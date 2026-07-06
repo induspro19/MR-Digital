@@ -3189,6 +3189,25 @@
         </div>`;
     }
 
+    function renderAssetDatalist() {
+        let q = '';
+        if (typeof _pendingFocus !== 'undefined' && _pendingFocus && _pendingFocus.id && _pendingFocus.id.startsWith('asset-')) {
+            const el = document.getElementById(_pendingFocus.id);
+            if (el) q = (el.value || '').trim().toLowerCase();
+        }
+        let arr = appData.assets || [];
+        if (q) {
+            const qTokens = q.split(/\s+/).filter(Boolean);
+            arr = arr.filter(a => {
+                const searchStr = ((a.name || '') + ' ' + (a.specification || '') + ' ' + (a.id || '')).toLowerCase();
+                return qTokens.every(t => searchStr.includes(t));
+            });
+        }
+        // Cap to 50 items to keep DOM rendering lightning fast
+        if (arr.length > 50) arr = arr.slice(0, 50);
+        return arr.map(a => `<option value="${esc(a.name)}">${esc(a.id || '')}${a.specification ? ' · ' + esc(a.specification) : ''}</option>`).join('');
+    }
+
     // ── NEW / REVISE MR (Full-Screen, styled like the printed MR sheet) ─────
     function renderNewMR() {
         const isRevision = !!currentEditRevisionId;
@@ -3370,7 +3389,7 @@
                     </tbody>
                 </table>
                 <datalist id="asset-options">
-                    ${appData.assets.map(a => `<option value="${esc(a.name)}">${esc(a.id || '')}${a.specification ? ' · ' + esc(a.specification) : ''}</option>`).join('')}
+                    ${renderAssetDatalist()}
                 </datalist>
                 <datalist id="project-options">
                     ${(appData.projects || []).map(p => `<option value="${esc(p.name)}">${esc(p.name)}${p.ccNo ? ' · CC: ' + esc(p.ccNo) : ''}</option>`).join('')}
@@ -6372,7 +6391,10 @@
                                 <button onclick="window.toggleProcHandlerStatus('${h.id}')" class="px-3 py-1 rounded-full text-[9px] font-black uppercase tracking-widest ${h.status==='Active' ? 'bg-emerald-100 text-emerald-700' : 'bg-slate-200 text-slate-500'}">${h.status}</button>
                             </td>
                             <td class="px-6 py-4 text-center">
-                                <button onclick="window.editProcHandler('${h.id}')" class="text-slate-300 hover:text-brand transition-colors"><i data-lucide="pencil" class="w-4 h-4"></i></button>
+                                <div class="flex items-center justify-center gap-3">
+                                    <button onclick="window.editProcHandler('${h.id}')" class="text-slate-400 hover:text-brand transition-colors" title="Edit"><i data-lucide="pencil" class="w-4 h-4"></i></button>
+                                    <button onclick="window.deleteProcHandler('${h.id}')" class="text-slate-400 hover:text-red-500 transition-colors" title="Delete"><i data-lucide="trash-2" class="w-4 h-4"></i></button>
+                                </div>
                             </td>
                         </tr>`).join('')}
                     </tbody>
@@ -6395,6 +6417,14 @@
         procHandlerForm = { id:h.id, name:h.name, empId:h.empId, dept:h.dept, designation:h.designation, email:h.email, mobile:h.mobile, status:h.status, userLoginId:h.userLoginId||"" };
         showProcHandlerModal = true;
         render();
+    };
+
+    window.deleteProcHandler = (id) => {
+        if (!confirm('Are you sure you want to completely delete this handler?')) return;
+        appData.procHandlers = (appData.procHandlers || []).filter(x => x.id !== id);
+        saveDB(appData);
+        render();
+        showToast('Handler deleted successfully.');
     };
 
     window.updateProcHandlerForm = (field, val) => { procHandlerForm[field] = val; };
