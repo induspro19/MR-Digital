@@ -69,13 +69,11 @@
   .login-scene {
     height: 100vh; max-height: 100vh; width: 100%; position: relative; overflow: hidden;
     display: flex; flex-direction: column;
-    background: linear-gradient(145deg, #060b12 0%, #0B1420 35%, #111C2C 65%, #0a1628 100%);
+    background: #0F172A;
   }
   .login-scene::before {
     content: ''; position: absolute; inset: 0; pointer-events: none;
-    background:
-      radial-gradient(ellipse 80% 60% at 15% 20%, rgba(179,18,46,0.12) 0%, transparent 55%),
-      radial-gradient(ellipse 70% 50% at 85% 75%, rgba(166,98,11,0.08) 0%, transparent 50%);
+    background: radial-gradient(ellipse 80% 60% at 15% 20%, rgba(211,47,47,0.12) 0%, transparent 55%);
   }
   .login-grid-overlay {
     position: absolute; inset: 0; pointer-events: none; opacity: 0.035;
@@ -84,20 +82,11 @@
       linear-gradient(90deg, rgba(255,255,255,0.5) 1px, transparent 1px);
     background-size: 48px 48px;
   }
-  .login-brand-panel {
-    /* Fully transparent — lets the .login-scene dark gradient show through with no hard edge */
-    background: transparent;
-  }
-  /* Shine sweep spans the WHOLE scene — no panel clipping edge visible */
-  .login-shine {
-    /* class kept on element for backwards compat, effect now on scene level */
-  }
+  .login-brand-panel { background: transparent; }
   .login-scene::after {
-    content: '';
-    position: absolute; inset: 0; pointer-events: none; z-index: 1;
-    background: linear-gradient(105deg, transparent 35%, rgba(255,255,255,0.04) 50%, transparent 65%);
-    background-size: 300% 100%;
-    animation: loginShine 9s ease-in-out infinite;
+    content: ''; position: absolute; inset: 0; pointer-events: none; z-index: 1;
+    background: linear-gradient(105deg, transparent 35%, rgba(255,255,255,0.03) 50%, transparent 65%);
+    background-size: 300% 100%; animation: loginShine 9s ease-in-out infinite;
   }
   @keyframes loginShine { 0%, 100% { background-position: 200% 0; } 50% { background-position: -100% 0; } }
   .login-logo-img {
@@ -105,16 +94,15 @@
     filter: drop-shadow(0 4px 20px rgba(0,0,0,0.45));
   }
   .login-card {
-    background: rgba(255,255,255,0.98);
-    backdrop-filter: blur(20px);
-    border: 1px solid rgba(255,255,255,0.25);
+    background: rgba(255,255,255,0.98); backdrop-filter: blur(20px);
+    border: 1px solid rgba(255,255,255,0.25); border-radius: 1.5rem;
     box-shadow: 0 25px 80px -20px rgba(0,0,0,0.55);
   }
   .login-input-dark {
     width: 100%; background: #f8f9fb; border: 1px solid #e2e5ea; border-radius: 12px;
     padding: 11px 14px; font-size: 13px; outline: none; transition: border-color .2s, box-shadow .2s;
   }
-  .login-input-dark:focus { border-color: #B3122E; box-shadow: 0 0 0 4px rgba(179,18,46,0.1); }
+  .login-input-dark:focus { border-color: #D32F2F; box-shadow: 0 0 0 4px rgba(211,47,47,0.1); }
   .login-part {
     position: absolute; pointer-events: none; color: rgba(255,255,255,0.92);
     opacity: var(--lo, 0.08);
@@ -148,59 +136,89 @@
     .login-logo-img { width: 64px; height: 64px; }
   }
 
-  /* Sign-in success overlay */
+  /* ── Enterprise Command Center Activation ── */
   #login-success-overlay {
-    position: fixed; inset: 0; z-index: 99999;
-    display: flex; align-items: center; justify-content: center;
-    background: radial-gradient(ellipse at center, rgba(11,20,32,0.97) 0%, rgba(6,10,16,0.99) 100%);
-    opacity: 0; pointer-events: all;
-    transition: opacity 0.35s ease;
+    position: fixed; inset: 0; z-index: 99999; pointer-events: all;
+    display: flex; flex-direction: column; align-items: center; justify-content: center;
+    background: #0B1120;
+    opacity: 0; transition: opacity 0.5s ease;
   }
-  #login-success-overlay.login-success-active { opacity: 1; }
-  #login-success-overlay.login-success-out { opacity: 0; transition: opacity 0.45s ease; }
-  .login-success-box { text-align: center; transform: scale(0.85); opacity: 0; transition: transform 0.5s cubic-bezier(0.34,1.56,0.64,1), opacity 0.4s ease; }
-  #login-success-overlay.login-success-active .login-success-box { transform: scale(1); opacity: 1; }
-  .login-success-icon-wrap {
-    width: 100px; height: 100px; margin: 0 auto 1.25rem; position: relative;
+  #login-success-overlay.ent-active { opacity: 1; }
+  
+  .ent-bg-grid {
+    position: absolute; inset: 0; z-index: 1; opacity: 0.15;
+    background-image: 
+      linear-gradient(rgba(255,255,255,0.2) 1px, transparent 1px),
+      linear-gradient(90deg, rgba(255,255,255,0.2) 1px, transparent 1px);
+    background-size: 50px 50px; background-position: center;
+    animation: gridDrift 20s linear infinite;
   }
-  .login-success-ring {
-    position: absolute; inset: 0; border-radius: 50%;
-    border: 3px solid transparent; border-top-color: #B3122E; border-right-color: rgba(179,18,46,0.4);
-    animation: loginRingSpin 0.9s linear infinite;
+  @keyframes gridDrift { 0% { transform: translateY(0); } 100% { transform: translateY(50px); } }
+
+  .ent-scene-2, .ent-scene-3, .ent-scene-4 {
+    position: absolute; z-index: 10; text-align: center;
+    transition: all 0.6s cubic-bezier(0.2, 0, 0, 1);
   }
-  #login-success-overlay.login-success-done .login-success-ring {
-    animation: loginRingComplete 0.5s ease forwards;
-    border-color: #047857; border-top-color: #047857;
+  
+  .ent-title { font-family: 'Space Grotesk', sans-serif; font-size: 2.2rem; font-weight: 700; color: #fff; letter-spacing: 0.05em; }
+  .ent-subtitle { font-size: 1.2rem; color: #D32F2F; margin: 0.5rem 0; font-weight: 600; }
+  .ent-tagline { font-size: 0.9rem; color: #94A3B8; text-transform: uppercase; letter-spacing: 0.05em; }
+  
+  .ent-sys-text { font-family: 'JetBrains Mono', monospace; color: #D32F2F; font-size: 0.85rem; letter-spacing: 0.1em; margin-bottom: 2rem; animation: pulseText 1.5s infinite; }
+  @keyframes pulseText { 0%, 100% { opacity: 1; } 50% { opacity: 0.4; } }
+  
+  .workflow-container { position: relative; display: flex; width: 80vw; max-width: 800px; margin: 0 auto; }
+  .wf-line-bg { position: absolute; top: 11px; left: 0; right: 0; height: 2px; background: rgba(255,255,255,0.05); }
+  .wf-line-fill { position: absolute; top: 11px; left: 0; height: 2px; background: #D32F2F; width: 0; transition: width 2.2s linear; box-shadow: 0 0 10px rgba(211,47,47,0.5); }
+  .wf-nodes { display: flex; justify-content: space-between; width: 100%; position: relative; z-index: 2; }
+  .wf-node { display: flex; flex-direction: column; align-items: center; width: 70px; }
+  .wf-dot { width: 24px; height: 24px; border-radius: 50%; background: #0B1120; border: 2px solid rgba(255,255,255,0.1); margin-bottom: 12px; transition: all 0.3s cubic-bezier(0.34, 1.56, 0.64, 1); }
+  .wf-node.active .wf-dot { background: #D32F2F; border-color: #D32F2F; box-shadow: 0 0 15px rgba(211,47,47,0.6); transform: scale(1.2); }
+  .wf-label { font-size: 10px; color: rgba(255,255,255,0.3); text-transform: uppercase; font-weight: 700; transition: color 0.3s; font-family: 'Inter', sans-serif; white-space: nowrap; }
+  .wf-node.active .wf-label { color: #fff; }
+  
+  .ent-ready-box { display: inline-flex; align-items: center; gap: 12px; background: rgba(16,185,129,0.1); border: 1px solid rgba(16,185,129,0.3); padding: 12px 24px; border-radius: 8px; color: #10B981; font-family: 'JetBrains Mono', monospace; font-weight: 700; letter-spacing: 0.1em; box-shadow: 0 0 30px rgba(16,185,129,0.15); }
+  .ent-check { width: 24px; height: 24px; }
+
+  /* ── Dashboard Cascade Build Animations ── */
+  body.dashboard-building #app-sidebar { animation: cascadeSlideRight 0.7s cubic-bezier(0.2, 0, 0, 1) forwards; }
+  body.dashboard-building header { animation: cascadeSlideDown 0.7s cubic-bezier(0.2, 0, 0, 1) forwards 0.15s; opacity: 0; }
+  body.dashboard-building main { animation: cascadeFadeUp 0.7s cubic-bezier(0.2, 0, 0, 1) forwards 0.3s; opacity: 0; }
+  
+  @keyframes cascadeSlideRight { 0% { transform: translateX(-100%); } 100% { transform: translateX(0); } }
+  @keyframes cascadeSlideDown { 0% { transform: translateY(-20px); opacity: 0; } 100% { transform: translateY(0); opacity: 1; } }
+  @keyframes cascadeFadeUp { 0% { transform: translateY(30px); opacity: 0; } 100% { transform: translateY(0); opacity: 1; } }
+    -webkit-backdrop-filter: blur(25px);
+    border: 1px solid rgba(255,255,255,0.5);
+    box-shadow: 0 30px 60px -15px rgba(0,0,0,0.6), 0 0 20px rgba(255,255,255,0.3) inset;
+    transition: opacity 0.4s ease;
   }
-  @keyframes loginRingSpin { to { transform: rotate(360deg); } }
-  @keyframes loginRingComplete { to { transform: rotate(360deg) scale(1.05); opacity: 0; } }
-  .login-success-gear {
-    position: absolute; inset: 12px; color: rgba(255,255,255,0.25);
-    animation: loginGearPulse 0.8s ease-in-out infinite;
+  .login-brand-panel { transition: opacity 0.4s ease; }
+  .login-input-dark {
+    width: 100%; background: rgba(255,255,255,0.9); border: 1px solid rgba(255,255,255,1); border-radius: 12px;
+    padding: 12px 16px; font-size: 14px; outline: none; transition: all 0.3s cubic-bezier(0.4, 0, 0.2, 1);
+    box-shadow: inset 0 2px 4px rgba(0,0,0,0.05); color: #0B1420;
   }
-  #login-success-overlay.login-success-done .login-success-gear { opacity: 0; transform: scale(0.5); transition: 0.3s; }
-  @keyframes loginGearPulse { 0%, 100% { transform: rotate(0deg); opacity: 0.3; } 50% { transform: rotate(18deg); opacity: 0.5; } }
-  .login-success-check {
-    position: absolute; inset: 0; display: flex; align-items: center; justify-content: center;
-    opacity: 0; transform: scale(0.3);
-    transition: opacity 0.35s ease 0.15s, transform 0.45s cubic-bezier(0.34,1.56,0.64,1) 0.1s;
+  .login-input-dark:focus { 
+    background: #fff; border-color: #B3122E; 
+    box-shadow: 0 0 0 4px rgba(179,18,46,0.15), inset 0 2px 4px rgba(0,0,0,0.02); 
+    transform: translateY(-1px);
   }
-  #login-success-overlay.login-success-done .login-success-check { opacity: 1; transform: scale(1); }
-  .login-success-check svg { width: 52px; height: 52px; color: #10B981; filter: drop-shadow(0 0 12px rgba(16,185,129,0.5)); }
-  .login-success-title {
-    font-family: 'Space Grotesk', sans-serif; font-size: 1.35rem; font-weight: 700;
-    color: #fff; letter-spacing: 0.06em; text-transform: uppercase;
+  .login-btn-premium {
+    position: relative; overflow: hidden;
+    background: linear-gradient(135deg, #B3122E 0%, #7F0C21 100%);
+    box-shadow: 0 10px 20px -5px rgba(179,18,46,0.5);
+    transition: all 0.3s cubic-bezier(0.4, 0, 0.2, 1);
   }
-  .login-success-sub { font-size: 12px; color: rgba(255,255,255,0.45); margin-top: 6px; }
-  .login-success-bar {
-    width: 160px; height: 3px; background: rgba(255,255,255,0.1); border-radius: 99px;
-    margin: 1.25rem auto 0; overflow: hidden;
+  .login-btn-premium::after {
+    content: ''; position: absolute; top: -50%; left: -50%; width: 200%; height: 200%;
+    background: radial-gradient(circle, rgba(255,255,255,0.2) 0%, transparent 50%);
+    transform: scale(0); opacity: 0; transition: transform 0.5s, opacity 0.5s;
   }
-  .login-success-bar-fill {
-    height: 100%; width: 0; background: linear-gradient(90deg, #B3122E, #10B981);
-    border-radius: 99px; animation: loginBarFill 1.4s ease forwards;
-  }
-  @keyframes loginBarFill { to { width: 100%; } }
+  .login-btn-premium:hover { transform: translateY(-2px); box-shadow: 0 15px 25px -5px rgba(179,18,46,0.6); }
+  .login-btn-premium:hover::after { transform: scale(1); opacity: 1; }
+  .login-btn-premium:active { transform: translateY(1px); box-shadow: 0 5px 10px -5px rgba(179,18,46,0.5); }
+  .login-btn-premium:disabled { filter: grayscale(1); cursor: not-allowed; opacity: 0.8; transform: none; box-shadow: none; }
 </style>
 
     <!-- ★ Supabase Cloud Backend ★ -->
@@ -736,7 +754,6 @@
         { key:'poNo',        label:'PO Number',                w:110, editable:'text' },
         { key:'poDate',      label:'PO Date',                  w:110, editable:'date' },
         { key:'prHandleBy',  label:'PR Handle By',             w:120, editable:'handler' },
-        { key:'vendor',      label:'Vendor',                   w:140, editable:'text' },
         { key:'tentDelivery',label:'Tentative Delivery Date',  w:135, editable:'date' },
         { key:'reqDelayDays',     label:'Requirement Delay (Days)', w:120, num:true },
         { key:'deliveryDelayDays',label:'Delivery Delay (Days)',    w:110, num:true },
@@ -1070,8 +1087,8 @@
     // Before a PR exists (still in the MR → Authorization → Planning flow) this is simply the
     // MR's own workflow status, unchanged.
     function mrOverallStatus(mr) {
-        if (!mr.prNumber) return mr.status;
-        const items = mr.items || [];
+        if (!mr || !mr.prNumber) return mr?.status;
+        const items = (mr.items || []).filter(Boolean);
         if (!items.length) return mr.status;
         const statuses = items.map(it => it.status || 'PLANNED');
         if (statuses.every(s => s === 'CANCELLED')) return 'CANCELLED';
@@ -1085,10 +1102,10 @@
     }
     // Effective status for Work Ledger / Reports — item-level statuses roll up once a PR exists.
     function getMrDisplayStatus(mr) {
-        return mr.prNumber ? mrOverallStatus(mr) : mr.status;
+        return mr && mr.prNumber ? mrOverallStatus(mr) : (mr ? mr.status : '');
     }
     function syncAllMrStatuses() {
-        (appData.mrs || []).forEach(mr => {
+        (appData.mrs || []).filter(Boolean).forEach(mr => {
             if (mr.prNumber) mr.status = mrOverallStatus(mr);
         });
     }
@@ -1334,13 +1351,19 @@
         
         const docNum = mr.prNumber || mr.mrNumber || '';
 
-        const l2 = findDeptL2(user.dept);
-        if (l2) {
-            mr.status = 'DEPT_APPROVAL_PENDING';
-            mr.l2User = l2.name;
-            actionLabel += ' — Pending Planning L2 Approval';
-            pendingNote = ' — sent to Planning L2 for approval.';
-            pushNotification({ dept: user.dept, level: 'L2' }, `Direct PR ${docNum} from ${user.name} (${user.dept}) is pending your Planning L2 approval.`, mr.id);
+        if (creatorLevel === 'L1') {
+            const l2 = findDeptL2(user.dept);
+            if (l2) {
+                mr.status = 'DEPT_APPROVAL_PENDING';
+                mr.l2User = l2.name;
+                actionLabel += ' — Pending Planning L2 Approval';
+                pendingNote = ' — sent to Planning L2 for approval.';
+                pushNotification({ dept: user.dept, level: 'L2' }, `Direct PR ${docNum} from ${user.name} (${user.dept}) is pending your Planning L2 approval.`, mr.id);
+            } else {
+                mr.status = 'RAISED';
+                actionLabel += ' — Pending Final Authorization';
+                pushNotification({ level: 'FINAL_AUTH' }, `Direct PR ${docNum} from ${user.name} (${user.dept}) is pending Final Authorization.`, mr.id);
+            }
         } else {
             mr.status = 'RAISED';
             actionLabel += ' — Pending Final Authorization';
@@ -1518,37 +1541,134 @@
     }
 
     function showLoginSuccessOverlay(displayName, onDone) {
-        const existing = document.getElementById('login-success-overlay');
-        if (existing) existing.remove();
-        const overlay = document.createElement('div');
-        overlay.id = 'login-success-overlay';
-        overlay.innerHTML = `
-            <div class="login-success-box">
-                <div class="login-success-icon-wrap">
-                    <div class="login-success-ring"></div>
-                    <div class="login-success-gear">${loginPartSvg('gear')}</div>
-                    <div class="login-success-check">
-                        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round">
-                            <path d="M20 6L9 17l-5-5"/>
-                        </svg>
+        try {
+            const existing = document.getElementById('login-success-overlay');
+            if (existing) existing.remove();
+            
+            // Scene 1: Fade out login card smoothly
+            const loginCard = document.querySelector('.login-brand-panel');
+            const loginForm = document.querySelector('.login-card');
+            if(loginCard) loginCard.style.opacity = '0';
+            if(loginForm) loginForm.style.opacity = '0';
+            
+            const overlay = document.createElement('div');
+            overlay.id = 'login-success-overlay';
+            overlay.innerHTML = `
+                <div class="ent-bg-grid"></div>
+                <div class="ent-scene-2" id="ent-scene-2">
+                    <h2 class="ent-title">INDUS FIRE SAFETY PVT. LTD.</h2>
+                    <h3 class="ent-subtitle">Purchase Request Management System</h3>
+                    <p class="ent-tagline">Smart Procurement • Seamless Approvals • Complete Material Tracking</p>
+                </div>
+                <div class="ent-scene-3" id="ent-scene-3" style="opacity:0; pointer-events:none;">
+                    <div class="ent-sys-text">ACTIVATING COMMAND CENTER...</div>
+                    <div class="workflow-container">
+                       <div class="wf-line-bg"></div>
+                       <div class="wf-line-fill"></div>
+                       <div class="wf-nodes">
+                          <div class="wf-node"><div class="wf-dot"></div><div class="wf-label">Planning</div></div>
+                          <div class="wf-node"><div class="wf-dot"></div><div class="wf-label">MR</div></div>
+                          <div class="wf-node"><div class="wf-dot"></div><div class="wf-label">PR</div></div>
+                          <div class="wf-node"><div class="wf-dot"></div><div class="wf-label">L2 Auth</div></div>
+                          <div class="wf-node"><div class="wf-dot"></div><div class="wf-label">Final Auth</div></div>
+                          <div class="wf-node"><div class="wf-dot"></div><div class="wf-label">Procure</div></div>
+                          <div class="wf-node"><div class="wf-dot"></div><div class="wf-label">Inventory</div></div>
+                          <div class="wf-node"><div class="wf-dot"></div><div class="wf-label">Reports</div></div>
+                       </div>
                     </div>
                 </div>
-                <p class="login-success-title">Access Granted</p>
-                <p class="login-success-sub">Welcome, ${esc(displayName || 'User')}</p>
-                <div class="login-success-bar"><div class="login-success-bar-fill"></div></div>
-            </div>`;
-        document.body.appendChild(overlay);
-        requestAnimationFrame(() => {
-            overlay.classList.add('login-success-active');
-            setTimeout(() => overlay.classList.add('login-success-done'), 450);
-        });
-        setTimeout(() => {
-            overlay.classList.add('login-success-out');
-            setTimeout(() => { overlay.remove(); if (onDone) onDone(); }, 450);
-        }, 1550);
+                <div class="ent-scene-4" id="ent-scene-4" style="opacity:0; pointer-events:none;">
+                    <div class="ent-ready-box">
+                        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round" class="ent-check">
+                            <path d="M20 6L9 17l-5-5"/>
+                        </svg>
+                        <span>SYSTEM READY</span>
+                    </div>
+                </div>
+            `;
+            document.body.appendChild(overlay);
+            
+            // Audio (optional, subtle digital beep)
+            try {
+                const ctx = new (window.AudioContext || window.webkitAudioContext)();
+                const osc = ctx.createOscillator();
+                osc.type = 'sine';
+                osc.frequency.setValueAtTime(800, ctx.currentTime);
+                osc.frequency.exponentialRampToValueAtTime(1200, ctx.currentTime + 0.5);
+                const gain = ctx.createGain();
+                gain.gain.setValueAtTime(0, ctx.currentTime);
+                gain.gain.linearRampToValueAtTime(0.05, ctx.currentTime + 0.1);
+                gain.gain.linearRampToValueAtTime(0, ctx.currentTime + 0.6);
+                osc.connect(gain); gain.connect(ctx.destination);
+                osc.start(); osc.stop(ctx.currentTime + 1);
+            } catch(e) {}
+            
+            requestAnimationFrame(() => {
+                overlay.classList.add('ent-active');
+                
+                // Scene 2: Fade out logo/text after 1.5s
+                setTimeout(() => {
+                    const s2 = document.getElementById('ent-scene-2');
+                    if (s2) {
+                        s2.style.opacity = '0';
+                        s2.style.transform = 'translateY(-10px)';
+                    }
+                    
+                    // Scene 3: Show workflow
+                    setTimeout(() => {
+                        const s3 = document.getElementById('ent-scene-3');
+                        if (s3) s3.style.opacity = '1';
+                        
+                        // Animate workflow nodes
+                        const lineFill = overlay.querySelector('.wf-line-fill');
+                        const nodes = overlay.querySelectorAll('.wf-node');
+                        
+                        setTimeout(() => { if(lineFill) lineFill.style.width = '100%'; }, 100);
+                        nodes.forEach((node, i) => {
+                            setTimeout(() => {
+                                node.classList.add('active');
+                            }, 100 + (i * (2000 / 7)));
+                        });
+                        
+                        // Scene 5 & 6: Load Dashboard invisibly & trigger cascade build
+                        setTimeout(() => {
+                            document.body.classList.add('dashboard-building');
+                            if(onDone) onDone(); // Renders dashboard, but overlay is still covering it!
+                            
+                            if (s3) {
+                                s3.style.opacity = '0';
+                                s3.style.transform = 'translateY(-10px)';
+                            }
+                            
+                            // Scene 7: System Ready text, then fade overlay
+                            setTimeout(() => {
+                                const s4 = document.getElementById('ent-scene-4');
+                                if (s4) s4.style.opacity = '1';
+                                
+                                // Fade out the overlay entirely
+                                setTimeout(() => {
+                                    overlay.style.opacity = '0';
+                                    setTimeout(() => {
+                                        overlay.remove();
+                                        // Remove building class after cascade animation finishes
+                                        setTimeout(() => document.body.classList.remove('dashboard-building'), 500);
+                                    }, 600);
+                                }, 1200); // System ready shows for 1.2s
+                            }, 500); // Wait for s3 fade out
+                        }, 2600); // 2s workflow + 600ms buffer
+                        
+                    }, 600); // Wait for s2 fade out
+                }, 1800);
+            });
+        } catch (e) {
+            console.error("Activation sequence failed, falling back to instant login", e);
+            document.body.classList.remove('dashboard-building');
+            if(onDone) onDone();
+        }
     }
 
-    window.togglePasswordVisibility = (btn) => {
+    window.togglePasswordVisibility = (btn, event) => {
+        if (event) event.preventDefault();
         const p = document.getElementById('upw');
         if (!p) return;
         const isPwd = p.type === 'password';
@@ -1557,18 +1677,32 @@
         lucide.createIcons();
     };
 
-    window.handleLogin = (id, pw) => {
-        const found = appData.users.find(u => u.id === id && u.password === pw && u.active);
-        if (found) {
-            user = found;
-            sessionStorage.setItem(SESSION_KEY, JSON.stringify(found));
-            activeTab = 'dashboard';
-            playLoginSuccessSound();
-            showLoginSuccessOverlay(found.name, () => render());
-        } else {
-            playLoginFailSound();
-            alert("Invalid credentials. Check ID / password.");
+    window.handleLogin = (id, pw, btnElement) => {
+        if(btnElement) {
+            btnElement.disabled = true;
+            btnElement.innerHTML = `<i data-lucide="loader-2" class="w-4 h-4 animate-spin"></i> Authenticating...`;
+            lucide.createIcons();
         }
+        
+        // Simulating network delay for effect
+        setTimeout(() => {
+            const found = appData.users.find(u => u.id === id && u.password === pw && u.active);
+            if (found) {
+                user = found;
+                sessionStorage.setItem(SESSION_KEY, JSON.stringify(found));
+                activeTab = 'dashboard';
+                playLoginSuccessSound();
+                showLoginSuccessOverlay(found.name, () => render());
+            } else {
+                playLoginFailSound();
+                alert("Invalid credentials. Check ID / password.");
+                if(btnElement) {
+                    btnElement.disabled = false;
+                    btnElement.innerHTML = `<i data-lucide="log-in" class="w-4 h-4"></i> Sign In`;
+                    lucide.createIcons();
+                }
+            }
+        }, 400);
     };
 
     window.logout = () => {
@@ -1839,7 +1973,7 @@
         if (!rows.length) return '';
         return `
         <tr class="no-print">
-            <td colspan="13" style="border:1px solid #cbd5e1; background:#fffbeb; padding:8px;">
+            <td colspan="12" style="border:1px solid #cbd5e1; background:#fffbeb; padding:8px;">
                 <div style="font-size:9px;font-weight:700;text-transform:uppercase;color:#92400e;letter-spacing:0.05em;margin-bottom:4px;">Budget Check</div>
                 ${rows.map(r => `<div style="font-size:11px;margin-bottom:2px;">
                     <b>${esc(r.project)}</b> — this MR: ₹${r.thisAmt.toLocaleString('en-IN',{maximumFractionDigits:0})}, project total incl. other MRs: ₹${r.total.toLocaleString('en-IN',{maximumFractionDigits:0})} of ₹${r.budget.toLocaleString('en-IN',{maximumFractionDigits:0})} budget —
@@ -3388,17 +3522,17 @@
                         <col style="width:3%">
                         <col style="width:13%"><col style="width:12%"><col style="width:7%"><col style="width:7%">
                         <col style="width:5%"><col style="width:4%"><col style="width:6%"><col style="width:7%">
-                        <col style="width:8%"><col style="width:9%"><col style="width:7%"><col style="width:9%">
+                        <col style="width:8%"><col style="width:12%"><col style="width:16%">
                     </colgroup>
                     <tbody>
-                        <tr><td colspan="13" style="border:1px solid #000; text-align:center; padding:10px 4px 2px;">
+                        <tr><td colspan="12" style="border:1px solid #000; text-align:center; padding:10px 4px 2px;">
                             <div style="font-size:26px; font-weight:700; color:#000;">INDUS FIRE SAFETY PVT. LTD.</div>
                         </td></tr>
-                        <tr><td colspan="13" style="border:1px solid #000; text-align:center; padding:2px 4px 10px;">
+                        <tr><td colspan="12" style="border:1px solid #000; text-align:center; padding:2px 4px 10px;">
                             <div style="font-size:13px; font-weight:600; color:#1f6f5c;">Block No. 501, Opp. GSFC Main Gate,Dashrath, Vadodara ,GUJARAT- 391740</div>
                         </td></tr>
-                        <tr><td colspan="13" style="border:1px solid #000; height:14px;"></td></tr>
-                        <tr><td colspan="13" style="border:1px solid #000; text-align:center; padding:8px 4px; font-size:20px; font-weight:700;">PURCHASE REQUEST</td></tr>
+                        <tr><td colspan="12" style="border:1px solid #000; height:14px;"></td></tr>
+                        <tr><td colspan="12" style="border:1px solid #000; text-align:center; padding:8px 4px; font-size:20px; font-weight:700;">PURCHASE REQUEST</td></tr>
 
                         <tr style="font-size:12px; font-weight:700;">
                             <td colspan="2" style="border:1px solid #000; padding:6px 8px;">Requisition No-</td>
@@ -3406,7 +3540,7 @@
                             <td colspan="2" style="border:1px solid #000; padding:6px 8px; text-align:center;">DATE:</td>
                             <td colspan="2" style="border:1px solid #000; padding:6px 8px; text-align:center; color:#92400e;">${fmtDate(Date.now())}</td>
                             <td colspan="2" style="border:1px solid #000; padding:6px 8px; text-align:center;">REV NO</td>
-                            <td colspan="3" style="border:1px solid #000; padding:6px 8px; text-align:center; color:#92400e;">${revNo}</td>
+                            <td colspan="2" style="border:1px solid #000; padding:6px 8px; text-align:center; color:#92400e;">${revNo}</td>
                         </tr>
                         <tr style="font-size:12px; font-weight:700;">
                             <td colspan="2" style="border:1px solid #000; padding:6px 8px;">Delivery Location</td>
@@ -3414,7 +3548,7 @@
                                 <input value="${esc(mrDeliveryLocation)}" onchange="window.onDeliveryLocationChange(this.value)" style="${xlInputCss} font-weight:700; color:#92400e;" />
                             </td>
                             <td colspan="2" style="border:1px solid #000; padding:6px 8px;">Initiator Department</td>
-                            <td colspan="5" style="border:1px solid #000; padding:6px 8px; color:#92400e;">${esc(user.dept)}</td>
+                            <td colspan="4" style="border:1px solid #000; padding:6px 8px; color:#92400e;">${esc(user.dept)}</td>
                         </tr>
 
                         <tr style="font-size:10.5px; font-weight:700; text-align:center; background:#f4f4f4;">
@@ -3435,7 +3569,7 @@
                         ${currentMrItems.map((item,i) => renderMrRow(item,i,xlInputCss)).join('')}
 
                         <tr class="no-print">
-                            <td colspan="13" style="border:1px solid #000; padding:4px; text-align:left;">
+                            <td colspan="12" style="border:1px solid #000; padding:4px; text-align:left;">
                                 <button onclick="window.addMrRow()" title="Add row" style="width:22px;height:22px;border:1px solid #94a3b8;background:#f8fafc;color:#334155;font-weight:700;font-size:14px;line-height:1;cursor:pointer;">+</button>
                             </td>
                         </tr>
@@ -3446,17 +3580,17 @@
                         <tr style="font-size:11px; font-weight:700;">
                             <td colspan="8" style="border:1px solid #000; padding:6px 8px; text-align:center;">Total</td>
                             <td style="border:1px solid #000; padding:6px 4px; text-align:right;">${grandTotal.toFixed(2)}</td>
-                            <td colspan="4" style="border:1px solid #000;"></td>
+                            <td colspan="3" style="border:1px solid #000;"></td>
                         </tr>
 
                         <tr style="font-size:11px; font-weight:700; text-align:center;">
-                            <td colspan="5" style="border:1px solid #000; padding:6px 4px;">Requested By / Prepared By:</td>
+                            <td colspan="4" style="border:1px solid #000; padding:6px 4px;">Requested By / Prepared By:</td>
                             <td colspan="4" style="border:1px solid #000; padding:6px 4px;">Authorized By:</td>
                             <td colspan="4" style="border:1px solid #000; padding:6px 4px;">Approved By:</td>
                         </tr>
                         <tr style="font-size:11px;">
                             <td colspan="2" style="border:1px solid #000; padding:6px 4px; font-weight:700; white-space:nowrap;">Name :</td>
-                            <td colspan="3" style="border:1px solid #000; padding:6px 4px;">${esc(user.name)}</td>
+                            <td colspan="2" style="border:1px solid #000; padding:6px 4px;">${esc(user.name)}</td>
                             <td colspan="2" style="border:1px solid #000; padding:6px 4px; font-weight:700; white-space:nowrap;">Name :</td>
                             <td colspan="2" style="border:1px solid #000; padding:6px 4px;"></td>
                             <td colspan="2" style="border:1px solid #000; padding:6px 4px; font-weight:700; white-space:nowrap;">Name :</td>
@@ -3464,7 +3598,7 @@
                         </tr>
                         <tr style="font-size:11px;">
                             <td colspan="2" style="border:1px solid #000; padding:6px 4px; font-weight:700; color:#92400e; white-space:nowrap;">Date :</td>
-                            <td colspan="3" style="border:1px solid #000; padding:6px 4px; color:#92400e;">${fmtDate(Date.now())}</td>
+                            <td colspan="2" style="border:1px solid #000; padding:6px 4px; color:#92400e;">${fmtDate(Date.now())}</td>
                             <td colspan="2" style="border:1px solid #000; padding:6px 4px; font-weight:700; white-space:nowrap;">Date :</td>
                             <td colspan="2" style="border:1px solid #000; padding:6px 4px;"></td>
                             <td colspan="2" style="border:1px solid #000; padding:6px 4px; font-weight:700; white-space:nowrap;">Date :</td>
@@ -3489,22 +3623,18 @@
                             <td colspan="1" style="border:1px solid #000; padding:6px 4px; white-space:nowrap;">Date :</td>
                             <td colspan="2" style="border:1px solid #000; padding:6px 4px;"></td>
                             <td colspan="1" style="border:1px solid #000; padding:6px 4px; white-space:nowrap;">Signature :</td>
-                            <td colspan="3" style="border:1px solid #000; padding:6px 4px;"></td>
-                            <td colspan="1" style="border:1px solid #000; padding:6px 4px;">Date:</td>
-                            <td colspan="2" style="border:1px solid #000; padding:6px 4px;"></td>
-                            <td colspan="1" style="border:1px solid #000; padding:6px 4px;">Sign:</td>
                             <td colspan="2" style="border:1px solid #000; padding:6px 4px;"></td>
                         </tr>`;
                         })()}
                         <tr style="font-size:11px;">
                             <td colspan="2" style="border:1px solid #000; padding:6px 4px; font-weight:700; text-align:center;">Procurement Dept</td>
-                            <td style="border:1px solid #000; padding:6px 4px; font-weight:700;">Name:</td>
-                            <td colspan="3" style="border:1px solid #000; padding:6px 4px;"></td>
-                            <td style="border:1px solid #000; padding:6px 4px; font-weight:700;">Date:</td>
+                            <td colspan="1" style="border:1px solid #000; padding:6px 4px; font-weight:700;">Name:</td>
+                            <td colspan="4" style="border:1px solid #000; padding:6px 4px;"></td>
+                            <td colspan="1" style="border:1px solid #000; padding:6px 4px; font-weight:700;">Date:</td>
                             <td colspan="4" style="border:1px solid #000; padding:6px 4px;"></td>
                         </tr>
                         <tr style="font-size:11px;">
-                            <td colspan="1" style="border:1px solid #000; padding:6px 4px; font-weight:700; vertical-align:top;">Remarks</td>
+                            <td colspan="2" style="border:1px solid #000; padding:6px 4px; font-weight:700; vertical-align:top;">Remarks</td>
                             <td colspan="7" style="border:1px solid #000; padding:0; vertical-align:top;">
                                 <textarea id="mr-overall-notes" placeholder="Purpose / justification..." style="width:100%; min-height:44px; background:transparent; border:none; outline:none; font:inherit; font-size:11px; color:#1f2937; padding:6px; resize:vertical;">${esc(notesVal)}</textarea>
                             </td>
@@ -3594,9 +3724,11 @@
             <td style="border:1px solid #000; padding:0;">
                 <input type="date" id="date-${rid}" value="${esc(item.requiredDate)}" onchange="window.onFieldChange(${rid},'requiredDate',this.value)" style="${xlInputCss} text-align:center;" />
             </td>
-            <td style="border:1px solid #000; padding:0; position:relative;">
+            <td style="border:1px solid #000; padding:0;">
                 <input id="proj-${rid}" list="project-options" value="${esc(item.project)}"
                     oninput="window.onProjectInput(${rid}, this.value)" onchange="window.onProjectChange(${rid}, this.value)"
+                    style="${xlInputCss}" placeholder="Cost Centre..." autocomplete="off" />
+            </td>
             <td style="border:1px solid #000; padding:0; position:relative;">
                 <input id="rem-${rid}" value="${esc(item.remarks)}" onchange="window.onFieldChange(${rid},'remarks',this.value)" style="${xlInputCss} padding-right:36px;" placeholder="Remarks..." />
                 <button onclick="window.duplicateMrRow(${rid})" class="no-print" title="Duplicate row" style="position:absolute; right:17px; top:50%; transform:translateY(-50%); border:none; background:transparent; color:#94a3b8; cursor:pointer; font-size:11px;">⧉</button>
@@ -6077,7 +6209,7 @@
             'Tentative Required Date': r.reqDate,
             'Cost Centre': r.costCentre, 'Revision': r.revision, 'Delivery Location': r.deliveryLoc, 'Initiator Department': r.dept,
             'Status': STATUS_META[r.status]?.label || r.status, 'PO Number': r.poNo, 'PO Date': r.poDate,
-            'PR Handle By': r.prHandleBy, 'Vendor': r.vendor, 'Tentative Delivery Date': r.tentDelivery,
+            'PR Handle By': r.prHandleBy, 'Tentative Delivery Date': r.tentDelivery,
             'Requirement Delay (Days)': r.reqDelayDays, 'Delivery Delay (Days)': r.deliveryDelayDays, 'Remarks': r.remarks
         }));
         const wb = XLSX.utils.book_new();
@@ -6092,8 +6224,8 @@
         doc.setFontSize(14); doc.text('Indus Fire Safety — Procurement Data Centre', 30, 30);
         doc.autoTable({
             startY: 45, styles: { fontSize: 6 },
-            head: [['MR No','PR No','Date','Item','Spec','Sample Make','Qty','Unit','Rate','Amount','Req. Date','Cost Centre','Rev','Delivery Loc','Dept','Status','PO No','PO Date','Handle By','Vendor','Tent. Delivery','Req. Delay','Delivery Delay','Remarks']],
-            body: rows.map(r => [r.mrNo, r.prNo, fmtDate(r.date), r.item, r.spec, r.sampleMake, r.qty, r.unit, r.rate, r.amount, r.reqDate, r.costCentre, r.revision, r.deliveryLoc, r.dept, STATUS_META[r.status]?.label||r.status, r.poNo, r.poDate, r.prHandleBy, r.vendor, r.tentDelivery, r.reqDelayDays, r.deliveryDelayDays, r.remarks])
+            head: [['MR No','PR No','Date','Item','Spec','Sample Make','Qty','Unit','Rate','Amount','Req. Date','Cost Centre','Rev','Delivery Loc','Dept','Status','PO No','PO Date','Handle By','Tent. Delivery','Req. Delay','Delivery Delay','Remarks']],
+            body: rows.map(r => [r.mrNo, r.prNo, fmtDate(r.date), r.item, r.spec, r.sampleMake, r.qty, r.unit, r.rate, r.amount, r.reqDate, r.costCentre, r.revision, r.deliveryLoc, r.dept, STATUS_META[r.status]?.label||r.status, r.poNo, r.poDate, r.prHandleBy, r.tentDelivery, r.reqDelayDays, r.deliveryDelayDays, r.remarks])
         });
         doc.save(`Indus_Fire_DataCentre_${fmtDateInput(Date.now())}.pdf`);
     };
@@ -7755,10 +7887,10 @@
                         </div>
                     </div>
                     <h2 class="text-xl xl:text-2xl font-display font-bold text-white/95 leading-tight mb-3">
-                        Material Request<br/><span class="text-brand-light">Portal</span>
+                        Purchase Request<br/><span class="text-brand-light">Management System</span>
                     </h2>
                     <p class="text-sm text-slate-400 leading-relaxed max-w-md mb-6">
-                        Procurement workflow from MR raise to PR, planning approval, and purchase order tracking — built for fire safety operations teams.
+                        Smart Procurement • Seamless Approvals • Complete Material Tracking
                     </p>
                     <div class="grid grid-cols-2 gap-3 max-w-md">
                         <div class="rounded-xl border border-white/10 bg-white/5 px-4 py-2.5 backdrop-blur-sm">
@@ -7775,13 +7907,13 @@
             </div>
 
             <div class="relative z-10 flex flex-1 items-center justify-center px-6 py-6 lg:py-0 lg:px-10 shrink-0" style="background:radial-gradient(ellipse 80% 80% at 80% 50%, rgba(11,20,32,0.45) 0%, transparent 70%)">
-                <div class="login-card w-full max-w-[400px] rounded-2xl p-7 sm:p-8 fade-in">
-                    <div class="mb-6">
+                <div class="login-card w-full max-w-[400px] rounded-3xl p-7 sm:p-9 fade-in">
+                    <div class="mb-7">
                         <p class="text-[10px] font-black text-brand uppercase tracking-[0.2em] mb-1.5">Secure Sign In</p>
-                        <h3 class="text-xl font-display font-bold text-ink">Welcome back</h3>
-                        <p class="text-xs text-slate-500 mt-1">Enter your personnel credentials to continue</p>
+                        <h3 class="text-2xl font-display font-bold text-ink">Welcome back</h3>
+                        <p class="text-sm text-slate-500 mt-1">Enter your personnel credentials to continue</p>
                     </div>
-                    <div class="space-y-4">
+                    <div class="space-y-5">
                         <div>
                             <label class="field-label" for="uid">Personnel ID</label>
                             <input id="uid" class="login-input-dark font-semibold" placeholder="Enter your personnel ID" autocomplete="username" />
@@ -7790,14 +7922,14 @@
                             <label class="field-label" for="upw">Password</label>
                             <div class="relative">
                                 <input id="upw" type="password" class="login-input-dark pr-10" placeholder="Enter your password" autocomplete="current-password"
-                                    onkeydown="if(event.key==='Enter') window.handleLogin(document.getElementById('uid').value, document.getElementById('upw').value)" />
-                                <button type="button" onclick="window.togglePasswordVisibility(this)" class="absolute right-3 top-1/2 -translate-y-1/2 text-slate-400 hover:text-brand-light transition-colors p-1" title="Toggle password visibility">
+                                    onkeydown="if(event.key==='Enter') window.handleLogin(document.getElementById('uid').value.trim(), document.getElementById('upw').value.trim(), document.getElementById('login-btn'))" />
+                                <button type="button" onclick="window.togglePasswordVisibility(this, event)" class="absolute right-3 top-1/2 -translate-y-1/2 text-slate-400 hover:text-brand transition-colors p-1" title="Toggle password visibility">
                                     <i data-lucide="eye" class="w-5 h-5"></i>
                                 </button>
                             </div>
                         </div>
-                        <button type="button" onclick="window.handleLogin(document.getElementById('uid').value, document.getElementById('upw').value)"
-                            class="w-full bg-brand text-white font-black py-3 rounded-xl uppercase tracking-[0.15em] text-xs hover:bg-brand-dark active:scale-[0.98] transition-all shadow-lg shadow-brand/25 flex items-center justify-center gap-2">
+                        <button id="login-btn" type="button" onclick="window.handleLogin(document.getElementById('uid').value.trim(), document.getElementById('upw').value.trim(), this)"
+                            class="login-btn-premium w-full text-white font-black py-3.5 rounded-xl uppercase tracking-[0.15em] text-xs transition-all flex items-center justify-center gap-2 mt-2">
                             <i data-lucide="log-in" class="w-4 h-4"></i> Sign In
                         </button>
                     </div>
