@@ -638,7 +638,7 @@
     // ── STATE ──────────────────────────────────────────────────────────────
     let appData = null; // Initialized asynchronously from Supabase — see bottom of script
     let user = null;
-    try { user = JSON.parse(localStorage.getItem(SESSION_KEY)); } catch(e) {}
+    try { user = JSON.parse(sessionStorage.getItem(SESSION_KEY)); localStorage.removeItem(SESSION_KEY); } catch(e) {}
     let activeTab = 'dashboard';
     let currentMrItems = [];
     let showMrDraftsPanel = false; // toggles the "My Drafts" picker inside the New MR screen
@@ -667,6 +667,21 @@
     let showReassignModal = null;
     let reassignForm = { newHandler:"", reason:"", remarks:"" };
     let showAssignHistoryModal = false;
+    let _reviewMrId = null;
+    let _reviewMrActionType = null;
+    window.openReviewModal = (id, type) => {
+        _reviewMrId = id;
+        _reviewMrActionType = type;
+        _lastRenderedTab = activeTab;
+        activeTab = 'review_document';
+        render();
+    };
+    window.closeReviewModal = () => {
+        _reviewMrId = null;
+        _reviewMrActionType = null;
+        activeTab = _lastRenderedTab || 'dashboard';
+        render();
+    };
     // ── ADD ITEM REQUEST STATE ────────────────────────────────────────────
     let showAddItemModal = false;
     let addItemForm = { name: '', description: '', uom: 'NOS', otherInfo: '' };
@@ -1097,19 +1112,13 @@
     }
 
     // ── HELPERS ────────────────────────────────────────────────────────────
-    function fmtDate(ts) {
-        if (!ts) return "—";
-        return new Date(ts).toLocaleDateString("en-IN", { day: "2-digit", month: "short", year: "numeric" });
-    }
+    function fmtDate(ts) { if (!ts) return "-"; const d = new Date(ts); return `${String(d.getDate()).padStart(2,'0')}-${String(d.getMonth()+1).padStart(2,'0')}-${d.getFullYear()}`; }
     function fmtDateInput(ts) {
         if (!ts) return "";
         const d = new Date(ts);
         return `${d.getFullYear()}-${String(d.getMonth()+1).padStart(2,'0')}-${String(d.getDate()).padStart(2,'0')}`;
     }
-    function fmtDateTime(ts) {
-        if (!ts) return "—";
-        return new Date(ts).toLocaleString("en-IN", { day: "2-digit", month: "short", year: "numeric", hour: "2-digit", minute: "2-digit" });
-    }
+    function fmtDateTime(ts) { if (!ts) return "-"; const d = new Date(ts); const dateStr = `${String(d.getDate()).padStart(2,'0')}-${String(d.getMonth()+1).padStart(2,'0')}-${d.getFullYear()}`; let h = d.getHours(); const m = String(d.getMinutes()).padStart(2,'0'); const ampm = h >= 12 ? 'PM' : 'AM'; h = h % 12; if (h === 0) h = 12; return `${dateStr} ${String(h).padStart(2,'0')}:${m} ${ampm}`; }
     // Days the MR has sat in its current status — used for escalation flags & approval KPIs.
     function daysInCurrentStatus(mr) {
         const hist = (mr.history || []).filter(h => h.field === 'status');
@@ -1185,7 +1194,7 @@
     let _lastRenderedSection = null; // planner sub-section (overview / queue / merge_pr)
 
     function captureFocusForRestore() {
-        const el = document.activeElement;
+        if (_pendingFocus && _pendingFocus.explicit) return; const el = document.activeElement;
         if (!el || !/^(INPUT|TEXTAREA|SELECT)$/.test(el.tagName)) { _pendingFocus = null; return; }
         _pendingFocus = {
             id: el.id || '',
@@ -1322,24 +1331,20 @@
         const creatorLevel = user.approvalLevel || 'L1';
         let actionLabel = 'Direct PR Raised (Planner)';
         let pendingNote = ' — sent for Final Authorization.';
+        
+        const docNum = mr.prNumber || mr.mrNumber || '';
 
-        if (directPrUsesPlanningL2Chain(user) && creatorLevel === 'L1') {
-            const l2 = findDeptL2(user.dept);
-            if (l2) {
-                mr.status = 'DEPT_APPROVAL_PENDING';
-                mr.l2User = l2.name;
-                actionLabel += ' — Pending Planning L2 Approval';
-                pendingNote = ' — sent to Planning L2 for approval.';
-                pushNotification({ dept: user.dept, level: 'L2' }, `Direct PR ${mr.mrNumber} from ${user.name} (${user.dept}) is pending your Planning L2 approval.`, mr.id);
-            } else {
-                mr.status = 'RAISED';
-                actionLabel += ' — Pending Final Authorization';
-                pushNotification({ level: 'FINAL_AUTH' }, `Direct PR ${mr.mrNumber} from ${user.name} (${user.dept}) is pending Final Authorization.`, mr.id);
-            }
+        const l2 = findDeptL2(user.dept);
+        if (l2) {
+            mr.status = 'DEPT_APPROVAL_PENDING';
+            mr.l2User = l2.name;
+            actionLabel += ' — Pending Planning L2 Approval';
+            pendingNote = ' — sent to Planning L2 for approval.';
+            pushNotification({ dept: user.dept, level: 'L2' }, `Direct PR ${docNum} from ${user.name} (${user.dept}) is pending your Planning L2 approval.`, mr.id);
         } else {
             mr.status = 'RAISED';
             actionLabel += ' — Pending Final Authorization';
-            pushNotification({ level: 'FINAL_AUTH' }, `Direct PR ${mr.mrNumber} from ${user.name} (${user.dept}) is pending Final Authorization.`, mr.id);
+            pushNotification({ level: 'FINAL_AUTH' }, `Direct PR ${docNum} from ${user.name} (${user.dept}) is pending Final Authorization.`, mr.id);
         }
 
         mr.history.push({ action: actionLabel, actor: user.name, role: user.role, dept: user.dept, ts: Date.now(), note: notes });
@@ -1543,11 +1548,20 @@
         }, 1550);
     }
 
+    window.togglePasswordVisibility = (btn) => {
+        const p = document.getElementById('upw');
+        if (!p) return;
+        const isPwd = p.type === 'password';
+        p.type = isPwd ? 'text' : 'password';
+        btn.innerHTML = isPwd ? '<i data-lucide="eye-off" class="w-5 h-5"></i>' : '<i data-lucide="eye" class="w-5 h-5"></i>';
+        lucide.createIcons();
+    };
+
     window.handleLogin = (id, pw) => {
         const found = appData.users.find(u => u.id === id && u.password === pw && u.active);
         if (found) {
             user = found;
-            localStorage.setItem(SESSION_KEY, JSON.stringify(found));
+            sessionStorage.setItem(SESSION_KEY, JSON.stringify(found));
             activeTab = 'dashboard';
             playLoginSuccessSound();
             showLoginSuccessOverlay(found.name, () => render());
@@ -1564,7 +1578,7 @@
             return;
         }
         user = null;
-        localStorage.removeItem(SESSION_KEY);
+        sessionStorage.removeItem(SESSION_KEY); localStorage.removeItem(SESSION_KEY);
         render();
     };
 
@@ -1608,31 +1622,113 @@
         }
     };
 
-    window.onAssetChange = (rowId, assetName) => {
-        const item = currentMrItems.find(i => i.id == rowId);
-        if (!item) return;
-        // Case-insensitive match so typed text (not just an exact dropdown pick) still auto-fills.
-        const asset = appData.assets.find(a => a.name.trim().toLowerCase() === (assetName || "").trim().toLowerCase());
-        item.assetName = assetName;
-        item.assetId   = asset ? asset.id : "";
-        item.uom       = asset ? (asset.unit || "NOS") : (item.uom || "NOS");
-        // Only auto-fill spec from the master when it exists and the row's spec is still empty,
-        // so we don't clobber a spec the planner already typed for a custom / unlisted item.
-        if (asset && !item.spec) item.spec = asset.specification || "";
-        softRender();
+    window.onAssetChange = (rowId, assetName) => { const item = currentMrItems.find(i => i.id == rowId); if (!item) return; item.assetName = assetName; const asset = appData.assets.find(a => (a.name || "").trim().toLowerCase() === (assetName || "").trim().toLowerCase()); if (asset) { item.assetId = asset.id || ""; item.uom = asset.unit || "NOS"; if (!item.spec) item.spec = asset.specification || ""; if (asset.category) item.category = asset.category; if (asset.hsnCode) item.hsnCode = asset.hsnCode; } _pendingFocus = { id: "qty-"+rowId, explicit: true }; softRender(); };
+
+    let _acHoverIdx = -1;
+    let _acItems = [];
+    
+    window.hideAssetAutocomplete = () => { const dd = document.getElementById('autocomplete-dropdown'); if (dd) { dd.classList.add('hidden'); dd.style.display = 'none'; } };
+
+    window.onAssetAutocompleteInput = (rid, inputEl) => {
+        const item = currentMrItems.find(i => i.id == rid);
+        if (item) item.assetName = inputEl.value; // Store state without softRender
+        
+        const q = inputEl.value.trim().toLowerCase();
+        const dd = document.getElementById('autocomplete-dropdown');
+        if (!dd) return;
+        
+        if (q.length < 2) {
+            dd.classList.add('hidden');
+            return;
+        }
+
+        const qTokens = q.split(/\s+/).filter(Boolean);
+        _acItems = appData.assets.filter(a => {
+            const searchStr = ((a.name || '') + ' ' + (a.specification || '') + ' ' + (a.id || '')).toLowerCase();
+            return qTokens.every(t => searchStr.includes(t));
+        }).slice(0, 50);
+
+        if (!_acItems.length) {
+            dd.classList.add('hidden');
+            return;
+        }
+
+        _acHoverIdx = 0;
+        
+        const rect = inputEl.getBoundingClientRect();
+        dd.style.top = (rect.bottom + window.scrollY) + 'px';
+        dd.style.left = (rect.left + window.scrollX) + 'px';
+        dd.style.width = Math.max(rect.width, 400) + 'px';
+        
+        renderAutocompleteList(rid, inputEl);
+        dd.classList.remove('hidden');
+        dd.style.display = 'flex';
     };
 
-    window.onAssetInput = (rowId, assetName) => {
+    function renderAutocompleteList(rid, inputEl) {
+        const dd = document.getElementById('autocomplete-dropdown');
+        dd.innerHTML = _acItems.map((a, idx) => `
+            <div class="px-3 py-2 cursor-pointer border-b border-slate-100 flex justify-between items-center ${idx === _acHoverIdx ? 'bg-brand/10' : 'hover:bg-slate-50'}"
+                 onmousedown="event.preventDefault(); window.selectAssetAutocomplete(${rid}, '${esc(a.name)}')">
+                <div class="flex flex-col">
+                    <span class="text-[11px] font-bold text-slate-800">${esc(a.name)}</span>
+                    <span class="text-[10px] text-slate-500">${esc(a.specification || '')}</span>
+                </div>
+                <div class="text-[9px] font-mono text-slate-400 bg-slate-100 px-1.5 py-0.5 rounded">${esc(a.id)}</div>
+            </div>
+        `).join('');
+    }
+
+    window.selectAssetAutocomplete = (rid, assetName) => {
+        const inputEl = document.getElementById(`asset-${rid}`);
+        if (inputEl) inputEl.value = assetName;
+        window.hideAssetAutocomplete();
+        window.onAssetChange(rid, assetName); 
+    };
+
+    window.onAssetAutocompleteKeydown = (e, rid, inputEl) => {
+        const dd = document.getElementById('autocomplete-dropdown');
+        if (!dd || dd.classList.contains('hidden')) return;
+
+        if (e.key === 'ArrowDown') {
+            e.preventDefault();
+            _acHoverIdx = Math.min(_acHoverIdx + 1, _acItems.length - 1);
+            renderAutocompleteList(rid, inputEl);
+        } else if (e.key === 'ArrowUp') {
+            e.preventDefault();
+            _acHoverIdx = Math.max(_acHoverIdx - 1, 0);
+            renderAutocompleteList(rid, inputEl);
+        } else if (e.key === 'Enter' || e.key === 'Tab') { if (_acHoverIdx >= 0 && _acItems[_acHoverIdx]) { e.preventDefault(); window.selectAssetAutocomplete(rid, _acItems[_acHoverIdx].name); } } else if (e.key === 'Escape') {
+            window.hideAssetAutocomplete();
+        }
+    };
+
+    window.onFieldChange = (rowId, key, val) => {
         const item = currentMrItems.find(i => i.id == rowId);
         if (!item) return;
-        item.assetName = assetName;
-        softRender();
+        item[key] = val;
+        
+        if (key === 'qty' || key === 'rate') {
+            const q = Number(item.qty) || 0;
+            const r = Number(item.rate) || 0;
+            item.amount = +(q * r).toFixed(2);
+            
+            const amountCell = document.getElementById(`amt-${rowId}`);
+            if (amountCell) amountCell.textContent = item.amount.toFixed(2);
+            
+            const gtCell = document.getElementById('grand-total-display');
+            if (gtCell) {
+                let gt = 0;
+                currentMrItems.forEach(it => { gt += ((Number(it.qty)||0) * (Number(it.rate)||0)); });
+                gtCell.textContent = gt.toFixed(2); } } softRender();
     };
+
+
 
     function resolveProjectInput(val) {
         const v = String(val || '').trim();
         if (!v) return null;
-        let proj = (appData.projects || []).find(p => p.name.trim().toLowerCase() === v.toLowerCase());
+        let proj = (appData.projects || []).find(p => (p.name || "").trim().toLowerCase() === v.toLowerCase());
         if (!proj) proj = (appData.projects || []).find(p => (p.ccNo || '').trim().toLowerCase() === v.toLowerCase());
         if (!proj) {
             const vl = v.toLowerCase();
@@ -1657,14 +1753,6 @@
         const proj = resolveProjectInput(val);
         item.project = proj ? proj.name : String(val || '').trim();
         softRender();
-    };
-
-    window.onFieldChange = (rowId, key, val) => {
-        const item = currentMrItems.find(i => i.id == rowId);
-        if (!item) return;
-        item[key] = val;
-        // Amount is derived live (Qty x Rate) — soft re-render keeps focus in the cell while typing.
-        if (['qty', 'rate', 'spec', 'uom', 'requiredDate', 'make', 'remarks'].includes(key)) softRender();
     };
 
     window.onDeliveryLocationChange = (val) => { mrDeliveryLocation = val; };
@@ -1857,7 +1945,7 @@
                         const n = norm(r);
                         const assetName = String(pick(n, ['item','asset','asset name','item name'])).trim();
                         if (!assetName) return null;
-                        const asset = appData.assets.find(a => a.name.trim().toLowerCase() === assetName.toLowerCase());
+                        const asset = appData.assets.find(a => (a.name || "").trim().toLowerCase() === assetName.toLowerCase());
                         const qty = parseFloat(pick(n, ['qty','quantity'])) || 1;
                         const rate = parseFloat(pick(n, ['rate','price'])) || 0;
                         let reqDate = pick(n, ['required date','requireddate','tentative require date','req date']);
@@ -1892,8 +1980,9 @@
         harvestMrItemsFromDom();
 
         if (currentMrItems.some(i => !i.assetName)) { alert("Please enter an item for every row."); return; }
-        if (currentMrItems.some(i => !i.project))   { alert("Please set a Project Name for every row."); return; }
+        if (currentMrItems.some(i => !i.project))   { alert("Please set a Cost Centre for every row."); return; }
         if (currentMrItems.some(i => !i.requiredDate)) { alert("Please set a tentative require date for every row."); return; }
+        if (currentMrItems.some(i => !i.qty || Number(i.qty) <= 0)) { alert("Please enter a valid quantity greater than 0 for every row."); return; }
 
         const dupes = findDuplicateMrItemPairs();
         if (dupes.length) {
@@ -1911,8 +2000,9 @@
             mr = appData.mrs.find(m => m.id === currentEditRevisionId);
             mr.revNo = (mr.revNo || 0) + 1;
         } else {
-            const mrNum = consumeNextMrNumber();
-            mr = { id: mrId, mrNumber: mrNum, prNumber: null, revNo: 0, createdAt: Date.now(), history: [] };
+            const mrNum = isDirectPR ? null : consumeNextMrNumber();
+            const prNum = isDirectPR ? consumeNextPrNumber() : null;
+            mr = { id: mrId, mrNumber: mrNum, prNumber: prNum, revNo: 0, createdAt: Date.now(), history: [] };
         }
 
         mr.status     = 'RAISED';
@@ -1933,10 +2023,10 @@
         if (isDirectPR && !isRevision) {
             const pendingNote = applyDirectPrRouting(mr, notes);
             if (!isRevision) appData.mrs.push(mr);
-            (mr.items || []).forEach(it => { if (!it.refMrNumber) it.refMrNumber = mr.mrNumber; });
+            (mr.items || []).forEach(it => { if (!it.refMrNumber) it.refMrNumber = mr.prNumber || mr.mrNumber; });
             saveDB();
             const wantsPrint = confirm(
-                "Direct PR " + (isRevision ? "Revised" : "Raised") + " successfully: " + mr.mrNumber + pendingNote +
+                "Direct PR " + (isRevision ? "Revised" : "Raised") + " successfully: " + (mr.prNumber || mr.mrNumber) + pendingNote +
                 "\n\nDo you want to print this PR now?"
             );
             activeTab = 'planner';
@@ -2089,8 +2179,8 @@
             // A Direct PR was already "planned" by the Planner at creation time, so once it
             // clears Authorization it auto-advances straight to Planned/PR-Generated instead of
             // sitting in a separate Planning Approval queue.
-            if (newStatus === 'AUTHORIZED' && mr.source === 'DIRECT_PR' && !mr.prNumber) {
-                mr.prNumber = consumeNextPrNumber();
+            if (newStatus === 'AUTHORIZED' && mr.source === 'DIRECT_PR') {
+                if (!mr.prNumber) mr.prNumber = consumeNextPrNumber();
                 mr.status = 'PLANNED';
                 (mr.items || []).forEach(it => {
                     it.refMrNumber = mr.mrNumber;
@@ -2689,10 +2779,54 @@
                 });
             }));
             XLSX.utils.book_append_sheet(wb, XLSX.utils.json_to_sheet(itemRows), 'Item Detail');
-
             XLSX.writeFile(wb, `indus-fire-mr-report-${Date.now()}.xlsx`);
         } catch(e) { alert('Excel export failed: ' + e.message); }
     };
+    function renderFullScreenReview() {
+        const m = appData.mrs.find(x => x.id === _reviewMrId);
+        if (!m) return '';
+        
+        let approveBtn = '';
+        let queryBtn = '';
+        
+        if (_reviewMrActionType && _reviewMrActionType.type === 'DEPT_L2') {
+            approveBtn = `<button onclick="window.approveDeptLevel('${m.id}','wf-note-modal'); window.closeReviewModal();" class="py-4 px-8 bg-brand text-white rounded-xl font-black text-[11px] uppercase shadow-lg active:scale-95 transition-all hover:bg-brand-600 flex-1">Approve</button>`;
+            queryBtn = `<button onclick="window.updateMrStatus('${m.id}','QUERY_RAISED','Query Raised','wf-note-modal'); window.closeReviewModal();" class="py-4 px-8 border-2 border-brand text-brand rounded-xl font-black text-[11px] uppercase hover:bg-brand-50 transition-all flex-1">Raise Query</button>`;
+        } else if (_reviewMrActionType && _reviewMrActionType.type === 'PLANNING') {
+            approveBtn = `<button onclick="window.updateMrStatus('${m.id}','PLANNED','Planning Approved','wf-note-modal'); window.closeReviewModal();" class="py-4 px-8 bg-brand text-white rounded-xl font-black text-[11px] uppercase shadow-lg active:scale-95 transition-all hover:bg-brand-600 flex-1">Approve</button>`;
+            queryBtn = `<button onclick="window.updateMrStatus('${m.id}','QUERY_RAISED','Query Raised','wf-note-modal'); window.closeReviewModal();" class="py-4 px-8 border-2 border-brand text-brand rounded-xl font-black text-[11px] uppercase hover:bg-brand-50 transition-all flex-1">Raise Query</button>`;
+        } else if (_reviewMrActionType && _reviewMrActionType.type === 'GENERIC') {
+            approveBtn = `<button onclick="window.updateMrStatus('${m.id}','${_reviewMrActionType.toStatus}','${_reviewMrActionType.actionLabel}','wf-note-modal'); window.closeReviewModal();" class="py-4 px-8 bg-brand text-white rounded-xl font-black text-[11px] uppercase shadow-lg active:scale-95 transition-all hover:bg-brand-600 flex-1">${_reviewMrActionType.actionLabel || 'Approve'}</button>`;
+            queryBtn = `<button onclick="window.updateMrStatus('${m.id}','QUERY_RAISED','Query Raised','wf-note-modal'); window.closeReviewModal();" class="py-4 px-8 border-2 border-brand text-brand rounded-xl font-black text-[11px] uppercase hover:bg-brand-50 transition-all flex-1">Raise Query</button>`;
+        }
+        
+        return `
+        <div class="h-screen w-screen flex flex-col bg-[#F1F2F4] overflow-hidden">
+            <div class="flex justify-between items-center px-8 py-5 border-b border-rule bg-white shadow-sm shrink-0 z-10">
+                <div>
+                    <p class="text-[10px] font-black uppercase tracking-widest text-brand mb-1">Full-Screen Review</p>
+                    <h3 class="font-display font-bold text-xl text-ink tracking-tight">${m.source === 'DIRECT_PR' ? 'Direct PR' : 'Material Request'} - <span class="font-mono text-brand">${m.mrNumber}</span></h3>
+                </div>
+                <button onclick="window.closeReviewModal()" class="text-slate-400 hover:text-red-500 transition-colors bg-white p-2.5 rounded-xl border border-rule shadow-sm flex items-center gap-2 font-bold text-xs"><i data-lucide="arrow-left" class="w-4 h-4"></i> Back to Queue</button>
+            </div>
+            
+            <div class="flex-1 overflow-y-auto p-4 md:p-8 relative">
+                <div class="bg-white shadow-sm border border-rule mx-auto" style="max-width: 1050px; min-height: 800px;">
+                    ${renderPrint(m)}
+                </div>
+            </div>
+            
+            <div class="p-6 border-t border-rule bg-white flex flex-col md:flex-row gap-6 items-center shrink-0 shadow-[0_-10px_40px_rgba(0,0,0,0.05)] z-20">
+                <div class="flex-1 w-full">
+                    <textarea id="wf-note-modal" class="glass-input w-full min-h-[60px]" placeholder="Add remarks or reason for query..."></textarea>
+                </div>
+                <div class="flex gap-4 shrink-0 min-w-[320px]">
+                    ${queryBtn}
+                    ${approveBtn}
+                </div>
+            </div>
+        </div>`;
+    }
 
     // ── RENDER ─────────────────────────────────────────────────────────────
     function render() {
@@ -2727,6 +2861,11 @@
         }
         if (printMrData)  { _lastRenderedTab = null; root.innerHTML = renderPrint(printMrData); lucide.createIcons(); return; }
         if (activeTab === 'new_mr') { _lastRenderedTab = null; root.innerHTML = renderNewMR(); lucide.createIcons(); return; }
+        if (activeTab === 'review_document') {
+            root.innerHTML = renderFullScreenReview();
+            lucide.createIcons();
+            return;
+        }
 
         root.innerHTML = `
             <div class="flex min-h-screen">
@@ -2749,6 +2888,7 @@
             ${dcHoldCancelModal ? renderDcHoldCancelModal() : ''}
             ${dcContextMenu ? renderDcContextMenu() : ''}
             ${showMrDraftsPanel ? renderMrDraftsPanel() : ''}
+            ${_reviewMrId ? renderReviewModal() : ''}
         `;
         lucide.createIcons();
         _lastRenderedTab = activeTab;
@@ -3189,30 +3329,12 @@
         </div>`;
     }
 
-    function renderAssetDatalist() {
-        let q = '';
-        if (typeof _pendingFocus !== 'undefined' && _pendingFocus && _pendingFocus.id && _pendingFocus.id.startsWith('asset-')) {
-            const el = document.getElementById(_pendingFocus.id);
-            if (el) q = (el.value || '').trim().toLowerCase();
-        }
-        let arr = appData.assets || [];
-        if (q) {
-            const qTokens = q.split(/\s+/).filter(Boolean);
-            arr = arr.filter(a => {
-                const searchStr = ((a.name || '') + ' ' + (a.specification || '') + ' ' + (a.id || '')).toLowerCase();
-                return qTokens.every(t => searchStr.includes(t));
-            });
-        }
-        // Cap to 50 items to keep DOM rendering lightning fast
-        if (arr.length > 50) arr = arr.slice(0, 50);
-        return arr.map(a => `<option value="${esc(a.name)}">${esc(a.id || '')}${a.specification ? ' · ' + esc(a.specification) : ''}</option>`).join('');
-    }
 
     // ── NEW / REVISE MR (Full-Screen, styled like the printed MR sheet) ─────
     function renderNewMR() {
         const isRevision = !!currentEditRevisionId;
         const existingMr = isRevision ? appData.mrs.find(m => m.id === currentEditRevisionId) : null;
-        const requisitionNo = existingMr ? existingMr.mrNumber : generateMrNumber();
+        const requisitionNo = existingMr ? (existingMr.prNumber || existingMr.mrNumber) : (isDirectPR ? generatePrNumber() : generateMrNumber());
         const revNo      = existingMr ? ((existingMr.revNo || 0) + 1) : 0;
         const grandTotal = currentMrItems.reduce((s, it) => s + ((Number(it.qty)||0) * (Number(it.rate)||0)), 0);
         const notesVal   = existingMr ? (existingMr.notes || '') : '';
@@ -3306,7 +3428,6 @@
                             <td style="border:1px solid #000; padding:6px 2px;">Rate</td>
                             <td style="border:1px solid #000; padding:6px 2px;">Amount</td>
                             <td style="border:1px solid #000; padding:6px 2px;">Tentative<br>Require Date</td>
-                            <td style="border:1px solid #000; padding:6px 2px;">Project Name</td>
                             <td style="border:1px solid #000; padding:6px 2px;">Cost Centre</td>
                             <td style="border:1px solid #000; padding:6px 2px;">Revision/Remarks/<br>Comments</td>
                         </tr>
@@ -3369,32 +3490,29 @@
                             <td colspan="2" style="border:1px solid #000; padding:6px 4px;"></td>
                             <td colspan="1" style="border:1px solid #000; padding:6px 4px; white-space:nowrap;">Signature :</td>
                             <td colspan="3" style="border:1px solid #000; padding:6px 4px;"></td>
+                            <td colspan="1" style="border:1px solid #000; padding:6px 4px;">Date:</td>
+                            <td colspan="2" style="border:1px solid #000; padding:6px 4px;"></td>
+                            <td colspan="1" style="border:1px solid #000; padding:6px 4px;">Sign:</td>
+                            <td colspan="2" style="border:1px solid #000; padding:6px 4px;"></td>
                         </tr>`;
                         })()}
                         <tr style="font-size:11px;">
-                            <td colspan="4" style="border:1px solid #000; padding:6px 4px; font-weight:700; text-align:center;">Procurement Dept</td>
-                            <td style="border:1px solid #000; padding:6px 4px; font-weight:700;">Name :</td>
+                            <td colspan="2" style="border:1px solid #000; padding:6px 4px; font-weight:700; text-align:center;">Procurement Dept</td>
+                            <td style="border:1px solid #000; padding:6px 4px; font-weight:700;">Name:</td>
                             <td colspan="3" style="border:1px solid #000; padding:6px 4px;"></td>
-                            <td style="border:1px solid #000; padding:6px 4px; font-weight:700;">Date :</td>
+                            <td style="border:1px solid #000; padding:6px 4px; font-weight:700;">Date:</td>
                             <td colspan="4" style="border:1px solid #000; padding:6px 4px;"></td>
                         </tr>
                         <tr style="font-size:11px;">
-                            <td colspan="2" style="border:1px solid #000; padding:6px 4px; font-weight:700; vertical-align:top; white-space:nowrap;">Remarks</td>
-                            <td colspan="6" style="border:1px solid #000; padding:0; vertical-align:top;">
+                            <td colspan="1" style="border:1px solid #000; padding:6px 4px; font-weight:700; vertical-align:top;">Remarks</td>
+                            <td colspan="7" style="border:1px solid #000; padding:0; vertical-align:top;">
                                 <textarea id="mr-overall-notes" placeholder="Purpose / justification..." style="width:100%; min-height:44px; background:transparent; border:none; outline:none; font:inherit; font-size:11px; color:#1f2937; padding:6px; resize:vertical;">${esc(notesVal)}</textarea>
                             </td>
-                            <td style="border:1px solid #000; padding:6px 4px; font-weight:700;">Sign:</td>
-                            <td colspan="4" style="border:1px solid #000; padding:6px 4px;"></td>
+                            <td colspan="1" style="border:1px solid #000; padding:6px 4px; font-weight:700;">Sign:</td>
+                            <td colspan="2" style="border:1px solid #000; padding:6px 4px;"></td>
                         </tr>
                     </tbody>
                 </table>
-                <datalist id="asset-options">
-                    ${renderAssetDatalist()}
-                </datalist>
-                <datalist id="project-options">
-                    ${(appData.projects || []).map(p => `<option value="${esc(p.name)}">${esc(p.name)}${p.ccNo ? ' · CC: ' + esc(p.ccNo) : ''}</option>`).join('')}
-                    ${(appData.projects || []).filter(p => p.ccNo).map(p => `<option value="${esc(p.ccNo)}">${esc(p.name)}</option>`).join('')}
-                </datalist>
                 </div>
             </div>
         </div>`;
@@ -3410,7 +3528,7 @@
         if (!filled.length) return '';
         return `
         <tr class="no-print">
-            <td colspan="13" style="border:1px solid #cbd5e1; background:#f8fafc; padding:8px;">
+            <td colspan="11" style="border:1px solid #cbd5e1; background:#f8fafc; padding:8px;">
                 <div style="font-size:9px;font-weight:700;text-transform:uppercase;color:#64748b;letter-spacing:0.05em;margin-bottom:6px;">Line items summary (${filled.length})</div>
                 <table style="width:100%;border-collapse:collapse;font-size:10px;">
                     <thead><tr style="background:#e2e8f0;text-align:center;font-weight:700;">
@@ -3422,7 +3540,6 @@
                         <td style="border:1px solid #94a3b8;padding:3px;width:56px;">Rate</td>
                         <td style="border:1px solid #94a3b8;padding:3px;width:64px;">Amount</td>
                         <td style="border:1px solid #94a3b8;padding:3px;width:84px;">Required Date</td>
-                        <td style="border:1px solid #94a3b8;padding:3px;">Project Name</td>
                         <td style="border:1px solid #94a3b8;padding:3px;width:88px;">Cost Centre</td>
                     </tr></thead>
                     <tbody>
@@ -3437,7 +3554,6 @@
                             <td style="border:1px solid #cbd5e1;padding:3px;text-align:right;">${Number(it.rate || 0).toFixed(2)}</td>
                             <td style="border:1px solid #cbd5e1;padding:3px;text-align:right;font-weight:700;">${amt}</td>
                             <td style="border:1px solid #cbd5e1;padding:3px;text-align:center;">${esc(it.requiredDate || '—')}</td>
-                            <td style="border:1px solid #cbd5e1;padding:3px;">${esc(it.project || '—')}</td>
                             <td style="border:1px solid #cbd5e1;padding:3px;">${esc(projectCcNo(it.project) || '—')}</td>
                         </tr>`;
                     }).join('')}
@@ -3450,14 +3566,11 @@
     function renderMrRow(item, idx, xlInputCss) {
         const rid = item.id;
         const amount = ((Number(item.qty)||0) * (Number(item.rate)||0)).toFixed(2);
-        const ccNo = projectCcNo(item.project);
         return `
         <tr style="font-size:11px;">
             <td style="border:1px solid #000; padding:4px; text-align:center; color:#64748b; font-weight:700;">${idx + 1}</td>
             <td style="border:1px solid #000; padding:0;">
-                <input id="asset-${rid}" list="asset-options" value="${esc(item.assetName)}"
-                    oninput="window.onAssetInput(${rid}, this.value)" onchange="window.onAssetChange(${rid}, this.value)"
-                    style="${xlInputCss} font-weight:700;" placeholder="Type item name…" autocomplete="off" />
+                <input id="asset-${rid}" value="${esc(item.assetName)}" oninput="window.onAssetAutocompleteInput(${rid}, this)" onkeydown="window.onAssetAutocompleteKeydown(event, ${rid}, this)" onblur="setTimeout(() => window.hideAssetAutocomplete(), 150); window.onAssetChange(${rid}, this.value)" style="${xlInputCss} font-weight:700;" placeholder="Type item name." autocomplete="off" />
             </td>
             <td style="border:1px solid #000; padding:0;">
                 <input id="spec-${rid}" value="${esc(item.spec)}" onchange="window.onFieldChange(${rid},'spec',this.value)" style="${xlInputCss}" placeholder="Specification..." />
@@ -3469,24 +3582,21 @@
                 <input id="sp-${rid}" value="${esc(item.sampleProvided)}" onchange="window.onFieldChange(${rid},'sampleProvided',this.value)" style="${xlInputCss}" placeholder="Yes / No" />
             </td>
             <td style="border:1px solid #000; padding:0;">
-                <input type="number" min="1" id="qty-${rid}" value="${item.qty}" oninput="window.onFieldChange(${rid},'qty',this.value)" style="${xlInputCss} text-align:center; font-weight:700;" />
+                <input type="text" inputmode="decimal" id="qty-${rid}" value="${item.qty !== undefined ? item.qty : ''}" oninput="window.onFieldChange(${rid},'qty',this.value)" style="${xlInputCss} text-align:center; font-weight:700;" autocomplete="off" />
             </td>
             <td style="border:1px solid #000; padding:0;">
-                <input id="unit-${rid}" value="${esc(item.uom)}" onchange="window.onFieldChange(${rid},'uom',this.value)" style="${xlInputCss} text-align:center;" />
+                <input id="unit-${rid}" value="${esc(item.uom)}" onchange="window.onFieldChange(${rid},'uom',this.value)" style="${xlInputCss} text-align:center;" autocomplete="off" />
             </td>
             <td style="border:1px solid #000; padding:0;">
-                <input type="number" min="0" step="0.01" id="rate-${rid}" value="${item.rate||0}" oninput="window.onFieldChange(${rid},'rate',this.value)" style="${xlInputCss} text-align:right;" />
+                <input type="text" inputmode="decimal" id="rate-${rid}" value="${item.rate !== undefined ? item.rate : ''}" oninput="window.onFieldChange(${rid},'rate',this.value)" style="${xlInputCss} text-align:right;" autocomplete="off" />
             </td>
-            <td style="border:1px solid #000; padding:4px; text-align:right; font-weight:700;">${amount}</td>
+            <td id="amt-${rid}" style="border:1px solid #000; padding:4px; text-align:right; font-weight:700;">${amount}</td>
             <td style="border:1px solid #000; padding:0;">
                 <input type="date" id="date-${rid}" value="${esc(item.requiredDate)}" onchange="window.onFieldChange(${rid},'requiredDate',this.value)" style="${xlInputCss} text-align:center;" />
             </td>
-            <td style="border:1px solid #000; padding:0;">
+            <td style="border:1px solid #000; padding:0; position:relative;">
                 <input id="proj-${rid}" list="project-options" value="${esc(item.project)}"
                     oninput="window.onProjectInput(${rid}, this.value)" onchange="window.onProjectChange(${rid}, this.value)"
-                    style="${xlInputCss}" placeholder="Search project…" autocomplete="off" />
-            </td>
-            <td style="border:1px solid #000; padding:4px; text-align:center; font-size:10px; color:#92400e; font-weight:700;">${esc(ccNo || '—')}</td>
             <td style="border:1px solid #000; padding:0; position:relative;">
                 <input id="rem-${rid}" value="${esc(item.remarks)}" onchange="window.onFieldChange(${rid},'remarks',this.value)" style="${xlInputCss} padding-right:36px;" placeholder="Remarks..." />
                 <button onclick="window.duplicateMrRow(${rid})" class="no-print" title="Duplicate row" style="position:absolute; right:17px; top:50%; transform:translateY(-50%); border:none; background:transparent; color:#94a3b8; cursor:pointer; font-size:11px;">⧉</button>
@@ -3560,7 +3670,7 @@
             <div class="bg-white rounded-2xl border border-rule shadow-panel overflow-hidden">
                 <table class="w-full text-left">
                     <thead><tr class="bg-paper text-[10px] font-black text-slate-500 uppercase tracking-widest border-b border-rule">
-                        <th class="px-6 py-4">MR Number</th>
+                        <th class="px-6 py-4">MR / PR Number</th>
                         <th class="px-6 py-4">Date</th>
                         ${canSeeAllDepartmentMrs() ? '<th class="px-6 py-4">Dept</th>' : ''}
                         <th class="px-6 py-4">Raised By</th>
@@ -3572,7 +3682,7 @@
                     ${sorted.length === 0 ? `<tr><td colspan="${canSeeAllDepartmentMrs() ? 7 : 6}" class="px-6 py-12 text-center text-slate-300 font-bold uppercase text-xs">No material requests match these filters</td></tr>` :
                       sorted.map(m => `
                       <tr class="hover:bg-paper/60 text-xs font-bold transition-all">
-                          <td class="px-6 py-5"><span class="idx-chip text-brand">${esc(m.mrNumber)}</span></td>
+                          <td class="px-6 py-5"><span class="idx-chip text-brand">${esc(m.mrNumber || m.prNumber)}</span></td>
                           <td class="px-6 py-5 text-slate-400">${fmtDate(m.createdAt)}</td>
                           ${canSeeAllDepartmentMrs() ? `<td class="px-6 py-5 text-slate-600">${esc(m.dept)}</td>` : ''}
                           <td class="px-6 py-5 text-slate-600 normal-case">${esc(m.raisedBy)}</td>
@@ -3809,14 +3919,13 @@
             <div class="bg-white rounded-2xl border border-rule shadow-panel overflow-hidden">
                 <table class="w-full text-left table-fixed">
                     <colgroup>
-                        <col style="width:16%"><col style="width:30%"><col style="width:9%"><col style="width:27%"><col style="width:18%">
+                        <col style="width:16%"><col style="width:40%"><col style="width:19%"><col style="width:25%">
                     </colgroup>
                     <thead><tr class="bg-slate-50 text-[8.5px] font-black text-slate-400 uppercase tracking-widest border-b border-rule">
                         <th class="px-2.5 py-2">MR No.</th>
                         <th class="px-2.5 py-2">Items</th>
                         <th class="px-2.5 py-2 text-center">Status</th>
-                        <th class="px-2.5 py-2">Remarks</th>
-                        <th class="px-2.5 py-2 text-center">Actions</th>
+                        <th class="px-2.5 py-2 text-center">Action</th>
                     </tr></thead>
                     <tbody class="divide-y divide-rule text-[10.5px] align-top">
                     ${queue.map(m => {
@@ -3841,14 +3950,8 @@
                                 ${m.notes ? `<div class="text-[9px] italic text-slate-400 mt-1 truncate" title="${esc(m.notes)}">"${esc(m.notes)}"</div>` : ''}
                             </td>
                             <td class="px-2.5 py-2 text-center">${renderStatusBadge(m.status)}${renderEscalationBadge(m)}</td>
-                            <td class="px-2.5 py-2">
-                                <textarea id="wf-note-${m.id}" class="glass-input !min-h-[38px] !py-1 !px-2 !text-[10.5px] w-full" placeholder="Remarks / reason for query..."></textarea>
-                            </td>
-                            <td class="px-2.5 py-2">
-                                <div class="flex flex-col gap-1">
-                                    <button onclick="window.updateMrStatus('${m.id}','QUERY_RAISED','Query Raised','wf-note-${m.id}')" class="py-1.5 border border-rule rounded-md font-black text-[8.5px] uppercase bg-white text-brand hover:bg-brand-50 transition-all whitespace-nowrap">Raise QR</button>
-                                    <button onclick="window.updateMrStatus('${m.id}','${toStatus}','${actionLabel}','wf-note-${m.id}')" class="py-1.5 bg-ink text-white rounded-md font-black text-[8.5px] uppercase shadow active:scale-95 transition-all hover:bg-black whitespace-nowrap">Approve</button>
-                                </div>
+                            <td class="px-2.5 py-2 align-middle px-4">
+                                <button onclick="window.openReviewModal('${m.id}', { type: 'GENERIC', toStatus: '${toStatus}', actionLabel: '${actionLabel}' })" class="w-full py-2 bg-brand text-white rounded-lg font-black text-[9px] uppercase shadow active:scale-95 transition-all hover:bg-brand-600 flex items-center justify-center gap-1.5"><i data-lucide="file-search" class="w-3 h-3"></i> Review</button>
                             </td>
                         </tr>`;
                     }).join('')}
@@ -3899,15 +4002,8 @@
                         </div>
                         ${m.notes ? `<p class="mt-4 text-xs italic text-slate-500 bg-paper p-3 rounded-xl">"${esc(m.notes)}"</p>` : ''}
                     </div>
-                    <div class="w-full md:w-[380px] bg-paper/60 p-8 border-l border-rule flex flex-col justify-between">
-                        <div>
-                            <label class="field-label">Remarks</label>
-                            <textarea id="wf-note-${m.id}" class="glass-input min-h-[100px]" placeholder="Add remarks or reason for query..."></textarea>
-                        </div>
-                        <div class="grid grid-cols-2 gap-4 mt-6">
-                            <button onclick="window.updateMrStatus('${m.id}','QUERY_RAISED','Query Raised','wf-note-${m.id}')" class="py-4 border border-rule rounded-xl font-black text-[10px] uppercase bg-white text-brand hover:bg-brand-50 transition-all">Raise QR</button>
-                            <button onclick="window.approveDeptLevel('${m.id}','wf-note-${m.id}')" class="py-4 bg-ink text-white rounded-xl font-black text-[10px] uppercase shadow-lg active:scale-95 transition-all hover:bg-black">Approve</button>
-                        </div>
+                    <div class="w-full md:w-[280px] bg-paper/60 p-8 border-l border-rule flex items-center justify-center">
+                        <button onclick="window.openReviewModal('${m.id}', { type: 'DEPT_L2' })" class="w-full py-5 bg-brand text-white rounded-xl font-black text-xs uppercase shadow-xl active:scale-95 transition-all hover:bg-brand-600 flex flex-col items-center justify-center gap-3"><i data-lucide="file-search" class="w-8 h-8 opacity-80"></i> Review<br/>Document</button>
                     </div>
                 </div>
             </div>`).join('')}
@@ -4480,7 +4576,7 @@
                             <input type="checkbox" ${checked ? 'checked' : ''} onchange="window.toggleMergePrSelect('${m.id}')" class="mt-1 accent-brand" />
                             <div class="flex-1 min-w-0">
                                 <div class="flex items-center justify-between gap-2">
-                                    <span class="font-mono font-bold text-brand">${esc(m.mrNumber)}</span>
+                                    <span class="font-mono font-bold text-brand">${esc(m.prNumber || m.mrNumber)}</span>
                                     ${renderStatusBadge(m.status)}
                                 </div>
                                 <p class="text-[10px] text-slate-500 mt-1">${esc(m.dept)} · ${fmtDate(m.createdAt)} · By ${esc(m.raisedBy)}</p>
@@ -4549,7 +4645,7 @@
                     <div class="flex-1 p-8">
                         <div class="flex justify-between items-start mb-6">
                             <div>
-                                <p class="text-2xl font-display font-bold text-brand tracking-tight font-mono">${esc(m.mrNumber)}</p>
+                                <p class="text-2xl font-display font-bold text-brand tracking-tight font-mono">${esc(m.prNumber || m.mrNumber)}</p>
                                 <p class="text-xs text-slate-400 mt-1">${esc(m.dept)} · ${fmtDate(m.createdAt)} · By ${esc(m.raisedBy)}${m.source==='DIRECT_PR' ? ' · <span class="text-violet-600 font-black">Direct PR</span>' : ''}</p>
                             </div>
                             <div class="flex items-center">${renderStatusBadge(m.status)}${renderEscalationBadge(m)}</div>
@@ -4563,15 +4659,8 @@
                         </div>
                         ${m.notes ? `<p class="mt-4 text-xs italic text-slate-500 bg-paper p-3 rounded-xl">"${esc(m.notes)}"</p>` : ''}
                     </div>
-                    <div class="w-full md:w-[380px] bg-paper/60 p-8 border-l border-rule flex flex-col justify-between">
-                        <div>
-                            <label class="field-label">Remarks</label>
-                            <textarea id="wf-note-${m.id}" class="glass-input min-h-[100px]" placeholder="Add remarks or reason for query..."></textarea>
-                        </div>
-                        <div class="grid grid-cols-2 gap-4 mt-6">
-                            <button onclick="window.updateMrStatus('${m.id}','QUERY_RAISED','Query Raised','wf-note-${m.id}')" class="py-4 border border-rule rounded-xl font-black text-[10px] uppercase bg-white text-brand hover:bg-brand-50 transition-all">Raise QR</button>
-                            <button onclick="window.updateMrStatus('${m.id}','PLANNED','Planning Approved','wf-note-${m.id}')" class="py-4 bg-ink text-white rounded-xl font-black text-[10px] uppercase shadow-lg active:scale-95 transition-all hover:bg-black">Approve</button>
-                        </div>
+                    <div class="w-full md:w-[280px] bg-paper/60 p-8 border-l border-rule flex items-center justify-center">
+                        <button onclick="window.openReviewModal('${m.id}', { type: 'PLANNING' })" class="w-full py-5 bg-brand text-white rounded-xl font-black text-xs uppercase shadow-xl active:scale-95 transition-all hover:bg-brand-600 flex flex-col items-center justify-center gap-3"><i data-lucide="file-search" class="w-8 h-8 opacity-80"></i> Review<br/>Document</button>
                     </div>
                 </div>
             </div>`).join('')}
@@ -5744,7 +5833,7 @@
         if (intent.type === 'navigate') { activeTab = intent.tab; render(); }
         else if (intent.type === 'logout') {
             user = null;
-            localStorage.removeItem(SESSION_KEY);
+            sessionStorage.removeItem(SESSION_KEY); localStorage.removeItem(SESSION_KEY);
             render();
         }
     };
@@ -7100,7 +7189,7 @@
         <div style="position:fixed;inset:0;background:rgba(11,20,32,0.7);display:flex;align-items:center;justify-content:center;z-index:1000;padding:1rem;">
             <div class="bg-white rounded-2xl shadow-2xl flex flex-col overflow-hidden w-full max-w-3xl" style="max-height:90vh;">
                 <div class="flex items-center justify-between px-6 py-4 border-b border-rule bg-paper/60">
-                    <h2 class="text-lg font-display font-bold uppercase tracking-widest">Audit: <span class="font-mono text-brand">${esc(mr.mrNumber)}</span></h2>
+                    <h2 class="text-lg font-display font-bold uppercase tracking-widest">Audit: <span class="font-mono text-brand">${esc(mr.prNumber || mr.mrNumber)}</span></h2>
                     <button onclick="window.closeAudit()" class="text-slate-400 bg-white p-1.5 border border-rule rounded-lg hover:text-brand"><i data-lucide="x" class="w-5 h-5"></i></button>
                 </div>
                 ${renderMrTimeline(mr)}
@@ -7471,7 +7560,7 @@
                 <tr><td colspan="12" class="mrp-section-title" style="font-size:18px;">PURCHASE REQUEST</td></tr>
                 <tr style="font-size:11px; font-weight:700;">
                     <td colspan="2">Requisition No-</td>
-                    <td colspan="2" style="color:#92400e;">${esc(mr.mrNumber)}</td>
+                    <td colspan="2" style="color:#92400e;">${esc(mr.prNumber || mr.mrNumber)}</td>
                     <td colspan="2" style="text-align:center;">DATE:</td>
                     <td colspan="2" style="text-align:center; color:#92400e;">${fmtDate(mr.createdAt)}</td>
                     <td colspan="2" style="text-align:center;">REV NO</td>
@@ -7699,8 +7788,13 @@
                         </div>
                         <div>
                             <label class="field-label" for="upw">Password</label>
-                            <input id="upw" type="password" class="login-input-dark" placeholder="Enter your password" autocomplete="current-password"
-                                onkeydown="if(event.key==='Enter') window.handleLogin(document.getElementById('uid').value, document.getElementById('upw').value)" />
+                            <div class="relative">
+                                <input id="upw" type="password" class="login-input-dark pr-10" placeholder="Enter your password" autocomplete="current-password"
+                                    onkeydown="if(event.key==='Enter') window.handleLogin(document.getElementById('uid').value, document.getElementById('upw').value)" />
+                                <button type="button" onclick="window.togglePasswordVisibility(this)" class="absolute right-3 top-1/2 -translate-y-1/2 text-slate-400 hover:text-brand-light transition-colors p-1" title="Toggle password visibility">
+                                    <i data-lucide="eye" class="w-5 h-5"></i>
+                                </button>
+                            </div>
                         </div>
                         <button type="button" onclick="window.handleLogin(document.getElementById('uid').value, document.getElementById('upw').value)"
                             class="w-full bg-brand text-white font-black py-3 rounded-xl uppercase tracking-[0.15em] text-xs hover:bg-brand-dark active:scale-[0.98] transition-all shadow-lg shadow-brand/25 flex items-center justify-center gap-2">
@@ -8153,5 +8247,28 @@
     })();
 
 </script>
+<div id="autocomplete-dropdown" class="hidden absolute z-50 bg-white border border-slate-300 shadow-2xl rounded-lg overflow-hidden flex-col max-h-64 overflow-y-auto" style="display:none; width:300px; text-align:left;"></div>
 </body>
 </html>
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
