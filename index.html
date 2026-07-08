@@ -69,7 +69,7 @@
   
   /* --- Premium Cinematic Login CSS --- */
     .login-scene {
-    display: flex; min-height: 100vh; width: 100%; position: relative; overflow: hidden;
+    display: flex; min-height: 100vh; width: 100%; position: relative; overflow-x: hidden; overflow-y: auto;
     background: #0B1420; /* base color */
   }
   .login-scene::before {
@@ -133,7 +133,7 @@
     .login-spin, .login-spin-rev, .login-float, .login-drift, .login-pulse, .login-shine { animation: none !important; }
   }
   @media (max-width: 1023px) {
-    .login-scene { flex-direction: column; justify-content: center; }
+    .login-scene { flex-direction: column; justify-content: flex-start; padding-bottom: 2rem; }
     .login-brand-panel { flex-shrink: 0; padding: 1.5rem 1.5rem 0.5rem !important; }
     .login-logo-img { width: 64px; height: 64px; }
   }
@@ -7895,7 +7895,7 @@ function renderMrRow(item, idx, xlInputCss) {
                     <p class="text-sm text-slate-400 leading-relaxed max-w-md mb-6">
                         Smart Procurement • Seamless Approvals • Complete Material Tracking
                     </p>
-                    <div class="grid grid-cols-2 gap-3 max-w-md">
+                    <div class="grid grid-cols-2 gap-3 max-w-md hidden sm:grid">
                         <div class="rounded-xl border border-white/10 bg-white/5 px-4 py-2.5 backdrop-blur-sm">
                             <p class="text-[9px] font-black text-slate-500 uppercase tracking-widest">Workflow</p>
                             <p class="text-xs font-bold text-white/90 mt-0.5">MR → Auth → Plan → PO</p>
