@@ -650,13 +650,12 @@
     const CHART_PALETTE = ['#B3122E','#0E7490','#047857','#B45309','#6D28D9','#BE185D','#78716C','#1f2937','#DC2626','#4F46E5','#0891B2','#65A30D'];
 
     // ── DATA CENTRE STATE ─────────────────────────────────────────────────
-    const DC_COLUMNS = [
-        { key:'mrNo',        label:'MR No',                    sticky:true, w:105 },
+        const DC_COLUMNS = [
         { key:'prNo',        label:'PR No',                    sticky:true, w:105 },
+        { key:'date',        label:'Date',                     sticky:true, w:90,  type:'date-disp' },
+        { key:'item',        label:'Item',                     sticky:true, w:170 },
+        { key:'spec',        label:'Specification',            sticky:true, w:190 },
         { key:'source',      label:'Source',                   w:95 },
-        { key:'date',        label:'Date',                     w:90,  type:'date-disp' },
-        { key:'item',        label:'Item',                     w:170 },
-        { key:'spec',        label:'Specification',            w:190 },
         { key:'sampleMake',  label:'Sample Make',              w:120 },
         { key:'qty',         label:'Qty',                      w:65,  num:true },
         { key:'unit',        label:'Unit',                     w:65 },
@@ -668,9 +667,9 @@
         { key:'revision',    label:'Rev',                      w:55,  num:true },
         { key:'deliveryLoc', label:'Delivery Location',        w:130 },
         { key:'dept',        label:'Initiator Dept',           w:130 },
-        { key:'status',      label:'Status',                   w:130, editable:'status' },
         { key:'poNo',        label:'PO Number',                w:110, editable:'text' },
         { key:'poDate',      label:'PO Date',                  w:110, editable:'date' },
+        { key:'status',      label:'Status',                   w:130, editable:'status' },
         { key:'prHandleBy',  label:'PR Handle By',             w:120, editable:'handler' },
         { key:'tentDelivery',label:'Tentative Delivery Date',  w:135, editable:'date' },
         { key:'reqDelayDays',     label:'Requirement Delay (Days)', w:120, num:true },
@@ -686,7 +685,7 @@
     let dcShowCols  = false;
     let dcColWidths = {};   // { colKey: widthPx } — populated on-demand from DC_COLUMNS.w, mutated by column resize
     let dcColOrder  = DC_COLUMNS.map(c => c.key); // display order of column keys — drag & drop reorders this only
-    const DC_FROZEN_KEYS = ['mrNo','prNo']; // always pinned first, never reordered/hidden
+    const DC_FROZEN_KEYS = ['prNo', 'date', 'item', 'spec']; // always pinned first, never reordered/hidden
     let dcDragKey   = null; // column key currently being dragged
     let dcPreset    = null; // one of: req_delay | delivery_delay | pending_proc | today_delivery | overdue_delivery | null
     // Named, reusable Data Centre views — each captures globalQ / column filters / sort / preset.
@@ -732,7 +731,7 @@
 
     // Column layout (order / widths / hidden) is a per-browser display preference and persists
     // independently of the main app database, exactly like a spreadsheet's saved view.
-    const DC_LAYOUT_KEY = "indus_fire_dc_layout_v1";
+    const DC_LAYOUT_KEY = "indus_fire_dc_layout_v2";
     function loadDcLayout() {
         try {
             const raw = localStorage.getItem(DC_LAYOUT_KEY);
@@ -5580,7 +5579,7 @@ function renderMrRow(item, idx, xlInputCss) {
         if (!el) {
             el = document.createElement('div');
             el.id = 'dc-toast';
-            el.style.cssText = 'position:fixed;bottom:24px;right:24px;z-index:2000;background:#047857;color:#fff;font-weight:700;font-size:12px;letter-spacing:.03em;padding:10px 18px;border-radius:10px;box-shadow:0 8px 24px -8px rgba(4,120,87,0.5);display:flex;align-items:center;gap:8px;transition:opacity .25s, transform .25s;';
+            el.style.cssText = 'position:fixed;bottom:24px;right:24px;z-index:2000;background:#047857;color:#fff;font-weight:700;font-size:12px;letter-spacing:.03em;padding:10px 18px;border-radius:10px;box-shadow:0 8px 24px -8px rgba(4,120,87,0.5);display:flex;align-items:center;gap:8px;transition:opacity .25s, transform .25s;pointer-events:none;';
             document.body.appendChild(el);
         }
         el.innerHTML = `<span style="width:7px;height:7px;border-radius:999px;background:#fff;display:inline-block;"></span>${esc(msg)}`;
@@ -5771,6 +5770,9 @@ function renderMrRow(item, idx, xlInputCss) {
     // Writes every staged Data Centre edit to localStorage in one go. This is the ONLY place
     // that persists Data Centre edits — there is no auto save.
     window.dcSaveChanges = () => {
+        if (document.activeElement && typeof document.activeElement.blur === 'function') {
+            document.activeElement.blur();
+        }
         if (!dcDirty) { showToast('Nothing to save'); return; }
         syncAllMrStatuses();
         saveDB(appData);
@@ -6173,7 +6175,7 @@ function renderMrRow(item, idx, xlInputCss) {
                 <p class="text-[10px] text-slate-500 font-bold uppercase tracking-widest">Page ${dcPage} of ${totalPages} · ${allRows.length} rows</p>
                 <div class="flex items-center gap-1">
                     ${canEdit ? `
-                    <button id="dc-save-btn" onclick="window.dcSaveChanges()" title="${dcDirty ? 'Save Changes' : 'No unsaved changes'}"
+                    <button id="dc-save-btn" onmousedown="window.dcSaveChanges()" title="${dcDirty ? 'Save Changes' : 'No unsaved changes'}"
                         class="px-2.5 py-1.5 rounded-lg border transition-all flex items-center justify-center ${dcDirty ? 'bg-emerald-600 border-emerald-600 text-white shadow-lg' : 'bg-white border-rule text-slate-400 opacity-70'}">
                         <span style="font-size:13px;line-height:1;">💾</span>
                     </button>` : ''}
@@ -6188,12 +6190,12 @@ function renderMrRow(item, idx, xlInputCss) {
     window.dcExportExcel = () => {
         const rows = dcFilteredRows();
         const data = rows.map(r => ({
-            'MR No': r.mrNo, 'PR No': r.prNo, 'Source': r.source==='DIRECT_PR'?'Direct PR':'MR Based', 'Date': fmtDate(r.date), 'Item': r.item, 'Specification': r.spec, 'Sample Make': r.sampleMake,
+            'PR No': r.prNo, 'Source': r.source==='DIRECT_PR'?'Direct PR':'MR Based', 'Date': fmtDate(r.date), 'Item': r.item, 'Specification': r.spec, 'Sample Make': r.sampleMake,
             'Qty': r.qty, 'Unit': r.unit, 'Rate': r.rate, 'Amount': r.amount,
             'Item Completion %': r.itemCompletionPct,
             'Tentative Required Date': r.reqDate,
             'Cost Centre': r.costCentre, 'Revision': r.revision, 'Delivery Location': r.deliveryLoc, 'Initiator Department': r.dept,
-            'Status': STATUS_META[r.status]?.label || r.status, 'PO Number': r.poNo, 'PO Date': r.poDate,
+            'PO Number': r.poNo, 'PO Date': r.poDate, 'Status': STATUS_META[r.status]?.label || r.status,
             'PR Handle By': r.prHandleBy, 'Tentative Delivery Date': r.tentDelivery,
             'Requirement Delay (Days)': r.reqDelayDays, 'Delivery Delay (Days)': r.deliveryDelayDays, 'Remarks': r.remarks
         }));
@@ -6209,8 +6211,8 @@ function renderMrRow(item, idx, xlInputCss) {
         doc.setFontSize(14); doc.text('Indus Fire Safety — Procurement Data Centre', 30, 30);
         doc.autoTable({
             startY: 45, styles: { fontSize: 6 },
-            head: [['MR No','PR No','Date','Item','Spec','Sample Make','Qty','Unit','Rate','Amount','Req. Date','Cost Centre','Rev','Delivery Loc','Dept','Status','PO No','PO Date','Handle By','Tent. Delivery','Req. Delay','Delivery Delay','Remarks']],
-            body: rows.map(r => [r.mrNo, r.prNo, fmtDate(r.date), r.item, r.spec, r.sampleMake, r.qty, r.unit, r.rate, r.amount, r.reqDate, r.costCentre, r.revision, r.deliveryLoc, r.dept, STATUS_META[r.status]?.label||r.status, r.poNo, r.poDate, r.prHandleBy, r.tentDelivery, r.reqDelayDays, r.deliveryDelayDays, r.remarks])
+            head: [['PR No','Date','Item','Spec','Sample Make','Qty','Unit','Rate','Amount','Req. Date','Cost Centre','Rev','Delivery Loc','Dept','PO No','PO Date','Status','Handle By','Tent. Delivery','Req. Delay','Delivery Delay','Remarks']],
+            body: rows.map(r => [r.prNo, fmtDate(r.date), r.item, r.spec, r.sampleMake, r.qty, r.unit, r.rate, r.amount, r.reqDate, r.costCentre, r.revision, r.deliveryLoc, r.dept, r.poNo, r.poDate, STATUS_META[r.status]?.label||r.status, r.prHandleBy, r.tentDelivery, r.reqDelayDays, r.deliveryDelayDays, r.remarks])
         });
         doc.save(`Indus_Fire_DataCentre_${fmtDateInput(Date.now())}.pdf`);
     };
