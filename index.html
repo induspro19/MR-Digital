@@ -572,6 +572,8 @@
     }
 
     // ── STATE ──────────────────────────────────────────────────────────────
+    let mobileMenuOpen = false;
+    window.toggleMobileMenu = () => { mobileMenuOpen = !mobileMenuOpen; render(); };
     let appData = null; // Initialized asynchronously from Supabase — see bottom of script
     let user = null;
     try { user = JSON.parse(sessionStorage.getItem(SESSION_KEY)); localStorage.removeItem(SESSION_KEY); } catch(e) {}
@@ -2600,6 +2602,8 @@
         alert('Sequence settings saved.\n\nNext MR: ' + peekNextMrNumber() + '\nNext PR: ' + peekNextPrNumber());
     };
 
+    
+
     window.syncSequenceFromData = () => {
         syncSequencesFromExisting();
         saveDB();
@@ -2647,6 +2651,7 @@
                 <button onclick="window.saveSequenceSettings()" class="bg-brand text-white px-6 py-3 rounded-xl font-black text-[10px] uppercase tracking-widest shadow-lg hover:bg-brand-dark active:scale-95 transition-all">Save Sequence Settings</button>
                 <button onclick="window.syncSequenceFromData()" class="bg-white border border-rule text-slate-700 px-6 py-3 rounded-xl font-black text-[10px] uppercase tracking-widest hover:bg-paper active:scale-95 transition-all">Sync from Existing Data</button>
             </div>
+
         </div>`;
     }
 
@@ -2925,9 +2930,22 @@
         }
 
         root.innerHTML = `
-            <div class="flex min-h-screen">
+            <div class="flex flex-col md:flex-row min-h-screen bg-paper w-full max-w-[100vw] overflow-x-hidden">
+                
+            <div class="md:hidden flex items-center justify-between bg-ink text-white p-3 sticky top-0 z-40 border-b border-white/10 no-print">
+                <div class="flex items-center gap-2">
+                    <div class="w-7 h-7 rounded bg-brand flex items-center justify-center shrink-0 shadow-lg shadow-brand/20">
+                        <i data-lucide="flame" class="w-4 h-4 text-white"></i>
+                    </div>
+                    <div class="font-display font-bold text-sm tracking-tight">Indus Fire</div>
+                </div>
+                <button onclick="window.toggleMobileMenu()" class="p-1.5 bg-white/10 rounded-md hover:bg-white/20 transition-colors">
+                    <i data-lucide="${mobileMenuOpen ? 'x' : 'menu'}" class="w-5 h-5"></i>
+                </button>
+            </div>
+                ${mobileMenuOpen ? '<div onclick="window.toggleMobileMenu()" class="fixed inset-0 bg-black/50 z-40 md:hidden no-print transition-opacity fade-in"></div>' : ''}
                 ${renderSidebar()}
-                <main class="flex-1 ml-64 ${activeTab==='data_centre' ? 'p-4' : 'p-10'} overflow-y-auto">
+                <main class="flex-1 md:ml-64 w-full ${activeTab==='data_centre' ? 'p-2 md:p-4' : 'p-4 md:p-10'} overflow-y-auto min-h-0 ${mobileMenuOpen ? 'opacity-30 pointer-events-none md:opacity-100 md:pointer-events-auto' : ''}">
                     <div class="fade-in">${renderContent()}</div>
                 </main>
             </div>
@@ -3095,7 +3113,7 @@
 
     function renderSidebar() {
         return `
-        <div id="app-sidebar" class="w-64 bg-ink h-screen fixed text-slate-300 flex flex-col no-print border-r border-black/20">
+        <div id="app-sidebar" class="w-64 bg-ink h-screen fixed top-0 left-0 text-slate-300 flex flex-col no-print border-r border-black/20 z-50 transition-transform duration-300 ${mobileMenuOpen ? 'translate-x-0' : '-translate-x-full'} md:translate-x-0">
             <div class="shrink-0 p-6 pb-4 border-b border-white/10">
                 <div class="flex items-center gap-3">
                     <div class="w-10 h-10 rounded-lg bg-brand flex items-center justify-center shrink-0 shadow-lg shadow-brand/20">
@@ -3294,7 +3312,7 @@
                     </div>`}
                 </div>
             </div>
-            <div class="bg-white rounded-2xl border border-rule shadow-panel overflow-hidden">
+            <div class="bg-white rounded-2xl border border-rule shadow-panel overflow-hidden overflow-x-auto">
                 <div class="px-6 py-4 border-b border-rule">
                     <h3 class="text-xs font-black text-slate-500 uppercase tracking-widest">Recent Department MRs</h3>
                 </div>
@@ -3790,7 +3808,7 @@ function renderMrRow(item, idx, xlInputCss) {
                 <p class="text-sm text-slate-500">${scopeNote}</p>
             </div>
             ${renderKeywordFilterBar({ scope:'track', filters: trackingFilters, setFn:'setTrackFilter', clearFn:'clearTrackFilters', showDept: canSeeAllDepartmentMrs(), showProject:true, showDateRange:true })}
-            <div class="bg-white rounded-2xl border border-rule shadow-panel overflow-hidden">
+            <div class="bg-white rounded-2xl border border-rule shadow-panel overflow-hidden overflow-x-auto">
                 <table class="w-full text-left">
                     <thead><tr class="bg-paper text-[10px] font-black text-slate-500 uppercase tracking-widest border-b border-rule">
                         <th class="px-6 py-4">MR / PR Number</th>
@@ -3891,7 +3909,7 @@ function renderMrRow(item, idx, xlInputCss) {
                 </div>
             </div>
 
-            <div class="bg-white rounded-2xl border border-rule shadow-panel overflow-hidden">
+            <div class="bg-white rounded-2xl border border-rule shadow-panel overflow-hidden overflow-x-auto">
                 <div class="px-6 py-4 border-b border-rule flex items-center justify-between">
                     <h3 class="text-xs font-black text-slate-500 uppercase tracking-widest">Preview ${scoped.length > 25 ? `(latest 25 of ${scoped.length})` : `(${scoped.length})`}</h3>
                 </div>
@@ -4039,8 +4057,8 @@ function renderMrRow(item, idx, xlInputCss) {
             <div class="py-16 text-center text-xs text-slate-300 font-black uppercase bg-white rounded-2xl border-2 border-dashed border-rule">
                 No MRs pending in this stage
             </div>` : `
-            <div class="bg-white rounded-2xl border border-rule shadow-panel overflow-hidden">
-                <table class="w-full text-left table-fixed">
+            <div class="bg-white rounded-2xl border border-rule shadow-panel overflow-hidden overflow-x-auto">
+                <table class="w-full text-left table-fixed min-w-[600px]">
                     <colgroup>
                         <col style="width:16%"><col style="width:36%"><col style="width:18%"><col style="width:20%"><col style="width:10%">
                     </colgroup>
@@ -4099,7 +4117,7 @@ function renderMrRow(item, idx, xlInputCss) {
             <div class="py-16 text-center text-xs text-slate-300 font-black uppercase bg-white rounded-2xl border-2 border-dashed border-rule">
                 No MRs pending in this stage
             </div>` : queue.map(m => `
-            <div class="bg-white rounded-2xl border border-rule shadow-panel overflow-hidden">
+            <div class="bg-white rounded-2xl border border-rule shadow-panel overflow-hidden overflow-x-auto">
                 <div class="flex flex-col md:flex-row">
                     <div class="flex-1 p-8">
                         <div class="flex justify-between items-start mb-6">
@@ -4478,12 +4496,12 @@ function renderMrRow(item, idx, xlInputCss) {
                 ${planKpiCard(exec.delayedProjects,'Delayed Projects','#DC2626')}
             </div>
 
-            <div class="bg-white rounded-2xl border border-rule shadow-panel overflow-hidden">
+            <div class="bg-white rounded-2xl border border-rule shadow-panel overflow-hidden overflow-x-auto">
                 <div class="p-3 border-b border-rule bg-paper">
                     <h3 class="text-[10px] font-display font-bold text-slate-600 uppercase tracking-widest">Active Project Material Status</h3>
                 </div>
                 <div class="overflow-hidden">
-                    <table class="w-full text-left table-fixed plan-mat-table">
+                    <table class="w-full text-left table-fixed plan-mat-table min-w-[700px]">
                         <thead><tr class="bg-slate-50 text-[8px] font-black text-slate-400 uppercase tracking-wide border-b border-rule">
                             <th class="px-1.5 py-1.5 text-center w-[4%]" title="Priority">Pri</th>
                             <th class="px-1.5 py-1.5 w-[22%]" title="Project">Project</th>
@@ -4533,7 +4551,7 @@ function renderMrRow(item, idx, xlInputCss) {
                 </div>
             </div>
 
-            <div class="bg-white rounded-2xl border border-rule shadow-panel overflow-hidden">
+            <div class="bg-white rounded-2xl border border-rule shadow-panel overflow-hidden overflow-x-auto">
                 <button type="button" onclick="window.togglePlanProjectCards()" class="w-full flex items-center justify-between gap-3 p-3 bg-paper hover:bg-slate-50 transition-colors text-left ${planProjectCardsExpanded ? 'border-b border-rule' : ''}">
                     <h3 class="text-[10px] font-display font-bold text-slate-600 uppercase tracking-widest">Project Progress Charts</h3>
                     <span class="flex items-center gap-1.5 text-[10px] font-black uppercase tracking-widest text-brand shrink-0">
@@ -4677,7 +4695,7 @@ function renderMrRow(item, idx, xlInputCss) {
             </div>
 
             <div class="grid grid-cols-1 lg:grid-cols-2 gap-6">
-                <div class="bg-white rounded-2xl border border-rule shadow-panel overflow-hidden">
+                <div class="bg-white rounded-2xl border border-rule shadow-panel overflow-hidden overflow-x-auto">
                     <div class="px-5 py-3 border-b border-rule bg-paper">
                         <h3 class="text-[11px] font-black text-slate-500 uppercase tracking-widest">Authorized MRs (awaiting PR)</h3>
                     </div>
@@ -4714,7 +4732,7 @@ function renderMrRow(item, idx, xlInputCss) {
                             <div class="flex justify-between text-xs"><span class="text-slate-500">Total line items</span><span class="font-bold">${previewItems.length}</span></div>
                             <div class="flex justify-between text-xs"><span class="text-slate-500">Next PR number</span><span class="font-mono font-bold text-[#0E7490]">${esc(peekNextPrNumber())}</span></div>
                         </div>
-                        <div class="border border-rule rounded-xl overflow-hidden max-h-48 overflow-y-auto custom-scrollbar">
+                        <div class="border border-rule rounded-xl overflow-hidden overflow-x-auto max-h-48 overflow-y-auto custom-scrollbar">
                             <table class="w-full text-left text-[10px]">
                                 <thead class="bg-slate-50 text-[9px] font-black text-slate-400 uppercase sticky top-0"><tr>
                                     <th class="px-2 py-1.5">Ref MR</th><th class="px-2 py-1.5">Dept</th><th class="px-2 py-1.5">Item</th><th class="px-2 py-1.5 text-right">Qty</th>
@@ -4756,7 +4774,7 @@ function renderMrRow(item, idx, xlInputCss) {
             <div class="py-16 text-center text-xs text-slate-300 font-black uppercase bg-white rounded-2xl border-2 border-dashed border-rule">
                 No MRs pending Planning Approval
             </div>` : queue.map(m => `
-            <div class="bg-white rounded-2xl border border-rule shadow-panel overflow-hidden">
+            <div class="bg-white rounded-2xl border border-rule shadow-panel overflow-hidden overflow-x-auto">
                 <div class="flex flex-col md:flex-row">
                     <div class="flex-1 p-8">
                         <div class="flex justify-between items-start mb-6">
@@ -5223,7 +5241,7 @@ function renderMrRow(item, idx, xlInputCss) {
                 </div>
 
                 <!-- Section 6 — Upcoming Material Requirement -->
-                <div class="bg-white rounded-2xl border border-rule shadow-panel overflow-hidden">
+                <div class="bg-white rounded-2xl border border-rule shadow-panel overflow-hidden overflow-x-auto">
                     <div class="p-3.5 border-b border-rule bg-paper">
                         <h3 class="text-[11px] font-display font-bold text-slate-600 uppercase tracking-widest">Upcoming Material Requirement</h3>
                     </div>
@@ -6068,7 +6086,7 @@ function renderMrRow(item, idx, xlInputCss) {
                     <h1 class="text-2xl font-display font-bold tracking-tight">Data Centre</h1>
                     <p class="text-xs text-slate-500">Master Purchase Request database · ${allRows.length} line items across ${summary.totalPR} PRs</p>
                 </div>
-                <div class="flex items-center gap-2 no-print">
+                <div class="flex flex-wrap items-center gap-2 no-print">
                     <select onchange="if(this.value) window.dcApplySavedFilter(this.value); this.value='';" class="text-[10px] font-black uppercase tracking-widest bg-white border border-rule px-2 py-2 rounded-lg">
                         <option value="">Saved Views (${dcSavedFilters.length})</option>
                         ${dcSavedFilters.map(f => `<option value="${esc(f.name)}">${esc(f.name)}</option>`).join('')}
@@ -6245,7 +6263,7 @@ function renderMrRow(item, idx, xlInputCss) {
                 <input id="reg-departments-q" value="${esc(q)}" oninput="window.setRegistryFilter('departments', this.value)" class="glass-input border-none shadow-none p-0 focus:ring-0 text-sm" placeholder="Search department name…" />
                 ${q ? `<button onclick="window.setRegistryFilter('departments','')" class="text-[10px] font-bold uppercase text-slate-400 hover:text-brand shrink-0">Clear</button>` : ''}
             </div>
-            <div class="bg-white rounded-xl border border-rule overflow-hidden shadow-panel">
+            <div class="bg-white rounded-xl border border-rule overflow-hidden overflow-x-auto shadow-panel">
                 <table class="w-full text-left">
                     <thead><tr class="bg-paper text-[9px] font-black text-slate-500 uppercase tracking-widest border-b border-rule">
                         <th class="px-4 py-2 w-[100px]">ID</th>
@@ -6307,7 +6325,7 @@ function renderMrRow(item, idx, xlInputCss) {
                 <input id="reg-assets-q" value="${esc(q)}" oninput="window.setRegistryFilter('assets', this.value)" class="glass-input border-none shadow-none p-0 focus:ring-0 text-sm" placeholder="Search by Asset ID, name, specification, or UOM…" />
                 ${q ? `<button onclick="window.setRegistryFilter('assets','')" class="text-[10px] font-bold uppercase text-slate-400 hover:text-brand shrink-0">Clear</button>` : ''}
             </div>
-            <div class="bg-white rounded-xl border border-rule overflow-hidden shadow-panel">
+            <div class="bg-white rounded-xl border border-rule overflow-hidden overflow-x-auto shadow-panel">
                 <div class="overflow-x-auto">
                 <table class="w-full text-left table-fixed min-w-[720px]">
                     <thead><tr class="bg-paper text-[9px] font-black text-slate-500 uppercase tracking-widest border-b border-rule">
@@ -6455,8 +6473,8 @@ function renderMrRow(item, idx, xlInputCss) {
                 <i data-lucide="search" class="w-4 h-4 text-slate-300 shrink-0"></i>
                 <input id="reg-${type}-q" value="${esc(q)}" oninput="window.setRegistryFilter('${type}', this.value)" class="glass-input border-none shadow-none p-0 focus:ring-0" placeholder="Search ${type} by any keyword…" />
             </div>
-            <div class="bg-white rounded-2xl border border-rule overflow-hidden shadow-panel">
-                <table class="w-full text-left">
+            <div class="bg-white rounded-2xl border border-rule overflow-hidden overflow-x-auto shadow-panel">
+                <table class="w-full text-left min-w-[600px]">
                     <thead><tr class="bg-paper text-[10px] font-black text-slate-500 uppercase tracking-widest border-b border-rule">
                         <th class="px-6 py-4">ID / Name</th>
                         <th class="px-6 py-4">${type==='projects'?'Status':'Detail'}</th>
@@ -6577,7 +6595,7 @@ function renderMrRow(item, idx, xlInputCss) {
                 <i data-lucide="search" class="w-4 h-4 text-slate-300 shrink-0"></i>
                 <input id="proc-handler-q" value="${esc(procHandlerFilter)}" oninput="window.setProcHandlerFilter(this.value)" class="glass-input border-none shadow-none p-0 focus:ring-0" placeholder="Search handlers by name, employee ID, department…" />
             </div>
-            <div class="bg-white rounded-2xl border border-rule overflow-hidden shadow-panel">
+            <div class="bg-white rounded-2xl border border-rule overflow-hidden overflow-x-auto shadow-panel">
                 <table class="w-full text-left">
                     <thead><tr class="bg-paper text-[10px] font-black text-slate-500 uppercase tracking-widest border-b border-rule">
                         <th class="px-6 py-4">Employee</th>
