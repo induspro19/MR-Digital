@@ -69,7 +69,7 @@
   
   /* --- Premium Cinematic Login CSS --- */
     .login-scene {
-    display: flex; min-height: 100vh; width: 100%; position: relative; overflow-x: hidden; overflow-y: auto;
+    display: flex; min-height: 100dvh; width: 100%; position: relative; overflow-x: hidden; overflow-y: auto;
     background: #0B1420; /* base color */
   }
   .login-scene::before {
@@ -134,7 +134,8 @@
   }
   @media (max-width: 1023px) {
     .login-scene { flex-direction: column; justify-content: flex-start; padding-bottom: 2rem; }
-    .login-brand-panel { flex-shrink: 0; padding: 1.5rem 1.5rem 0.5rem !important; }
+    .login-brand-panel { flex-shrink: 0; padding: 1.5rem 1.5rem 0.5rem !important; min-height: auto; }
+    .login-scene { height: auto; min-height: 100dvh; }
     .login-logo-img { width: 64px; height: 64px; }
   }
 
@@ -646,7 +647,10 @@
     };
 
     // ── PLANNING CONTROL BOARD STATE ─────────────────────────────────────
-    let pcbState = { q: '', project: '', status: '' };
+    let pcbState = JSON.parse(localStorage.getItem('pcbState')) || { q: '', projects: [], status: '' };
+    if (typeof pcbState.project === 'string') { pcbState.projects = pcbState.project ? [pcbState.project] : []; delete pcbState.project; }
+    if (!Array.isArray(pcbState.projects)) pcbState.projects = [];
+    window.window.pcbProjectDropdownOpen = false;
     let pcbChartTypes = { project: 'pie', monthly: 'bar' };
     let pcbChartLabelMode = { project: 'off', monthly: 'off' }; // off | value | percent | both
     const CHART_PALETTE = ['#B3122E','#0E7490','#047857','#B45309','#6D28D9','#BE185D','#78716C','#1f2937','#DC2626','#4F46E5','#0891B2','#65A30D'];
@@ -3288,8 +3292,17 @@
                     </button>
                 </div>
             </div>
-            <div class="grid grid-cols-2 md:grid-cols-5 gap-4">
-                ${statCard(stats.total, 'Total MRs', 'text-slate-900', 'clipboard-list')}
+            <div class="grid grid-cols-2 md:grid-cols-6 gap-4">
+                  ${(function(){
+                      const queryMrs = myMrs.filter(m => m.status === 'QUERY_RAISED');
+                      if (queryMrs.length === 0) return '';
+                      return `<div onclick="window.setTrackFilter('status', 'QUERY_RAISED'); window.navigate('tracking');" class="bg-amber-50 rounded-2xl p-4 border border-amber-200 shadow-sm cursor-pointer hover:bg-amber-100 hover:shadow-md transition-all group flex flex-col items-center justify-center text-center animate-pulse">
+                          <i data-lucide="alert-circle" class="w-6 h-6 text-amber-600 mb-2 group-hover:scale-110 transition-transform"></i>
+                          <p class="text-[10px] font-black text-amber-800 uppercase tracking-widest leading-tight">Active Queries</p>
+                          <p class="text-3xl font-display font-black text-amber-600 mt-1">${queryMrs.length}</p>
+                      </div>`;
+                  })()}
+                  ${statCard(stats.total, 'Total MRs', 'text-slate-900', 'clipboard-list')}
                 ${statCard(stats.open, 'Open MRs', 'text-amber-600', 'clock')}
                 ${statCard(stats.closed, 'Closed MRs', 'text-emerald-600', 'check-circle-2')}
                 ${statCard(raisers.length, 'Requesters', 'text-blue-600', 'users')}
@@ -4503,8 +4516,8 @@ function renderMrRow(item, idx, xlInputCss) {
                 <div class="overflow-hidden">
                     <table class="w-full text-left table-fixed plan-mat-table min-w-[700px]">
                         <thead><tr class="bg-slate-50 text-[8px] font-black text-slate-400 uppercase tracking-wide border-b border-rule">
-                            <th class="px-1.5 py-1.5 text-center w-[4%]" title="Priority">Pri</th>
-                            <th class="px-1.5 py-1.5 w-[22%]" title="Project">Project</th>
+                            <th class="px-1.5 py-1.5 text-center w-[48px] min-w-[48px] sticky left-0 bg-slate-50 z-20 shadow-[1px_0_0_#E3E5E9]" title="Priority">Pri</th>
+                              <th class="px-1.5 py-1.5 min-w-[200px] sticky left-[48px] bg-slate-50 z-20 shadow-[1px_0_0_#E3E5E9]" title="Project">Project</th>
                             <th class="px-1 py-1.5 text-center w-[6%]" title="% Received">% Rec</th>
                             <th class="px-1 py-1.5 text-right w-[9%]" title="Total BOM Items (reference only)">BOM Ref</th>
                             <th class="px-1 py-1.5 text-right w-[9%]" title="Pending PR against BOM (manual)">Pend PR</th>
@@ -4517,8 +4530,8 @@ function renderMrRow(item, idx, xlInputCss) {
                             ${projectRows.length === 0 ? '<tr><td colspan="9" class="p-6 text-center text-slate-400 text-xs">No active projects found.</td></tr>' : ''}
                             ${projectRows.map(p => `
                             <tr class="hover:bg-slate-50 transition-colors">
-                                <td class="px-1 py-1"><input type="number" value="${p.priority}" onchange="window.updateProjectField('${p.id}','priority',this.value)" class="w-full text-center glass-input !py-0.5 !px-0.5 !text-[10px] font-bold" /></td>
-                                <td class="px-1.5 py-1 font-bold text-ink truncate" title="${esc(p.name)}">${esc(p.name)}</td>
+                                <td class="px-1 py-1 sticky left-0 bg-white z-10 shadow-[1px_0_0_#E3E5E9]"><input type="number" value="${p.priority}" onchange="window.updateProjectField('${p.id}','priority',this.value)" class="w-full text-center glass-input !py-0.5 !px-0.5 !text-[10px] font-bold" /></td>
+                                  <td class="px-1.5 py-1 font-bold text-ink truncate sticky left-[48px] bg-white z-10 shadow-[1px_0_0_#E3E5E9] max-w-[250px]" title="${esc(p.name)}">${esc(p.name)}</td>
                                 <td class="px-1 py-1 text-center font-bold text-[10px]" style="color:${p.matPct>=100?'#047857':p.matPct>50?'#0E7490':'#B45309'}">${p.matPct}%</td>
                                 <td class="px-1 py-1">
                                     ${(p.bom > 0 && !bomUnlocked[p.id]) ? `
@@ -4946,7 +4959,18 @@ function renderMrRow(item, idx, xlInputCss) {
         }
     }
 
-    window.setPcbFilter = (key, val) => { pcbState[key] = val; softRender(); };
+    window.setPcbFilter = (key, val) => { pcbState[key] = val; localStorage.setItem('pcbState', JSON.stringify(pcbState)); softRender(); };
+    window.togglePcbProject = (name) => {
+        if (!pcbState.projects.includes(name)) pcbState.projects.push(name);
+        else pcbState.projects = pcbState.projects.filter(n => n !== name);
+        localStorage.setItem('pcbState', JSON.stringify(pcbState));
+        softRender();
+    };
+    window.setPcbProjects = (arr) => {
+        pcbState.projects = arr;
+        localStorage.setItem('pcbState', JSON.stringify(pcbState));
+        softRender();
+    };
     window.setPcbChartType = (which, type) => { pcbChartTypes[which] = type; window.renderPcbCharts(); };
 
     window.downloadPcbChart = (which) => {
@@ -5103,7 +5127,7 @@ function renderMrRow(item, idx, xlInputCss) {
     function renderPlanningControlBoard() {
         const d = computePlanningControlData();
         let rows = d.projectRows;
-        if (pcbState.project) rows = rows.filter(r => r.name === pcbState.project);
+        if (pcbState.projects && pcbState.projects.length > 0) rows = rows.filter(r => pcbState.projects.includes(r.name));
         if (pcbState.status)  rows = rows.filter(r => r.planningStatus === pcbState.status);
         if (pcbState.q) {
             const q = pcbState.q.toLowerCase();
@@ -5151,10 +5175,43 @@ function renderMrRow(item, idx, xlInputCss) {
                 <div class="p-3.5 border-b border-rule bg-paper flex flex-wrap items-center gap-2">
                     <h3 class="text-[11px] font-display font-bold text-slate-600 uppercase tracking-widest mr-auto">Project Planning Dashboard</h3>
                     <input id="pcb-q" value="${esc(pcbState.q)}" oninput="window.setPcbFilter('q', this.value)" placeholder="Search project / remarks…" class="glass-input !w-48 !py-1.5 !text-xs" />
-                    <select onchange="window.setPcbFilter('project', this.value)" class="glass-input !w-40 !py-1.5 !text-xs">
-                        <option value="">All Projects</option>
-                        ${d.projectRows.map(p => `<option value="${esc(p.name)}" ${pcbState.project===p.name?'selected':''}>${esc(p.name)}</option>`).join('')}
-                    </select>
+                    
+                      ${(() => {
+                          let selPr = 0; let selRec = 0;
+                          if (pcbState.projects && pcbState.projects.length > 0) {
+                              const selRows = d.projectRows.filter(r => pcbState.projects.includes(r.name));
+                              selRows.forEach(r => { selPr += r.prGenerated; selRec += r.receivedItems; });
+                          }
+                          const selPct = selPr > 0 ? Math.round((selRec / selPr) * 100) : 0;
+                          return (pcbState.projects && pcbState.projects.length > 0) 
+                              ? `<div class="bg-brand/10 border border-brand/20 text-brand px-3 py-1.5 rounded-lg text-xs font-bold whitespace-nowrap shadow-sm">Selected Completion: ${selPct}%</div>` 
+                              : '';
+                      })()}
+                      <div class="relative group">
+                          <button id="pcb-proj-btn" type="button" onclick="window.pcbProjectDropdownOpen = !window.pcbProjectDropdownOpen; softRender()" class="glass-input !w-40 !py-1.5 !text-xs flex justify-between items-center text-left bg-white text-slate-700 truncate shadow-sm">
+                              ${pcbState.projects.length ? pcbState.projects.length + ' Selected' : 'All Projects'}
+                              <i data-lucide="chevron-down" class="w-3.5 h-3.5 opacity-50"></i>
+                          </button>
+                          <div id="pcb-proj-dd" class="${window.pcbProjectDropdownOpen ? '' : 'hidden'} absolute top-full left-0 mt-1 w-64 bg-white border border-rule shadow-2xl rounded-xl z-[100] max-h-80 flex flex-col p-1.5">
+                              <label class="flex items-center gap-2 px-2 py-2 hover:bg-slate-50 cursor-pointer rounded-lg text-[10px] uppercase font-black tracking-widest text-brand border-b border-rule mb-1 shrink-0">
+                                  <input type="checkbox" onchange="window.setPcbProjects([])" ${pcbState.projects.length===0?'checked':''} class="accent-brand rounded border-slate-300 w-3.5 h-3.5" />
+                                  Clear / Select All
+                              </label>
+                              <div class="overflow-y-auto custom-scrollbar flex-1">
+                                  ${d.projectRows.map(p => `
+                                      <label class="flex items-center gap-2 px-2 py-1.5 hover:bg-slate-50 cursor-pointer rounded-lg text-xs">
+                                          <input type="checkbox" onchange="window.togglePcbProject('${esc(p.name)}')" ${pcbState.projects.includes(p.name)?'checked':''} class="accent-brand rounded border-slate-300 w-3.5 h-3.5" />
+                                          <span class="truncate" title="${esc(p.name)}">${esc(p.name)}</span>
+                                      </label>
+                                  `).join('')}
+                              </div>
+                              <div class="pt-2 mt-1 border-t border-rule shrink-0">
+                                  <button type="button" onclick="window.pcbProjectDropdownOpen = false; softRender()" class="w-full bg-slate-800 text-white font-bold py-2 rounded-lg text-xs hover:bg-slate-900 active:scale-95 transition-all shadow-md flex items-center justify-center gap-2">
+                                      <i data-lucide="check-circle" class="w-3.5 h-3.5"></i> Save & Close
+                                  </button>
+                              </div>
+                          </div>
+                      </div>
                     <select onchange="window.setPcbFilter('status', this.value)" class="glass-input !w-40 !py-1.5 !text-xs">
                         <option value="">All Statuses</option>
                         ${['Pending Planning','In Procurement','Completed','No BOM / MR'].map(s => `<option value="${esc(s)}" ${pcbState.status===s?'selected':''}>${esc(s)}</option>`).join('')}
@@ -5163,8 +5220,8 @@ function renderMrRow(item, idx, xlInputCss) {
                 <div class="overflow-x-auto max-h-[420px] custom-scrollbar">
                     <table class="w-full text-left whitespace-nowrap">
                         <thead class="sticky top-0 z-10"><tr class="bg-slate-50 text-[9px] font-black text-slate-400 uppercase tracking-widest border-b border-rule">
-                            <th class="px-3 py-2 text-center">Priority</th>
-                            <th class="px-3 py-2">Project</th>
+                            <th class="px-3 py-2 text-center w-[48px] min-w-[48px] sticky left-0 bg-slate-50 z-20 shadow-[1px_0_0_#E3E5E9]">Priority</th>
+                              <th class="px-3 py-2 min-w-[200px] sticky left-[48px] bg-slate-50 z-20 shadow-[1px_0_0_#E3E5E9]">Project</th>
                             <th class="px-3 py-2 text-right">Total BOM</th>
                             <th class="px-3 py-2 text-right">MR Received</th>
                             <th class="px-3 py-2 text-right">PR Generated</th>
@@ -5183,8 +5240,8 @@ function renderMrRow(item, idx, xlInputCss) {
                                 const sc = pcbStatusColor(p.planningStatus);
                                 return `
                                 <tr class="hover:bg-slate-50 transition-colors">
-                                    <td class="px-3 py-1.5 text-center font-bold">${p.priority}</td>
-                                    <td class="px-3 py-1.5 font-bold text-ink text-[13px]">${esc(p.name)}</td>
+                                    <td class="px-3 py-1.5 text-center font-bold sticky left-0 bg-white z-10 shadow-[1px_0_0_#E3E5E9]">${p.priority}</td>
+                                      <td class="px-3 py-1.5 font-bold text-ink text-[13px] sticky left-[48px] bg-white z-10 shadow-[1px_0_0_#E3E5E9] truncate max-w-[250px]" title="${esc(p.name)}">${esc(p.name)}</td>
                                     <td class="px-3 py-1.5 text-right font-mono">${p.bom}</td>
                                     <td class="px-3 py-1.5 text-right font-mono">${p.mrReceived}</td>
                                     <td class="px-3 py-1.5 text-right font-mono">${p.prGenerated}</td>
@@ -8256,7 +8313,7 @@ function renderMrRow(item, idx, xlInputCss) {
                 { event: 'UPDATE', schema: 'public', table: 'app_state', filter: 'id=eq.1' },
                 function(payload) {
                     if (Date.now() - _lastSaveTs < 3000) return; // suppress echo
-                    console.log('[Realtime] Remote change detected — reloading data...');
+                    console.log('[Realtime] Remote change detected...');
                     var newData = payload.new && payload.new.data;
                     if (!newData || typeof newData !== 'object') return;
                     migrateToItemLevelProcurement(newData);
