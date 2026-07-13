@@ -1,17 +1,18 @@
 <!DOCTYPE html>
 <html lang="en">
 <head>
-<meta charset="UTF-8">
-<meta name="viewport" content="width=device-width, initial-scale=1.0">
-<title>Indus Fire Safety · MR Portal</title>
-<script src="https://cdn.tailwindcss.com"></script>
-<script src="https://unpkg.com/lucide@latest"></script>
-<script src="https://cdn.sheetjs.com/xlsx-0.20.1/package/dist/xlsx.full.min.js"></script>
-<script src="https://cdnjs.cloudflare.com/ajax/libs/jspdf/2.5.1/jspdf.umd.min.js"></script>
-<script src="https://cdnjs.cloudflare.com/ajax/libs/jspdf-autotable/3.5.29/jspdf.plugin.autotable.min.js"></script>
-<script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.4/dist/chart.umd.min.js"></script>
-<script src="https://cdn.jsdelivr.net/npm/chartjs-plugin-datalabels@2.2.0/dist/chartjs-plugin-datalabels.min.js"></script>
-<script>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+    <title>FusionFlow - Material Requisition</title>
+    <script src="https://cdn.tailwindcss.com"></script>
+    <script src="https://unpkg.com/lucide@latest"></script>
+    <script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.4/dist/chart.umd.min.js"></script>
+    <script src="https://cdn.jsdelivr.net/npm/chartjs-plugin-datalabels@2.2.0/dist/chartjs-plugin-datalabels.min.js"></script>
+    <script src="https://unpkg.com/@supabase/supabase-js@2"></script>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/html2pdf.js/0.10.1/html2pdf.bundle.min.js"></script>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/xlsx/0.18.5/xlsx.full.min.js"></script>
+    <link href="https://fonts.googleapis.com/css2?family=Space+Grotesk:wght@500;600;700&family=Inter:wght@400;500;600;700;800&family=JetBrains+Mono:wght@500;600;700&display=swap" rel="stylesheet">
+    <script>
   tailwind.config = {
     theme: {
       extend: {
@@ -33,58 +34,63 @@
       }
     }
   }
-</script>
+    </script>
 <style>
-  @import url('https://fonts.googleapis.com/css2?family=Space+Grotesk:wght@500;600;700&family=Inter:wght@400;500;600;700;800&family=JetBrains+Mono:wght@500;600;700&display=swap');
-  body { font-family: 'Inter', sans-serif; background-color: #F1F2F4; text-align: left; }
+  html, body { -webkit-tap-highlight-color: transparent; scroll-behavior: smooth; }
+  body { font-family: 'Inter', sans-serif; background-color: #F1F2F4; color: #1f2937; margin: 0; padding: 0; overflow-x: hidden; text-align: left; }
   body.login-active { overflow: hidden; height: 100vh; max-height: 100vh; }
   .font-display { font-family: 'Space Grotesk', sans-serif; }
   .font-mono { font-family: 'JetBrains Mono', monospace; }
   .custom-scrollbar::-webkit-scrollbar { width: 6px; height: 6px; }
   .custom-scrollbar::-webkit-scrollbar-track { background: transparent; }
   .custom-scrollbar::-webkit-scrollbar-thumb { background: #C7CBD3; border-radius: 10px; }
+  .custom-scrollbar::-webkit-scrollbar-thumb:hover { background: #94a3b8; }
   *:focus-visible { outline: 2px solid #B3122E; outline-offset: 2px; }
+  .glass-panel { background: rgba(255, 255, 255, 0.95); backdrop-filter: blur(12px); border: 1px solid rgba(255,255,255,0.2); }
   @media print {
-      .no-print { display: none !important; }
-      body { background: white !important; padding: 0 !important; margin: 0 !important; }
-      #app-root { padding: 0 !important; margin: 0 !important; width: 100% !important; }
-      main { margin-left: 0 !important; padding: 0 !important; }
-      .dc-scroll { max-height: none !important; overflow: visible !important; }
+    .no-print { display: none !important; }
+    body { background: white !important; padding: 0 !important; margin: 0 !important; }
+    #app-root { padding: 0 !important; margin: 0 !important; width: 100% !important; }
+    main { margin-left: 0 !important; padding: 0 !important; }
+    .dc-scroll { max-height: none !important; overflow: visible !important; }
+    * { -webkit-print-color-adjust: exact !important; print-color-adjust: exact !important; }
   }
-  .pcb-chart-box { position:relative; height:256px; width:100%; overflow:hidden; }
-  .pcb-chart-box canvas { position:absolute; inset:0; width:100% !important; height:100% !important; }
+  .pcb-chart-box { position: relative; height: 256px; width: 100%; overflow: hidden; }
+  .pcb-chart-box canvas { position: absolute; inset: 0; width: 100% !important; height: 100% !important; }
   .plan-mat-table { font-size: 10px; }
   .plan-mat-table .glass-input { min-width: 0; }
   .fade-in { animation: fadeIn 0.35s ease-out forwards; }
   @keyframes fadeIn { from { opacity: 0; transform: translateY(6px); } to { opacity: 1; transform: translateY(0); } }
-  .status-chip { display:inline-flex; align-items:center; gap:6px; padding:3px 10px 3px 8px; border-radius:6px; font-family:'JetBrains Mono',monospace; font-size:10px; font-weight:700; text-transform:uppercase; letter-spacing:.04em; border:1px solid transparent; white-space:nowrap; }
-  .status-chip .dot { width:6px; height:6px; border-radius:999px; flex-shrink:0; }
-  .idx-chip { font-family:'JetBrains Mono',monospace; font-weight:700; letter-spacing:.02em; }
+  .status-chip { display: inline-flex; align-items: center; gap: 6px; padding: 3px 10px 3px 8px; border-radius: 6px; font-family: 'JetBrains Mono', monospace; font-size: 10px; font-weight: 700; text-transform: uppercase; letter-spacing: .04em; border: 1px solid transparent; white-space: nowrap; }
+  .status-chip .dot { width: 6px; height: 6px; border-radius: 999px; flex-shrink: 0; }
+  .idx-chip { font-family: 'JetBrains Mono', monospace; font-weight: 700; letter-spacing: .02em; }
   .bar-seg { height: 100%; transition: width .3s ease; }
-  .field-label { font-size:10px; font-weight:800; color:#8A93A3; text-transform:uppercase; letter-spacing:.08em; margin-bottom:4px; display:block; }
-  .glass-input { width:100%; background:#fff; border:1px solid #E3E5E9; border-radius:10px; padding:9px 12px; font-size:12.5px; outline:none; transition: box-shadow .15s, border-color .15s; }
-  .glass-input:focus { border-color:#B3122E; box-shadow: 0 0 0 3px rgba(179,18,46,0.08); }
+  .field-label { font-size: 10px; font-weight: 800; color: #8A93A3; text-transform: uppercase; letter-spacing: .08em; margin-bottom: 4px; display: block; }
+  .glass-input { width: 100%; background: #fff; border: 1px solid #E3E5E9; border-radius: 10px; padding: 9px 12px; font-size: 12.5px; outline: none; transition: box-shadow .15s, border-color .15s; }
+  .glass-input:focus { border-color: #B3122E; box-shadow: 0 0 0 3px rgba(179,18,46,0.08); }
+  .login-auth-status { display: none; }
 
-  /* ── Login page — single screen, no scroll ── */
-  
-  /* --- Premium Cinematic Login CSS --- */
-    .login-scene {
-    display: flex; min-height: 100dvh; width: 100%; position: relative; overflow-x: hidden; overflow-y: auto;
-    background: #0B1420; /* base color */
+  .login-scene {
+    display: flex; min-height: 100vh; width: 100%; position: relative; overflow: hidden;
+    background: linear-gradient(145deg, #060b12 0%, #0B1420 35%, #111C2C 65%, #0a1628 100%);
   }
   .login-scene::before {
     content: ''; position: absolute; inset: 0; pointer-events: none;
-    background: radial-gradient(circle at top right, rgba(211,47,47,0.1) 0%, transparent 40%),
-                radial-gradient(circle at bottom left, rgba(211,47,47,0.05) 0%, transparent 40%);
+    background:
+      radial-gradient(ellipse 80% 60% at 15% 20%, rgba(179,18,46,0.12) 0%, transparent 55%),
+      radial-gradient(ellipse 70% 50% at 85% 75%, rgba(166,98,11,0.08) 0%, transparent 50%);
   }
   .login-grid-overlay {
-    position: absolute; inset: 0; pointer-events: none; z-index: 1; opacity: 0.12;
-    background-image: 
+    position: absolute; inset: 0; pointer-events: none; z-index: 1; opacity: 0.035;
+    background-image:
       linear-gradient(rgba(255,255,255,0.5) 1px, transparent 1px),
       linear-gradient(90deg, rgba(255,255,255,0.5) 1px, transparent 1px);
     background-size: 48px 48px;
   }
-  .login-brand-panel { background: transparent; }
+  .login-brand-panel {
+    background: linear-gradient(160deg, rgba(179,18,46,0.12) 0%, transparent 45%),
+                linear-gradient(220deg, rgba(255,255,255,0.04) 0%, transparent 50%);
+  }
   .login-scene::after {
     content: ''; position: absolute; inset: 0; pointer-events: none; z-index: 1;
     background: linear-gradient(105deg, transparent 35%, rgba(255,255,255,0.03) 50%, transparent 65%);
@@ -104,7 +110,7 @@
     width: 100%; background: #f8f9fb; border: 1px solid #e2e5ea; border-radius: 12px;
     padding: 11px 14px; font-size: 13px; outline: none; transition: border-color .2s, box-shadow .2s;
   }
-  .login-input-dark:focus { border-color: #D32F2F; box-shadow: 0 0 0 4px rgba(211,47,47,0.1); }
+  .login-input-dark:focus { border-color: #B3122E; box-shadow: 0 0 0 4px rgba(179,18,46,0.1); }
   .login-part {
     position: absolute; pointer-events: none; color: rgba(255,255,255,0.92);
     opacity: var(--lo, 0.08);
@@ -133,26 +139,73 @@
     .login-spin, .login-spin-rev, .login-float, .login-drift, .login-pulse, .login-shine { animation: none !important; }
   }
   @media (max-width: 1023px) {
-    .login-scene { flex-direction: column; justify-content: flex-start; padding-bottom: 2rem; }
-    .login-brand-panel { flex-shrink: 0; padding: 1.5rem 1.5rem 0.5rem !important; min-height: auto; }
-    .login-scene { height: auto; min-height: 100dvh; }
+    .login-scene { flex-direction: column; justify-content: center; }
+    .login-brand-panel { flex-shrink: 0; padding: 1.5rem 1.5rem 0.5rem !important; }
     .login-logo-img { width: 64px; height: 64px; }
   }
 
+  #login-success-overlay {
+    position: fixed; inset: 0; z-index: 99999;
+    display: flex; align-items: center; justify-content: center;
+    background: radial-gradient(ellipse at center, rgba(11,20,32,0.97) 0%, rgba(6,10,16,0.99) 100%);
+    opacity: 0; pointer-events: all;
+    transition: opacity 0.35s ease;
+  }
+  #login-success-overlay.login-success-active { opacity: 1; }
+  #login-success-overlay.login-success-out { opacity: 0; transition: opacity 0.45s ease; }
+  .login-success-box { text-align: center; transform: scale(0.85); opacity: 0; transition: transform 0.5s cubic-bezier(0.34,1.56,0.64,1), opacity 0.4s ease; }
+  #login-success-overlay.login-success-active .login-success-box { transform: scale(1); opacity: 1; }
+  .login-success-icon-wrap { width: 100px; height: 100px; margin: 0 auto 1.25rem; position: relative; }
+  .login-success-ring {
+    position: absolute; inset: 0; border-radius: 50%;
+    border: 3px solid transparent; border-top-color: #B3122E; border-right-color: rgba(179,18,46,0.4);
+    animation: loginRingSpin 0.9s linear infinite;
+  }
+  #login-success-overlay.login-success-done .login-success-ring {
+    animation: loginRingComplete 0.5s ease forwards;
+    border-color: #047857; border-top-color: #047857;
+  }
+  @keyframes loginRingSpin { to { transform: rotate(360deg); } }
+  @keyframes loginRingComplete { to { transform: rotate(360deg) scale(1.05); opacity: 0; } }
+  .login-success-gear {
+    position: absolute; inset: 12px; color: rgba(255,255,255,0.25);
+    animation: loginGearPulse 0.8s ease-in-out infinite;
+  }
+  #login-success-overlay.login-success-done .login-success-gear { opacity: 0; transform: scale(0.5); transition: 0.3s; }
+  @keyframes loginGearPulse { 0%, 100% { transform: rotate(0deg); opacity: 0.3; } 50% { transform: rotate(18deg); opacity: 0.5; } }
+  .login-success-check {
+    position: absolute; inset: 0; display: flex; align-items: center; justify-content: center;
+    opacity: 0; transform: scale(0.3);
+    transition: opacity 0.35s ease 0.15s, transform 0.45s cubic-bezier(0.34,1.56,0.64,1) 0.1s;
+  }
+  #login-success-overlay.login-success-done .login-success-check { opacity: 1; transform: scale(1); }
+  .login-success-check svg { width: 52px; height: 52px; color: #10B981; filter: drop-shadow(0 0 12px rgba(16,185,129,0.5)); }
+  .login-success-title {
+    font-family: 'Space Grotesk', sans-serif; font-size: 1.35rem; font-weight: 700;
+    color: #fff; letter-spacing: 0.06em; text-transform: uppercase;
+  }
+  .login-success-sub { font-size: 12px; color: rgba(255,255,255,0.45); margin-top: 6px; }
+  .login-success-bar {
+    width: 160px; height: 3px; background: rgba(255,255,255,0.1); border-radius: 99px;
+    margin: 1.25rem auto 0; overflow: hidden;
+  }
+  .login-success-bar-fill {
+    height: 100%; width: 0; background: linear-gradient(90deg, #B3122E, #10B981);
+    border-radius: 99px; animation: loginBarFill 1.4s ease forwards;
+  }
+  @keyframes loginBarFill { to { width: 100%; } }
 </style>
+</head>
+<body class="bg-paper text-ink font-body custom-scrollbar">
+    <div id="app-root" class="min-h-screen"></div>
+<script>
 
-    <!-- ★ Supabase Cloud Backend ★ -->
-    <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
-    <script>
+
         const _supabaseClient = window.supabase.createClient(
             'https://duikfskqbacackelieux.supabase.co',
             'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6ImR1aWtmc2txYmFjYWNrZWxpZXV4Iiwicm9sZSI6ImFub24iLCJpYXQiOjE3NjM2MTA0ODIsImV4cCI6MjA3OTE4NjQ4Mn0.IST84GYs9-5eOGmx485XPqDAwfp0Jdw5MHAjzUYTUUA'
         );
-    </script>
-</head>
-<body class="antialiased text-slate-900 selection:bg-brand-light text-left">
-<div id="app-root"></div>
-<script>
+
     const LOGIN_LOGO = 'indus-fire-logo.png';
     const DB_KEY = "indus_fire_safety_db_v3";
     const SESSION_KEY = "indus_fire_session_v3";
@@ -172,7 +225,7 @@
     };
     const APPROVAL_LEVEL_ORDER = ["L1","L2","FINAL_AUTH","PLANNING","PROCUREMENT","ADMIN"];
     // Sensible default Approval Level for each system Role, used only to pre-fill the User
-    // Creation form — the admin can always override it, and creators default to L1 exactly as
+    // Creation form - the admin can always override it, and creators default to L1 exactly as
     // required ("If no Approval Level is selected, the system should automatically assign L1").
     const ROLE_DEFAULT_APPROVAL_LEVEL = { creator: "L1", authorizer: "FINAL_AUTH", planner: "PLANNING", procurement: "PROCUREMENT", admin: "ADMIN" };
 
@@ -183,18 +236,19 @@
         QUERY_RAISED:  { label: "Query (QR)",      color: "#A6620B", bg: "#FCF1DF" },
         AUTHORIZED:    { label: "Authorized",      color: "#0E7490", bg: "#E7F7FA" },
         PLANNED:       { label: "Planned",         color: "#6D28D9", bg: "#F2ECFC" },
+        PR_ACCEPTED:   { label: "PR Accepted",     color: "#2563EB", bg: "#EFF6FF" },
         PROCUREMENT:   { label: "PO Given",        color: "#B45309", bg: "#FDF3E4" },
         PARTIAL:       { label: "Partial Received",color: "#BE185D", bg: "#FCE9F1" },
         CLOSED:        { label: "Received",        color: "#047857", bg: "#E5F6EF" },
         HOLD:          { label: "Hold",             color: "#78716C", bg: "#F5F5F4" },
         CANCELLED:     { label: "Cancel",           color: "#B91C1C", bg: "#FEE2E2" }
     };
-    const STATUS_ORDER = ["RAISED","DEPT_APPROVAL_PENDING","DEPT_APPROVED","QUERY_RAISED","AUTHORIZED","PLANNED","PROCUREMENT","PARTIAL","CLOSED","HOLD","CANCELLED"];
-    // Statuses reachable once a PO has actually been issued — status can only move forward from here.
+    const STATUS_ORDER = ["RAISED","DEPT_APPROVAL_PENDING","DEPT_APPROVED","QUERY_RAISED","AUTHORIZED","PLANNED","PR_ACCEPTED","PROCUREMENT","PARTIAL","CLOSED","HOLD","CANCELLED"];
+    // Statuses reachable once a PO has actually been issued - status can only move forward from here.
     const POST_PO_STATUSES = ["PROCUREMENT","PARTIAL","CLOSED","HOLD","CANCELLED"];
-    // Manual status choices available before a PO exists — PROCUREMENT ("PO Given") is deliberately
+    // Manual status choices available before a PO exists - PROCUREMENT ("PO Given") is deliberately
     // excluded because it can only be set automatically once both PO Number and PO Date are entered.
-    const PRE_PO_STATUSES  = STATUS_ORDER.filter(s => !["PROCUREMENT","PARTIAL","CLOSED"].includes(s));
+    const PRE_PO_STATUSES  = STATUS_ORDER.filter(s => !["PLANNED","PROCUREMENT","PARTIAL","CLOSED"].includes(s));
 
     const SEED = {
         users: [
@@ -584,7 +638,9 @@
     let currentEditRevisionId = null;
     let mrDeliveryLocation = "Indus House";
     let printMrData = null;
-    let printPrNumber = null; // combined multi-MR PR print
+    let printPrNumber = null;
+    let procInboxPrNumber = null;
+    let procInboxMrId = null; // combined multi-MR PR print
     let autoPrintAfterRender = false; // open browser print dialog right after combined PR view loads
     let showAuditTrailId = null;
     let showUserAddModal = false;
@@ -606,6 +662,7 @@
     let showReassignModal = null;
     let reassignForm = { newHandler:"", reason:"", remarks:"" };
     let showAssignHistoryModal = false;
+    let historyModal = null;
     let _reviewMrId = null;
     let _reviewMrActionType = null;
     window.openReviewModal = (id, type) => {
@@ -628,6 +685,7 @@
     let itemRejectReason = '';
     let procDashFilters = { handler:"", project:"", vendor:"", status:"", priority:"", dateFrom:"", dateTo:"", dept:"" };
     let procPerfFilters = { handler:"", project:"", vendor:"", status:"", priority:"", dateFrom:"", dateTo:"", dept:"" };
+    let procSavingMonth = null;
     let queueFilters     = { authorize:"", planner:"", dept_approval:"" };
     let showNotifPanel = false;
 
@@ -647,10 +705,18 @@
     };
 
     // ── PLANNING CONTROL BOARD STATE ─────────────────────────────────────
-    let pcbState = JSON.parse(localStorage.getItem('pcbState')) || { q: '', projects: [], status: '' };
+    let pcbState = { q: '', projects: [], status: '' };
+    try {
+        const _pcbRaw = localStorage.getItem('pcbState');
+        if (_pcbRaw) pcbState = { ...pcbState, ...JSON.parse(_pcbRaw) };
+    } catch(e) {}
     if (typeof pcbState.project === 'string') { pcbState.projects = pcbState.project ? [pcbState.project] : []; delete pcbState.project; }
     if (!Array.isArray(pcbState.projects)) pcbState.projects = [];
-    window.window.pcbProjectDropdownOpen = false;
+    window.pcbProjectDropdownOpen = false;
+
+    // Bulk PO Update State
+    window.dcBulkSelected = new Set();
+    window.dcBulkPoModal = false;
     let pcbChartTypes = { project: 'pie', monthly: 'bar' };
     let pcbChartLabelMode = { project: 'off', monthly: 'off' }; // off | value | percent | both
     const CHART_PALETTE = ['#B3122E','#0E7490','#047857','#B45309','#6D28D9','#BE185D','#78716C','#1f2937','#DC2626','#4F46E5','#0891B2','#65A30D'];
@@ -677,6 +743,10 @@
         { key:'poDate',      label:'PO Date',                  w:110, editable:'date' },
         { key:'status',      label:'Status',                   w:130, editable:'status' },
         { key:'prHandleBy',  label:'PR Handle By',             w:120, editable:'handler' },
+        { key:'vendor',      label:'Vendor Name',              w:140, editable:'text', procOnly:true },
+        { key:'firstQuoteBudget', label:'First Quote/Budget', w:140, editable:'number', num:true, currency:true, procOnly:true },
+        { key:'poValue',     label:'PO Value',                 w:120, editable:'number', num:true, currency:true, procOnly:true },
+        { key:'saving',      label:'Saving',                   w:110, num:true, currency:true, procOnly:true },
         { key:'tentDelivery',label:'Tentative Delivery Date',  w:135, editable:'date' },
         { key:'reqDelayDays',     label:'Requirement Delay (Days)', w:120, num:true },
         { key:'deliveryDelayDays',label:'Delivery Delay (Days)',    w:110, num:true },
@@ -771,13 +841,27 @@
             const raw = localStorage.getItem(DB_KEY);
             data = raw ? JSON.parse(raw) : JSON.parse(JSON.stringify(SEED));
         } catch(e) { data = JSON.parse(JSON.stringify(SEED)); }
+        return normalizeAppData(data);
+    }
+
+    function normalizeAppData(data) {
+        if (!data || typeof data !== 'object') data = JSON.parse(JSON.stringify(SEED));
+        if (!Array.isArray(data.users) || data.users.length === 0) data.users = JSON.parse(JSON.stringify(SEED.users));
+        if (!Array.isArray(data.mrs)) data.mrs = [];
+        if (!Array.isArray(data.assets)) data.assets = JSON.parse(JSON.stringify(SEED.assets || []));
+        if (!Array.isArray(data.projects)) data.projects = JSON.parse(JSON.stringify(SEED.projects || []));
+        if (!Array.isArray(data.departments)) data.departments = JSON.parse(JSON.stringify(SEED.departments || []));
+        if (!Array.isArray(data.notifications)) data.notifications = [];
+        if (!Array.isArray(data.procHandlers)) data.procHandlers = JSON.parse(JSON.stringify(SEED.procHandlers || []));
+        if (!Array.isArray(data.assignmentHistory)) data.assignmentHistory = [];
+        if (!Array.isArray(data.mrDrafts)) data.mrDrafts = [];
+        if (!Array.isArray(data.itemRequests)) data.itemRequests = [];
         migrateToItemLevelProcurement(data);
         migrateUsersAndNotifications(data);
+        backfillLegacyL2Approval(data);
         migrateProcHandlers(data);
         migrateDepartments(data);
         migrateSequences(data);
-        if (!Array.isArray(data.mrDrafts)) data.mrDrafts = [];
-        if (!Array.isArray(data.itemRequests)) data.itemRequests = [];
         return data;
     }
 
@@ -958,6 +1042,11 @@
         (data.mrs || []).forEach(mr => {
             if (mr.l1User === undefined) mr.l1User = mr.raisedBy || '';
             if (mr.l2User === undefined) mr.l2User = '';
+            const l2Hist = (mr.history || []).find(h => (h.action || '').includes('Department Approved'));
+            if (l2Hist) {
+                if (!mr.deptApprovalDate) mr.deptApprovalDate = l2Hist.ts;
+                if (!mr.l2User) mr.l2User = l2Hist.actor || '';
+            }
         });
     }
 
@@ -1077,7 +1166,8 @@
     // Average approval time (Raised → Final Authorization) overall and per department,
     // plus a live count of MRs currently escalated across the department & final-auth queues.
     function computeApprovalPerformance() {
-        const authorized = appData.mrs.filter(m => m.authorizationDate && m.createdAt);
+        const mrs = appData.mrs || [];
+        const authorized = mrs.filter(m => m.authorizationDate && m.createdAt);
         const times = authorized.map(m => (m.authorizationDate - m.createdAt) / 86400000);
         const avgAll = times.length ? (times.reduce((a,b) => a+b, 0) / times.length) : 0;
         const byDept = {};
@@ -1088,7 +1178,7 @@
         const deptAvg = Object.entries(byDept)
             .map(([dept, arr]) => ({ dept, avg: arr.reduce((a,b) => a+b, 0) / arr.length, count: arr.length }))
             .sort((a,b) => b.avg - a.avg);
-        const escalatedCount = appData.mrs.filter(m =>
+        const escalatedCount = mrs.filter(m =>
             ['DEPT_APPROVAL_PENDING','RAISED'].includes(m.status) && daysInCurrentStatus(m) >= 3
         ).length;
         return { avgAll, deptAvg, escalatedCount };
@@ -1210,7 +1300,7 @@
     function uniqueDepts() {
         const master = departmentNames();
         if (master.length) return master;
-        return Array.from(new Set(appData.mrs.map(m => m.dept).filter(Boolean))).sort();
+        return Array.from(new Set((appData.mrs || []).map(m => m.dept).filter(Boolean))).sort();
     }
 
     // Only Admin, Planner, Authorizer, and Procurement may view MR data across departments.
@@ -1251,6 +1341,170 @@
         return (appData.users || []).find(u => u.active && u.dept === dept && u.approvalLevel === 'L2');
     }
 
+    function findDeptL2In(users, dept) {
+        return (users || []).find(u => u.active !== false && u.dept === dept && u.approvalLevel === 'L2');
+    }
+
+    function historyHadL2PendingStep(history) {
+        const deptPendingLabel = (STATUS_META.DEPT_APPROVAL_PENDING || {}).label || 'Department Approval Pending';
+        return (history || []).some(h => {
+            const a = (h.action || '');
+            if (a.includes('Pending Department Approval')) return true;
+            if (a.includes('Pending Planning L2 Approval')) return true;
+            if (/l2/i.test(a) && /pending/i.test(a)) return true;
+            if (h.oldValue === deptPendingLabel || h.newValue === deptPendingLabel) return true;
+            if (h.oldValue === 'Dept. Approval' || h.newValue === 'Dept. Approval') return true;
+            if (h.oldValue === 'L2_APPROVAL_PENDING' || h.newValue === 'L2_APPROVAL_PENDING') return true;
+            return false;
+        });
+    }
+
+    function historyHasExplicitL2Approval(history) {
+        const deptApprovedLabel = (STATUS_META.DEPT_APPROVED || {}).label || 'Department Approved';
+        return (history || []).some(h => {
+            const a = (h.action || '');
+            if (a.includes('Department Approved')) return true;
+            if (a === 'Dept Approved') return true;
+            if (/department.*approv/i.test(a) && !/pending/i.test(a)) return true;
+            if (/^dept\.?\s*approv/i.test(a) && !/pending/i.test(a)) return true;
+            if (h.newValue === deptApprovedLabel || h.newValue === 'Department Approved') return true;
+            if (h.newValue === 'Dept. Approved') return true;
+            if (/l2/i.test(a) && /approv/i.test(a) && !/pending/i.test(a)) return true;
+            return false;
+        });
+    }
+
+    function findExplicitL2HistoryEntry(history) {
+        const deptApprovedLabel = (STATUS_META.DEPT_APPROVED || {}).label || 'Department Approved';
+        return (history || []).find(h => {
+            const a = (h.action || '');
+            if (a.includes('Department Approved')) return true;
+            if (a === 'Dept Approved') return true;
+            if (/department.*approv/i.test(a) && !/pending/i.test(a)) return true;
+            if (/^dept\.?\s*approv/i.test(a) && !/pending/i.test(a)) return true;
+            if (h.newValue === deptApprovedLabel || h.newValue === 'Department Approved' || h.newValue === 'Dept. Approved') return true;
+            if (/l2/i.test(a) && /approv/i.test(a) && !/pending/i.test(a)) return true;
+            return false;
+        });
+    }
+
+    function mrWorkflowPassedDeptApproval(mr, history) {
+        if (['AUTHORIZED', 'PLANNED', 'PR_ACCEPTED', 'PROCUREMENT', 'PARTIAL', 'CLOSED', 'DEPT_APPROVED', 'RAISED'].includes(mr.status)) {
+            if (mr.status !== 'DEPT_APPROVAL_PENDING') return true;
+        }
+        if (mr.finalAuthUser || mr.authorizationDate || mr.prNumber) return true;
+        return (history || []).some(h => {
+            const a = (h.action || '');
+            return a.includes('Authorization Approved') || a.includes('Sent for Final Authorization')
+                || a.includes('Planning Approved') || a.includes('PR Accepted');
+        });
+    }
+
+    function inferL2ApprovalActor(mr, history, users) {
+        const explicit = findExplicitL2HistoryEntry(history);
+        if (explicit && explicit.actor) return explicit.actor;
+
+        const sentFinal = (history || []).find(h => (h.action || '').includes('Sent for Final Authorization'));
+        if (sentFinal && sentFinal.actor) return sentFinal.actor;
+
+        const raiser = (mr.raisedBy || mr.l1User || '').trim();
+        if (mr.l2User && mr.l2User !== raiser) return mr.l2User;
+
+        const l2 = findDeptL2In(users, mr.dept);
+        return l2 ? l2.name : (mr.l2User || '');
+    }
+
+    function inferL2ApprovalTimestamp(history, mr) {
+        if (mr.deptApprovalDate) return mr.deptApprovalDate;
+
+        const explicit = findExplicitL2HistoryEntry(history);
+        if (explicit && explicit.ts) return explicit.ts;
+
+        const sentFinal = (history || []).find(h => (h.action || '').includes('Sent for Final Authorization'));
+        if (sentFinal && sentFinal.ts) return sentFinal.ts;
+
+        const sorted = (history || []).slice().sort((a, b) => (a.ts || 0) - (b.ts || 0));
+        const pendingIdx = sorted.findIndex(h => {
+            const a = h.action || '';
+            return a.includes('Pending Department') || a.includes('Pending Planning L2')
+                || h.newValue === 'Dept. Approval' || h.newValue === 'L2_APPROVAL_PENDING';
+        });
+        if (pendingIdx >= 0) {
+            const after = sorted.slice(pendingIdx + 1);
+            const next = after.find(h => {
+                const a = h.action || '';
+                return a.includes('Authorization Approved') || a.includes('Sent for Final') || a.includes('Planning Approved');
+            });
+            if (next && next.ts && sorted[pendingIdx].ts) {
+                return Math.max(sorted[pendingIdx].ts + 60000, next.ts - 120000);
+            }
+            if (sorted[pendingIdx].ts) return sorted[pendingIdx].ts + 60000;
+        }
+
+        const raised = sorted.find(h => (h.action || '').includes('Raised'));
+        const auth = sorted.find(h => (h.action || '').includes('Authorization Approved'));
+        if (raised && auth && auth.ts > raised.ts) return Math.floor((raised.ts + auth.ts) / 2);
+        if (raised && raised.ts) return raised.ts + 3600000;
+        if (auth && auth.ts) return auth.ts - 300000;
+        return mr.createdAt || Date.now();
+    }
+
+    function mrLikelyHadL2Approval(mr, history, users) {
+        if (historyHasExplicitL2Approval(history)) return true;
+        if (mr.deptApprovalDate && mr.l2User) return true;
+        if (historyHadL2PendingStep(history) && mrWorkflowPassedDeptApproval(mr, history)) return true;
+
+        const raiser = (mr.raisedBy || mr.l1User || '').trim();
+        const raiserUser = (users || []).find(u => u.name === raiser);
+        const raiserLevel = (raiserUser && raiserUser.approvalLevel) || 'L1';
+        if (raiserLevel !== 'L1') return false;
+
+        const l2 = findDeptL2In(users, mr.dept);
+        if (!l2) return false;
+
+        return mrWorkflowPassedDeptApproval(mr, history);
+    }
+
+    function buildSyntheticL2ApprovalEntry(mr, history, users) {
+        if (!mrLikelyHadL2Approval(mr, history, users)) return null;
+        const actor = inferL2ApprovalActor(mr, history, users);
+        if (!actor) return null;
+        const ts = inferL2ApprovalTimestamp(history, mr);
+        const l2UserRec = (users || []).find(u => u.name === actor);
+        return {
+            action: 'Department Approved',
+            actor,
+            dept: mr.dept || (l2UserRec && l2UserRec.dept) || '',
+            role: (l2UserRec && l2UserRec.role) || 'creator',
+            ts,
+            note: ''
+        };
+    }
+
+    function backfillLegacyL2Approval(data) {
+        (data.mrs || []).forEach(mr => {
+            mr.history = mr.history || [];
+            const explicit = findExplicitL2HistoryEntry(mr.history);
+            if (explicit) {
+                if (!mr.deptApprovalDate) mr.deptApprovalDate = explicit.ts;
+                if (!mr.l2User) mr.l2User = explicit.actor || '';
+                return;
+            }
+            const synthetic = buildSyntheticL2ApprovalEntry(mr, mr.history, data.users);
+            if (!synthetic) return;
+
+            mr.l2User = mr.l2User || synthetic.actor;
+            mr.deptApprovalDate = mr.deptApprovalDate || synthetic.ts;
+            mr.history.push({
+                ...synthetic,
+                field: 'status',
+                oldValue: (STATUS_META.DEPT_APPROVAL_PENDING || {}).label || 'Department Approval Pending',
+                newValue: (STATUS_META.DEPT_APPROVED || {}).label || 'Department Approved'
+            });
+            mr.history.sort((a, b) => (a.ts || 0) - (b.ts || 0));
+        });
+    }
+
     // Direct PR is raised by Planning (planner/admin). When the Planning department has L1/L2
     // users, L1-raised Direct PRs must go through Planning L2 before Final Authorization.
     function directPrUsesPlanningL2Chain(u) {
@@ -1273,20 +1527,15 @@
         let pendingNote = ' — sent for Final Authorization.';
         
         const docNum = mr.prNumber || mr.mrNumber || '';
+        const routeThroughPlanningL2 = creatorLevel === 'L1' && directPrUsesPlanningL2Chain(user) && findDeptL2(user.dept);
 
-        if (creatorLevel === 'L1') {
+        if (routeThroughPlanningL2) {
             const l2 = findDeptL2(user.dept);
-            if (l2) {
-                mr.status = 'DEPT_APPROVAL_PENDING';
-                mr.l2User = l2.name;
-                actionLabel += ' — Pending Planning L2 Approval';
-                pendingNote = ' — sent to Planning L2 for approval.';
-                pushNotification({ dept: user.dept, level: 'L2' }, `Direct PR ${docNum} from ${user.name} (${user.dept}) is pending your Planning L2 approval.`, mr.id);
-            } else {
-                mr.status = 'RAISED';
-                actionLabel += ' — Pending Final Authorization';
-                pushNotification({ level: 'FINAL_AUTH' }, `Direct PR ${docNum} from ${user.name} (${user.dept}) is pending Final Authorization.`, mr.id);
-            }
+            mr.status = 'DEPT_APPROVAL_PENDING';
+            mr.l2User = l2.name;
+            actionLabel += ' — Pending Planning L2 Approval';
+            pendingNote = ' — sent to Planning L2 for approval.';
+            pushNotification({ dept: user.dept, level: 'L2' }, `Direct PR ${docNum} from ${user.name} (${user.dept}) is pending your Planning L2 approval.`, mr.id);
         } else {
             mr.status = 'RAISED';
             actionLabel += ' — Pending Final Authorization';
@@ -1464,130 +1713,40 @@
     }
 
     
-    function showLoginSuccessOverlay(displayName, onDone) {
-        try {
-            const existing = document.getElementById('login-success-overlay');
-            if (existing) existing.remove();
-            
-            // Scene 1: Fade out login card smoothly
-            const loginCard = document.querySelector('.login-brand-panel');
-            const loginForm = document.querySelector('.login-card');
-            if(loginCard) loginCard.style.opacity = '0';
-            if(loginForm) loginForm.style.opacity = '0';
-            
-            const overlay = document.createElement('div');
-            overlay.id = 'login-success-overlay';
-            overlay.innerHTML = `
-                <div class="ent-bg-grid"></div>
-                <div class="ent-scene-2" id="ent-scene-2">
-                    <h2 class="ent-title">INDUS FIRE SAFETY PVT. LTD.</h2>
-                    <h3 class="ent-subtitle">Purchase Request Management System</h3>
-                    <p class="ent-tagline">Smart Procurement • Seamless Approvals • Complete Material Tracking</p>
-                </div>
-                <div class="ent-scene-3" id="ent-scene-3" style="opacity:0; pointer-events:none;">
-                    <div class="ent-sys-text">ACTIVATING COMMAND CENTER...</div>
-                    <div class="workflow-container">
-                       <div class="wf-line-bg"></div>
-                       <div class="wf-line-fill"></div>
-                       <div class="wf-nodes">
-                          <div class="wf-node"><div class="wf-dot"></div><div class="wf-label">Planning</div></div>
-                          <div class="wf-node"><div class="wf-dot"></div><div class="wf-label">MR</div></div>
-                          <div class="wf-node"><div class="wf-dot"></div><div class="wf-label">PR</div></div>
-                          <div class="wf-node"><div class="wf-dot"></div><div class="wf-label">L2 Auth</div></div>
-                          <div class="wf-node"><div class="wf-dot"></div><div class="wf-label">Final Auth</div></div>
-                          <div class="wf-node"><div class="wf-dot"></div><div class="wf-label">Procure</div></div>
-                          <div class="wf-node"><div class="wf-dot"></div><div class="wf-label">Inventory</div></div>
-                          <div class="wf-node"><div class="wf-dot"></div><div class="wf-label">Reports</div></div>
-                       </div>
-                    </div>
-                </div>
-                <div class="ent-scene-4" id="ent-scene-4" style="opacity:0; pointer-events:none;">
-                    <div class="ent-ready-box">
-                        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round" class="ent-check">
+    function showLoginSuccessOverlay(displayName) {
+        const existing = document.getElementById('login-success-overlay');
+        if (existing) existing.remove();
+        document.body.classList.remove('dashboard-building', 'login-active');
+
+        const overlay = document.createElement('div');
+        overlay.id = 'login-success-overlay';
+        overlay.innerHTML = `
+            <div class="login-success-box">
+                <div class="login-success-icon-wrap">
+                    <div class="login-success-ring"></div>
+                    <div class="login-success-check">
+                        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round">
                             <path d="M20 6L9 17l-5-5"/>
                         </svg>
-                        <span>SYSTEM READY</span>
                     </div>
                 </div>
-            `;
-            document.body.appendChild(overlay);
-            
-            // Audio (optional, subtle digital beep)
-            try {
-                const ctx = new (window.AudioContext || window.webkitAudioContext)();
-                const osc = ctx.createOscillator();
-                osc.type = 'sine';
-                osc.frequency.setValueAtTime(800, ctx.currentTime);
-                osc.frequency.exponentialRampToValueAtTime(1200, ctx.currentTime + 0.5);
-                const gain = ctx.createGain();
-                gain.gain.setValueAtTime(0, ctx.currentTime);
-                gain.gain.linearRampToValueAtTime(0.05, ctx.currentTime + 0.1);
-                gain.gain.linearRampToValueAtTime(0, ctx.currentTime + 0.6);
-                osc.connect(gain); gain.connect(ctx.destination);
-                osc.start(); osc.stop(ctx.currentTime + 1);
-            } catch(e) {}
-            
-            requestAnimationFrame(() => {
-                overlay.classList.add('ent-active');
-                
-                // Scene 2: Fade out logo/text after 1.5s
-                setTimeout(() => {
-                    const s2 = document.getElementById('ent-scene-2');
-                    if (s2) {
-                        s2.style.opacity = '0';
-                        s2.style.transform = 'translateY(-10px)';
-                    }
-                    
-                    // Scene 3: Show workflow
-                    setTimeout(() => {
-                        const s3 = document.getElementById('ent-scene-3');
-                        if (s3) s3.style.opacity = '1';
-                        
-                        // Animate workflow nodes
-                        const lineFill = overlay.querySelector('.wf-line-fill');
-                        const nodes = overlay.querySelectorAll('.wf-node');
-                        
-                        setTimeout(() => { if(lineFill) lineFill.style.width = '100%'; }, 100);
-                        nodes.forEach((node, i) => {
-                            setTimeout(() => {
-                                node.classList.add('active');
-                            }, 100 + (i * (2000 / 7)));
-                        });
-                        
-                        // Scene 5 & 6: Load Dashboard invisibly & trigger cascade build
-                        setTimeout(() => {
-                            document.body.classList.add('dashboard-building');
-                            if(onDone) onDone(); // Renders dashboard, but overlay is still covering it!
-                            
-                            if (s3) {
-                                s3.style.opacity = '0';
-                                s3.style.transform = 'translateY(-10px)';
-                            }
-                            
-                            // Scene 7: System Ready text, then fade overlay
-                            setTimeout(() => {
-                                const s4 = document.getElementById('ent-scene-4');
-                                if (s4) {
-                                    s4.style.opacity = '1';
-                                    s4.style.transform = 'scale(1.05)';
-                                }
-                                
-                                setTimeout(() => {
-                                    overlay.style.opacity = '0';
-                                    setTimeout(() => {
-                                        overlay.remove();
-                                        document.body.classList.remove('dashboard-building');
-                                    }, 800);
-                                }, 1200);
-                            }, 400);
-                        }, 2800);
-                    }, 500);
-                }, 1500);
-            });
-        } catch(e) {
-            console.error(e);
-            if(onDone) onDone();
-        }
+                <p class="login-success-title">Access Granted</p>
+                <p class="login-success-sub">Welcome, ${esc(displayName || 'User')}</p>
+                <div class="login-success-bar"><div class="login-success-bar-fill"></div></div>
+            </div>`;
+        document.body.appendChild(overlay);
+
+        requestAnimationFrame(() => {
+            overlay.classList.add('login-success-active');
+            setTimeout(() => overlay.classList.add('login-success-done'), 450);
+        });
+
+        const dismiss = () => {
+            overlay.classList.add('login-success-out');
+            setTimeout(() => { if (overlay.parentNode) overlay.remove(); }, 450);
+        };
+        setTimeout(dismiss, 1600);
+        setTimeout(() => { if (overlay.parentNode) overlay.remove(); }, 3500);
     }
 
 
@@ -1601,7 +1760,6 @@
         p.type = isPwd ? 'text' : 'password';
         btn.innerHTML = isPwd ? '<i data-lucide="eye-off" class="w-5 h-5"></i>' : '<i data-lucide="eye" class="w-5 h-5"></i>';
         lucide.createIcons();
-            if(window.initFireSuppressionEngine) window.initFireSuppressionEngine();
     };
 
     window.handleLogin = (id, pw, btnElement) => {
@@ -1613,13 +1771,24 @@
         
         // Simulating network delay for effect
         setTimeout(() => {
+            if (!appData || !Array.isArray(appData.users)) {
+                alert('Application data is still loading. Please wait a moment and try again.');
+                if(btnElement) {
+                    btnElement.disabled = false;
+                    btnElement.innerHTML = `<i data-lucide="log-in" class="w-4 h-4"></i> Sign In`;
+                    lucide.createIcons();
+                }
+                return;
+            }
             const found = appData.users.find(u => (u.id||'').trim().toLowerCase() === (id||'').trim().toLowerCase() && (u.password||'').trim() === pw.trim() && u.active !== false);
             if (found) {
                 user = found;
                 sessionStorage.setItem(SESSION_KEY, JSON.stringify(found));
                 activeTab = 'dashboard';
                 playLoginSuccessSound();
-                showLoginSuccessOverlay(found.name, () => render());
+                document.getElementById('login-success-overlay')?.remove();
+                document.body.classList.remove('dashboard-building', 'login-active');
+                render();
             } else {
                 playLoginFailSound();
                 alert("Invalid credentials. Check ID / password.");
@@ -2081,6 +2250,21 @@
             };
         });
 
+        // Automatically add newly typed items to the Master Asset List
+        mr.items.forEach(it => {
+            const nameLower = (it.name || '').toLowerCase().trim();
+            if (nameLower && !appData.assets.some(a => (a.name || '').toLowerCase().trim() === nameLower)) {
+                const id = generateAssetId(it.name, appData.assets);
+                appData.assets.push({
+                    id, 
+                    name: it.name.trim(), 
+                    specification: it.spec || "", 
+                    unit: it.unit || "NOS",
+                    rate: it.rate || 0
+                });
+            }
+        });
+
         if (isDirectPR && !isRevision) {
             const pendingNote = applyDirectPrRouting(mr, notes);
             if (!isRevision) appData.mrs.push(mr);
@@ -2281,7 +2465,8 @@
         mr.history.push({ action: 'Department Approved', actor: user.name, role: user.role, dept: user.dept, ts: Date.now(),
             field: 'status', oldValue: STATUS_META.DEPT_APPROVAL_PENDING.label, newValue: STATUS_META.DEPT_APPROVED.label, note });
 
-        mr.status = 'RAISED'; // forwarded straight into the existing Final Authorization queue
+        // Direct PR approved by Planning L2 must be forwarded to Final Authorization before procurement.
+        mr.status = 'RAISED';
         mr.history.push({ action: 'Sent for Final Authorization', actor: user.name, role: user.role, dept: user.dept, ts: Date.now(),
             field: 'status', oldValue: STATUS_META.DEPT_APPROVED.label, newValue: STATUS_META.RAISED.label, note: '' });
 
@@ -2894,9 +3079,12 @@
         </div>`;
     }
 
-    // ── RENDER ─────────────────────────────────────────────────────────────
+    // ── RENDER ────────────────────────────────────────────────────────────────────────────────────────
     function render() {
         const root = document.getElementById('app-root');
+        if (!root) return;
+        if (!appData) appData = normalizeAppData(null);
+        try {
         const mainBefore = document.querySelector('main.flex-1.overflow-y-auto');
         const sidebarNavBefore = document.getElementById('app-sidebar-nav');
         const preserveScroll = !!(mainBefore && user && _lastRenderedTab === activeTab
@@ -2915,6 +3103,13 @@
             return;
         }
         document.body.classList.remove('login-active');
+
+        if (procInboxPrNumber) {
+            _lastRenderedTab = null;
+            root.innerHTML = renderCombinedPrPrint(procInboxPrNumber, 'inbox');
+            lucide.createIcons();
+            return;
+        }
         if (printPrNumber) {
             _lastRenderedTab = null;
             root.innerHTML = renderCombinedPrPrint(printPrNumber);
@@ -2968,6 +3163,7 @@
             ${dcContextMenu ? renderDcContextMenu() : ''}
             ${showMrDraftsPanel ? renderMrDraftsPanel() : ''}
             ${_reviewMrId ? renderReviewModal() : ''}
+            ${historyModal ? renderHistoryModal() : ''}
         `;
         lucide.createIcons();
         _lastRenderedTab = activeTab;
@@ -2987,6 +3183,14 @@
             });
         }
         scheduleDashboardCharts();
+        } catch (err) {
+            console.error('[render] failed:', err);
+            root.innerHTML = `<div style="padding:40px;font-family:Inter,sans-serif;max-width:520px;margin:40px auto;">
+                <h2 style="color:#B3122E;font-size:18px;margin:0 0 12px;">Unable to load screen</h2>
+                <p style="color:#64748b;font-size:14px;line-height:1.5;">${esc(String(err.message || err))}</p>
+                <button onclick="location.reload()" style="margin-top:16px;background:#B3122E;color:#fff;border:none;padding:10px 18px;border-radius:8px;font-weight:700;cursor:pointer;">Reload App</button>
+            </div>`;
+        }
     }
 
     function getChartCtor() {
@@ -3116,6 +3320,7 @@
     }
 
     function renderSidebar() {
+        const mrs = appData.mrs || [];
         return `
         <div id="app-sidebar" class="w-64 bg-ink h-screen fixed top-0 left-0 text-slate-300 flex flex-col no-print border-r border-black/20 z-50 transition-transform duration-300 ${mobileMenuOpen ? 'translate-x-0' : '-translate-x-full'} md:translate-x-0">
             <div class="shrink-0 p-6 pb-4 border-b border-white/10">
@@ -3134,14 +3339,15 @@
                 ${navBtn('tracking','Work Ledger','clipboard-list')}
                 ${navBtn('reports','Reports','bar-chart-3')}
                 ${(user.role==='admin'||user.role==='creator') ? navBtn('new_mr','Raise MR','plus-circle') : ''}
-                ${(user.approvalLevel==='L2') ? navBtn('dept_approval','Dept Approval','users-2', appData.mrs.filter(m=>m.status==='DEPT_APPROVAL_PENDING' && m.dept===user.dept).length) : ''}
-                ${(user.role==='admin'||user.role==='authorizer') ? navBtn('authorize','Authorize','shield-check', appData.mrs.filter(m=>m.status==='RAISED').length) : ''}
-                ${(user.role==='admin'||user.role==='planner') ? navBtn('planner','Planning','file-search', appData.mrs.filter(m=>m.status==='AUTHORIZED').length) : ''}
+                ${(user.approvalLevel==='L2') ? navBtn('dept_approval','Dept Approval','users-2', mrs.filter(m=>m.status==='DEPT_APPROVAL_PENDING' && m.dept===user.dept).length) : ''}
+                ${(user.role==='admin'||user.role==='authorizer') ? navBtn('authorize','Authorize','shield-check', mrs.filter(m=>m.status==='RAISED').length) : ''}
+                ${(user.role==='admin'||user.role==='planner') ? navBtn('planner','Planning','file-search', mrs.filter(m=>m.status==='AUTHORIZED').length) : ''}
                 ${(user.role==='admin'||user.role==='planner') ? navBtn('direct_pr','+ Create Direct PR','zap') : ''}
                 ${(user.role==='admin'||user.role==='planner'||user.role==='procurement'||user.role==='authorizer') ? navBtn('data_centre','Data Centre','database') : ''}
                 ${(user.role==='admin'||user.role==='procurement') ? `
                     <div class="pt-4 mt-4 border-t border-white/10 space-y-1">
                         <div class="px-3 pb-1 text-[9px] font-black text-slate-500 uppercase tracking-widest">Procurement Team</div>
+                        ${navBtn('proc_inbox','Procurement Inbox','inbox', mrs.filter(m=>m.status==='PLANNED').length)}
                         ${navBtn('proc_team','Team Performance','users-round')}
                         ${navBtn('proc_performance','Performance Report','file-bar-chart')}
                     </div>` : ''}
@@ -3225,16 +3431,105 @@
             case 'admin_proc_handlers': return renderProcHandlerMaster();
             case 'admin_sequences':    return renderAdminSequences();
             case 'proc_team':        return renderProcTeamDashboard();
+            case 'proc_inbox':       return renderProcInbox();
             case 'proc_performance': return renderProcPerformanceReport();
             default: return `<div class="p-10 text-slate-300 font-bold uppercase tracking-widest text-center border-2 border-dashed rounded-3xl">Select a section from the sidebar.</div>`;
         }
     }
 
     // ── DASHBOARD ───────────────────────────────────────────────────────────
+    window.setProcSavingMonth = (key) => {
+        procSavingMonth = key;
+        render();
+    };
+
+    function renderProcurementMonthlySavings() {
+        const rows = buildPrRows().filter(r => Number(r.saving) !== 0);
+        if (!rows.length) {
+            return `
+            <div class="bg-white rounded-2xl border border-rule shadow-panel p-6">
+                <h3 class="text-xs font-black text-slate-500 uppercase tracking-widest mb-4">Procurement Savings</h3>
+                <p class="text-sm text-slate-500">No savings data entered yet.</p>
+            </div>`;
+        }
+        const monthly = {};
+        rows.forEach(r => {
+            const sourceDate = r.poDate || r.date;
+            const dt = sourceDate ? new Date(sourceDate) : null;
+            if (!dt || Number.isNaN(dt.getTime())) return;
+            const key = `${dt.getFullYear()}-${String(dt.getMonth() + 1).padStart(2, '0')}`;
+            monthly[key] = (monthly[key] || 0) + Number(r.saving || 0);
+        });
+        const keys = Object.keys(monthly).sort((a, b) => b.localeCompare(a));
+        const currentKey = new Date().toISOString().slice(0, 7);
+        if (!procSavingMonth || !monthly[procSavingMonth]) {
+            procSavingMonth = monthly[currentKey] !== undefined ? currentKey : keys[0];
+        }
+        const selectedLabel = procSavingMonth ? `${new Date(procSavingMonth + '-01').toLocaleString('en-IN', { month: 'long', year: 'numeric' })}` : '';
+        const selectedValue = monthly[procSavingMonth] || 0;
+        const options = keys.map(key => {
+            const label = new Date(key + '-01').toLocaleString('en-IN', { month: 'long', year: 'numeric' });
+            return `<option value="${key}" ${key === procSavingMonth ? 'selected' : ''}>${esc(label)}</option>`;
+        }).join('');
+        return `
+        <div class="bg-white rounded-2xl border border-rule shadow-panel p-6 h-full min-h-44 flex flex-col justify-between">
+            <div class="flex items-center justify-between gap-4 mb-4">
+                <div>
+                    <h3 class="text-xs font-black text-slate-500 uppercase tracking-widest">Procurement Savings</h3>
+                    <p class="text-[11px] text-slate-400 mt-1">Showing savings for selected month.</p>
+                </div>
+                <select onchange="window.setProcSavingMonth(this.value)" class="text-[11px] font-bold uppercase tracking-widest border border-rule rounded-lg bg-slate-50 px-3 py-2">
+                    ${options}
+                </select>
+            </div>
+            <div class="flex flex-col gap-2">
+                <span class="text-[10px] uppercase tracking-widest text-slate-500">${esc(selectedLabel)}</span>
+                <p class="text-4xl font-display font-black text-emerald-600">${formatCurrencyValue(selectedValue)}</p>
+                <p class="text-xs text-slate-500">Select a previous month to view its savings amount.</p>
+            </div>
+        </div>`;
+    }
+
     function renderDashboard() {
+        const mrs = appData.mrs || [];
+        if (user.role === 'procurement') {
+            const newPrs = mrs.filter(m => m.status === 'PLANNED').length;
+            const acceptedPrs = buildPrRows().filter(r => r.status !== 'PLANNED' && r.status !== 'RAISED').length;
+            return `
+            <div class="space-y-8 fade-in">
+                <div>
+                    <h2 class="text-2xl font-display font-bold tracking-tight">Procurement Dashboard</h2>
+                    <p class="text-sm text-slate-500 mt-1">Welcome back, ${esc(user.name.split(' ')[0])}.</p>
+                </div>
+                <div class="grid grid-cols-1 md:grid-cols-2 gap-6">
+                    <div onclick="window.navigate('proc_inbox')" class="bg-white border-2 border-brand/20 rounded-2xl p-6 cursor-pointer hover:shadow-lg hover:border-brand transition-all flex items-center gap-6 group">
+                        <div class="w-16 h-16 bg-brand/10 rounded-full flex items-center justify-center shrink-0 group-hover:scale-110 transition-transform">
+                            <i data-lucide="inbox" class="w-8 h-8 text-brand"></i>
+                        </div>
+                        <div>
+                            <p class="text-4xl font-display font-black text-ink">${newPrs}</p>
+                            <p class="text-xs font-black uppercase tracking-widest text-slate-500 mt-1">New PR Received</p>
+                        </div>
+                    </div>
+                    <div onclick="window.navigate('data_centre')" class="bg-white border-2 border-emerald-600/20 rounded-2xl p-6 cursor-pointer hover:shadow-lg hover:border-emerald-600 transition-all flex items-center gap-6 group">
+                        <div class="w-16 h-16 bg-emerald-600/10 rounded-full flex items-center justify-center shrink-0 group-hover:scale-110 transition-transform">
+                            <i data-lucide="database" class="w-8 h-8 text-emerald-600"></i>
+                        </div>
+                        <div>
+                            <p class="text-4xl font-display font-black text-ink">${acceptedPrs}</p>
+                            <p class="text-xs font-black uppercase tracking-widest text-slate-500 mt-1">Accepted PR (Data Center)</p>
+                        </div>
+                    </div>
+                </div>
+                <div class="space-y-6">
+                    ${renderProcurementMonthlySavings()}
+                    ${renderProcTeamSnapshot()}
+                </div>
+            </div>`;
+        }
         const rows = buildPrRows();
         const s = dcSummary(rows);
-        const totalMr = appData.mrs.length;
+        const totalMr = mrs.length;
         const card = (val, label, color, preset) => dcCard(val, label, color, `window.dcApplyPreset('${preset}')`);
         return `
         <div class="space-y-8">
@@ -3374,7 +3669,7 @@
                     <i data-lucide="users-round" class="w-3.5 h-3.5"></i> Open Team Dashboard
                 </button>
             </div>
-            <div class="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
+            <div class="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 xl:grid-cols-4 gap-4 auto-rows-fr">
                 ${perf.length===0 ? `<div class="col-span-full text-center text-slate-300 text-xs uppercase font-bold py-8 border-2 border-dashed rounded-2xl">No Procurement Handlers yet — add one in Procurement Handlers master</div>` : perf.map(p => procHandlerCard(p)).join('')}
             </div>
         </div>`;
@@ -4086,8 +4381,8 @@ function renderMrRow(item, idx, xlInputCss) {
                     ${queue.map(m => {
                         const items = m.items || [];
                         const itemNames = items.map(it => it.name).join(', ');
-                        const l2Approve = (m.history || []).find(h => h.action === 'Department Approved');
-                        const l2Name = l2Approve ? l2Approve.actor : (m.l2User || 'N/A');
+                        const l2Approve = resolveL2ApprovalEntry(m.history, m);
+                        const l2Name = l2Approve ? l2Approve.actor : ((m.deptApprovalDate && m.l2User) ? m.l2User : 'N/A');
                         return `
                         <tr>
                             <td class="px-2.5 py-2 font-mono font-bold text-brand">${esc(m.mrNumber)}</td>
@@ -5461,6 +5756,12 @@ function renderMrRow(item, idx, xlInputCss) {
     // All procurement work (PO issuance, receipt, hold/cancel, remarks) now happens
     // exclusively inline inside the Data Centre grid below — there is no separate
     // Procurement page/module anymore.
+    function formatCurrencyValue(value) {
+        const num = Number(value);
+        if (!Number.isFinite(num)) return '—';
+        return `₹${num.toLocaleString('en-IN', { maximumFractionDigits: 0 })}`;
+    }
+
     function buildPrRows() {
         const rows = [];
         const today = new Date(); today.setHours(0,0,0,0);
@@ -5492,6 +5793,9 @@ function renderMrRow(item, idx, xlInputCss) {
                 const receivedQty = (itStatus === 'CANCELLED') ? 0 : Math.min(qtyNum, Number(it.receivedQty) || 0);
                 const pendingQty = Math.max(0, qtyNum - receivedQty);
                 const itemCompletionPct = qtyNum > 0 ? +( (receivedQty / qtyNum) * 100 ).toFixed(1) : 0;
+                const firstQuoteBudget = Number(it.firstQuoteBudget || 0);
+                const poValue = Number(it.poValue || 0);
+                const saving = firstQuoteBudget - poValue;
                 rows.push({
                     mrId: mr.id, itemIdx: idx,
                     mrNo: mr.mrNumber, prNo: mr.prNumber, source: mr.source || 'MR_BASED', date: mr.createdAt,
@@ -5503,6 +5807,7 @@ function renderMrRow(item, idx, xlInputCss) {
                     deliveryLoc: mr.deliveryLocation || '', dept: mr.dept || '', plannedBy: mr.plannedBy || '',
                     status: itStatus, poNo: it.poNumber || '', poDate: it.poDate || '',
                     prHandleBy: it.procEngineer || '', vendor: it.vendor || '',
+                    firstQuoteBudget, poValue, saving,
                     tentDelivery: it.tentativeDeliveryDate || '', actualDelivery: it.actualDeliveryDate || '',
                     materialReceived: it.materialReceivedDate || '',
                     reqDelayDays: reqDelay, deliveryDelayDays: deliveryDelay,
@@ -5562,7 +5867,7 @@ function renderMrRow(item, idx, xlInputCss) {
         render();
     };
     window.dcToggleColsPanel = () => { dcShowCols = !dcShowCols; render(); };
-    window.dcSetPage = (p) => { dcPage = p; render(); };
+    window.dcSetPage = (p) => { dcPage = p; if(window.dcBulkSelected) window.dcBulkSelected.clear(); render(); };
     window.dcCopyCell = (val) => {
         navigator.clipboard?.writeText(String(val ?? '')).catch(()=>{});
         showToast('Copied');
@@ -5668,11 +5973,13 @@ function renderMrRow(item, idx, xlInputCss) {
     // own PO / vendor / engineer / delivery dates / status), not the parent MR.
     const DC_FIELD_MAP = {
         status: 'status', poNo: 'poNumber', poDate: 'poDate', prHandleBy: 'procEngineer', vendor: 'vendor',
+        firstQuoteBudget: 'firstQuoteBudget', poValue: 'poValue',
         tentDelivery: 'tentativeDeliveryDate',
         remarks: 'procRemarks'
     };
     const DC_FIELD_LABEL = {
-        status: 'Status', poNo: 'PO Number', poDate: 'PO Date', prHandleBy: 'Procurement Engineer', vendor: 'Vendor',
+        status: 'Status', poNo: 'PO Number', poDate: 'PO Date', prHandleBy: 'Procurement Engineer', vendor: 'Vendor Name',
+        firstQuoteBudget: 'First Quote/Budget', poValue: 'PO Value',
         tentDelivery: 'Tentative Delivery Date',
         remarks: 'Remarks'
     };
@@ -5826,7 +6133,18 @@ function renderMrRow(item, idx, xlInputCss) {
         }
 
         const oldVal = it[dbKey];
-        it[dbKey] = val;
+        if (field === 'firstQuoteBudget' || field === 'poValue') {
+            const numeric = Number(val);
+            it[dbKey] = Number.isFinite(numeric) ? numeric : 0;
+            // Recompute saving immediately so the Data Centre shows Budget - PO Value live
+            const firstQuoteBudget = Number(it.firstQuoteBudget || 0);
+            const poValueNow = Number(it.poValue || 0);
+            it.saving = firstQuoteBudget - poValueNow;
+            // Update the grid view so the saving cell reflects the new value
+            softRender();
+        } else {
+            it[dbKey] = val;
+        }
         const autoAdvanced = (field === 'poNo' || field === 'poDate') ? checkAutoPoGiven(mr, it) : false;
 
         mr.history = mr.history || [];
@@ -6032,6 +6350,186 @@ function renderMrRow(item, idx, xlInputCss) {
         }
     };
 
+    // ── PROCUREMENT INBOX ─────────────────────────────────────────────────────────────
+    function renderProcInbox() {
+        const inboxMrs = appData.mrs.filter(m => m.status === 'PLANNED');
+
+        if (inboxMrs.length === 0) {
+            return `
+            <div class="flex flex-col items-center justify-center h-[70vh] text-center fade-in">
+                <div class="w-24 h-24 bg-brand/5 rounded-full flex items-center justify-center mb-6">
+                    <i data-lucide="inbox" class="w-10 h-10 text-brand"></i>
+                </div>
+                <h2 class="text-2xl font-display font-bold text-ink mb-2 tracking-tight">Inbox Zero</h2>
+                <p class="text-slate-500 max-w-sm mx-auto">All PRs have been reviewed. Nothing pending.</p>
+            </div>`;
+        }
+
+        return `
+        <div class="space-y-5 fade-in">
+            <div class="flex items-center gap-3">
+                <div class="w-10 h-10 rounded-xl bg-brand/10 flex items-center justify-center shrink-0">
+                    <i data-lucide="inbox" class="w-5 h-5 text-brand"></i>
+                </div>
+                <div>
+                    <h1 class="text-xl font-display font-bold tracking-tight text-ink">New PR Received</h1>
+                    <p class="text-xs text-slate-500">Review incoming PRs — Accept to move to Data Centre or Return to Planner</p>
+                </div>
+                <span class="ml-auto text-[11px] font-black uppercase tracking-widest bg-brand text-white px-3 py-1.5 rounded-full">${inboxMrs.length} Pending</span>
+            </div>
+
+            <div class="bg-white rounded-2xl border border-rule shadow-panel overflow-hidden overflow-x-auto">
+                <table class="w-full text-left">
+                    <thead>
+                        <tr class="bg-ink text-white">
+                            <th class="px-4 py-3 text-[10px] font-black uppercase tracking-widest w-8">
+                                <input type="checkbox" id="inbox-select-all" onchange="window.inboxToggleAll(this.checked)" class="rounded" />
+                            </th>
+                            <th class="px-4 py-3 text-[10px] font-black uppercase tracking-widest">#</th>
+                            <th class="px-4 py-3 text-[10px] font-black uppercase tracking-widest">PR No.</th>
+                            <th class="px-4 py-3 text-[10px] font-black uppercase tracking-widest">Date &amp; Time Received</th>
+                            <th class="px-4 py-3 text-[10px] font-black uppercase tracking-widest">Raised By</th>
+                            <th class="px-4 py-3 text-[10px] font-black uppercase tracking-widest">Department</th>
+                            <th class="px-4 py-3 text-[10px] font-black uppercase tracking-widest text-center">Items</th>
+                            <th class="px-4 py-3 text-[10px] font-black uppercase tracking-widest text-right">Value</th>
+                            <th class="px-4 py-3 text-[10px] font-black uppercase tracking-widest text-center">Status / Remark</th>
+                            <th class="px-4 py-3 text-[10px] font-black uppercase tracking-widest text-center">Action</th>
+                        </tr>
+                    </thead>
+                    <tbody class="divide-y divide-rule">
+                        ${inboxMrs.map((mr, idx) => {
+                            const itemCount = (mr.items || []).length;
+                            const val = (mr.items || []).reduce((s, it) => s + (Number(it.qty)*Number(it.rate)||0), 0);
+                            const receivedAt = mr.plannedAt || mr.createdAt;
+
+                            // Check if this PR was previously returned by Procurement
+                            const history = mr.history || [];
+                            const returnEntry = [...history].reverse().find(h => (h.action||'').includes('Returned to Planner by Procurement'));
+                            const resubmitEntry = returnEntry
+                                ? history.find(h => h.ts > returnEntry.ts && (h.action||'').toLowerCase().includes('resubmit'))
+                                : null;
+                            // Planner who resubmitted = last PLANNED history entry after the return
+                            const replanEntry = returnEntry
+                                ? history.find(h => h.ts > returnEntry.ts && (h.field === 'status' && h.newValue && (h.newValue === 'Planned' || h.newValue === 'PLANNED' || (h.action||'').toLowerCase().includes('plan'))))
+                                : null;
+                            const wasReturned = !!returnEntry;
+                            const procHandler = mr.prHandleBy || mr.procHandler || '—';
+                            const resubmittedBy = replanEntry ? replanEntry.actor : (wasReturned ? mr.raisedBy : null);
+                            const returnReason = returnEntry ? returnEntry.note : null;
+
+                            const statusCell = wasReturned
+                                ? `<div class="flex flex-col items-center gap-1.5">
+                                    <div class="flex items-center gap-1 bg-amber-50 border border-amber-300 text-amber-700 rounded-lg px-2.5 py-1 text-[10px] font-black uppercase tracking-wide">
+                                        <i data-lucide="triangle-alert" class="w-3.5 h-3.5 shrink-0"></i> Resubmitted
+                                    </div>
+                                    ${returnReason ? `<div class="text-[10px] text-slate-500 max-w-[160px] text-center leading-snug italic">"<span class='font-bold text-slate-700'>${esc(returnReason)}</span>"</div>` : ''}
+                                    ${resubmittedBy ? `<div class="text-[10px] font-black text-slate-600 flex items-center gap-1"><i data-lucide="user-check" class="w-3 h-3 text-emerald-500"></i>${esc(resubmittedBy)}</div>` : ''}
+                                </div>`
+                                : `<div class="flex items-center justify-center">
+                                    <span class="inline-flex items-center gap-1 bg-emerald-50 border border-emerald-200 text-emerald-700 rounded-full px-2.5 py-1 text-[10px] font-black uppercase tracking-wide">
+                                        <i data-lucide="circle-check" class="w-3 h-3"></i> New
+                                    </span>
+                                  </div>`;
+
+                            return `
+                            <tr class="${wasReturned ? 'bg-amber-50/40 hover:bg-amber-50' : 'hover:bg-slate-50'} transition-colors group">
+                                <td class="px-4 py-3">
+                                    <input type="checkbox" class="inbox-row-check rounded" data-mrid="${mr.id}" />
+                                </td>
+                                <td class="px-4 py-3 text-[11px] font-black text-slate-400">${idx + 1}</td>
+                                <td class="px-4 py-3">
+                                    <span class="text-[12px] font-black text-brand tracking-wide">${esc(mr.prNumber || '—')}</span>
+                                    ${procHandler !== '—' ? `<div class="text-[10px] text-slate-400 mt-0.5 flex items-center gap-1"><i data-lucide="hard-hat" class="w-3 h-3"></i>${esc(procHandler)}</div>` : ''}
+                                </td>
+                                <td class="px-4 py-3">
+                                    <div class="text-[11px] font-bold text-slate-700">${fmtDate(receivedAt)}</div>
+                                    <div class="text-[10px] text-slate-400">${receivedAt ? new Date(receivedAt).toLocaleTimeString('en-IN', {hour:'2-digit', minute:'2-digit', hour12:true}) : '—'}</div>
+                                </td>
+                                <td class="px-4 py-3">
+                                    <div class="text-[11px] font-bold text-slate-800">${esc(mr.raisedBy)}</div>
+                                </td>
+                                <td class="px-4 py-3">
+                                    <div class="text-[11px] font-bold text-slate-700">${esc(mr.dept)}</div>
+                                </td>
+                                <td class="px-4 py-3 text-center">
+                                    <span class="text-[11px] font-black text-slate-600">${itemCount}</span>
+                                </td>
+                                <td class="px-4 py-3 text-right">
+                                    <span class="text-[11px] font-bold text-slate-800">₹${val.toLocaleString('en-IN')}</span>
+                                </td>
+                                <td class="px-4 py-3 text-center">${statusCell}</td>
+                                <td class="px-4 py-3 text-center">
+                                    <button onclick="window.procViewPR('${mr.id}')"
+                                        class="inline-flex items-center gap-1.5 bg-ink text-white text-[10px] font-black uppercase tracking-widest px-3 py-1.5 rounded-lg hover:bg-brand transition-all">
+                                        <i data-lucide="eye" class="w-3.5 h-3.5"></i> View PR
+                                    </button>
+                                </td>
+                            </tr>`;
+                        }).join('')}
+                    </tbody>
+                </table>
+            </div>
+        </div>`;
+    }
+
+    window.inboxToggleAll = (checked) => {
+        document.querySelectorAll('.inbox-row-check').forEach(cb => { cb.checked = checked; });
+    };
+
+    window.procViewPR = (mrId) => {
+        const mr = appData.mrs.find(m => m.id === mrId);
+        if (!mr) return;
+        procInboxPrNumber = mr.prNumber || mr.mrNumber;
+        procInboxMrId = mrId;
+        render();
+    };
+    window.procAcceptPR = (mrId) => {
+        const mr = appData.mrs.find(m => m.id === mrId);
+        if (!mr) return;
+        mr.status = 'PR_ACCEPTED';
+        (mr.items || []).forEach(it => { if (it.status === 'PLANNED') it.status = 'PR_ACCEPTED'; });
+        mr.history.push({ 
+            action: 'PR Accepted (Procurement Inbox)', 
+            actor: user.name, role: user.role, dept: user.dept, ts: Date.now(),
+            field: 'status', oldValue: STATUS_META.PLANNED.label, newValue: STATUS_META.PR_ACCEPTED.label,
+            note: 'PR received and accepted into Data Centre.'
+        });
+        saveDB();
+        // Reset inbox view back to table after accepting
+        procInboxPrNumber = null;
+        procInboxMrId = null;
+        render();
+        alert('✅ PR Accepted! It has been moved to the Data Centre.');
+    };
+
+    window.closeProcInboxView = () => {
+        procInboxPrNumber = null;
+        procInboxMrId = null;
+        render();
+    };
+
+    window.procReturnPR = (mrId) => {
+        const reason = prompt("Enter reason for returning PR to Planner:");
+        if (!reason) return;
+        const mr = appData.mrs.find(m => m.id === mrId);
+        if (!mr) return;
+        // Returned PR → goes back to QUERY_RAISED (Planner will correct & resubmit → FINAL_AUTH → PLANNED → Procurement)
+        mr.status = 'QUERY_RAISED';
+        (mr.items || []).forEach(it => { it.status = 'QUERY_RAISED'; });
+        mr.history.push({ 
+            action: 'Returned to Planner by Procurement', 
+            actor: user.name, role: user.role, dept: user.dept, ts: Date.now(),
+            field: 'status', oldValue: STATUS_META.PLANNED.label, newValue: STATUS_META.QUERY_RAISED.label,
+            note: reason
+        });
+        saveDB();
+        // Reset inbox view
+        procInboxPrNumber = null;
+        procInboxMrId = null;
+        render();
+        alert('↩️ PR Returned to Planner. They will correct and resubmit for Final Authorization.');
+    };
+
     function dcSummary(rows) {
         const totalMR    = new Set(rows.map(r => r.mrNo)).size;
         const totalPR    = new Set(rows.map(r => r.prNo)).size;
@@ -6143,7 +6641,7 @@ function renderMrRow(item, idx, xlInputCss) {
                     <h1 class="text-2xl font-display font-bold tracking-tight">Data Centre</h1>
                     <p class="text-xs text-slate-500">Master Purchase Request database · ${allRows.length} line items across ${summary.totalPR} PRs</p>
                 </div>
-                <div class="flex flex-wrap items-center gap-2 no-print">
+                <div class="flex items-center gap-2 no-print">
                     <select onchange="if(this.value) window.dcApplySavedFilter(this.value); this.value='';" class="text-[10px] font-black uppercase tracking-widest bg-white border border-rule px-2 py-2 rounded-lg">
                         <option value="">Saved Views (${dcSavedFilters.length})</option>
                         ${dcSavedFilters.map(f => `<option value="${esc(f.name)}">${esc(f.name)}</option>`).join('')}
@@ -6250,7 +6748,7 @@ function renderMrRow(item, idx, xlInputCss) {
                 <p class="text-[10px] text-slate-500 font-bold uppercase tracking-widest">Page ${dcPage} of ${totalPages} · ${allRows.length} rows</p>
                 <div class="flex items-center gap-1">
                     ${canEdit ? `
-                    <button id="dc-save-btn" onmousedown="window.dcSaveChanges()" title="${dcDirty ? 'Save Changes' : 'No unsaved changes'}"
+                    <button id="dc-save-btn" onclick="window.dcSaveChanges()" title="${dcDirty ? 'Save Changes' : 'No unsaved changes'}"
                         class="px-2.5 py-1.5 rounded-lg border transition-all flex items-center justify-center ${dcDirty ? 'bg-emerald-600 border-emerald-600 text-white shadow-lg' : 'bg-white border-rule text-slate-400 opacity-70'}">
                         <span style="font-size:13px;line-height:1;">💾</span>
                     </button>` : ''}
@@ -6261,6 +6759,396 @@ function renderMrRow(item, idx, xlInputCss) {
             </div>
         </div>`;
     }
+
+    window.dcCloseContextMenu = () => { dcContextMenu = null; render(); };
+    function renderDcContextMenu() {
+        const m = dcContextMenu;
+        if (!m) return '';
+        const mr = appData.mrs.find(x => x.id === m.mrId);
+        const it = mr && mr.items && mr.items[m.itemIdx];
+        if (!mr || !it) return '';
+        const item = (label, icon, onclick, disabled) => `
+            <button ${disabled ? 'disabled' : `onclick="${onclick}"`} class="w-full text-left px-4 py-2 text-[11px] font-bold flex items-center gap-2 ${disabled ? 'text-slate-300 cursor-not-allowed' : 'text-slate-700 hover:bg-paper'}">
+                <i data-lucide="${icon}" class="w-3.5 h-3.5"></i> ${label}
+            </button>`;
+        const copyStr = `${it.name || ''} | PR ${mr.prNumber || '—'} | ${it.qty || ''} ${it.unit || ''}`;
+        return `
+        <div class="no-print" onclick="window.dcCloseContextMenu()" style="position:fixed; inset:0; z-index:1998;"></div>
+        <div class="no-print bg-white border border-rule rounded-xl shadow-2xl py-1.5" style="position:fixed; left:${m.x}px; top:${m.y}px; z-index:1999; min-width:200px;">
+            ${item('View Audit Trail', 'history', `window.dcCloseContextMenu(); window.showAudit('${mr.id}')`)}
+            ${item('Copy Row (Item + PR No.)', 'copy', `window.dcCloseContextMenu(); window.dcCopyCell('${esc(copyStr)}')`)}
+            ${item('Print Combined PR', 'printer', `window.dcCloseContextMenu(); window.printMR('${mr.id}')`, !mr.prNumber)}
+            ${canReassign() ? item('Reassign Handler', 'repeat', `window.dcCloseContextMenu(); window.openReassignModal('${mr.id}',${m.itemIdx})`) : ''}
+        </div>`;
+    }
+
+    function renderDcHoldCancelModal() {
+        const m = dcHoldCancelModal;
+        if (!m) return '';
+        const label = m.status === 'HOLD' ? 'Hold' : 'Cancel';
+        return `
+        <div class="fixed inset-0 bg-ink/70 backdrop-blur-sm z-[1000] flex items-center justify-center p-4" style="position:fixed;inset:0;background:rgba(11,20,32,0.7);display:flex;align-items:center;justify-content:center;z-index:1000;">
+            <div class="bg-white rounded-2xl shadow-2xl w-full max-w-md overflow-hidden">
+                <div class="px-8 py-6 border-b border-rule flex justify-between items-center bg-paper/60">
+                    <div>
+                        <h2 class="text-lg font-display font-bold uppercase tracking-widest">${label} Item</h2>
+                        <p class="text-[10px] text-slate-500 mt-1">Reason and justification are mandatory before this status can be saved.</p>
+                    </div>
+                    <button onclick="window.dcCloseHoldCancelModal()" class="text-slate-400 bg-white p-1 border border-rule rounded-lg hover:text-brand"><i data-lucide="x" class="w-5 h-5"></i></button>
+                </div>
+                <div class="p-8 space-y-4">
+                    <div><label class="field-label">Reason *</label><input id="hc-reason" class="glass-input bg-paper" placeholder="Brief reason for ${label.toLowerCase()}..." /></div>
+                    <div><label class="field-label">Justification *</label><textarea id="hc-justification" class="glass-input bg-paper min-h-[90px]" placeholder="Detailed justification..."></textarea></div>
+                    <button onclick="window.dcCommitHoldCancel()" class="w-full bg-brand text-white font-black py-4 rounded-xl uppercase tracking-widest shadow-xl active:scale-95 transition-all mt-2">Confirm ${label}</button>
+                </div>
+            </div>
+        </div>`;
+    }
+
+    function renderDcLeaveModal() {
+        return `
+        <div class="fixed inset-0 bg-ink/60 backdrop-blur-sm z-[100] flex items-center justify-center p-4 fade-in">
+            <div class="bg-white rounded-2xl w-full max-w-sm overflow-hidden shadow-[0_20px_50px_-12px_rgba(0,0,0,0.5)] border border-rule">
+                <div class="p-6 text-center">
+                    <div class="w-16 h-16 bg-amberx-light rounded-full flex items-center justify-center mx-auto mb-4 border border-amberx/20 text-amberx">
+                        <i data-lucide="alert-triangle" class="w-8 h-8"></i>
+                    </div>
+                    <h2 class="text-xl font-display font-bold text-ink mb-2">Unsaved Changes Detected</h2>
+                    <p class="text-xs text-slate-500 font-medium">You have unsaved changes in the Data Centre.<br>Do you want to save before leaving?</p>
+                </div>
+                <div class="bg-slate-50 p-4 border-t border-rule flex flex-col gap-2">
+                    <button onclick="window.dcSaveChanges()" class="w-full bg-emerald-600 text-white rounded-xl py-3 font-black text-[10px] uppercase tracking-widest hover:bg-emerald-700 shadow-md">Save & Continue</button>
+                    <button onclick="window.dcDiscardChanges()" class="w-full bg-white border border-rule text-slate-600 rounded-xl py-3 font-black text-[10px] uppercase tracking-widest hover:bg-slate-100">Leave Without Saving</button>
+                    <button onclick="window.dcCancelLeave()" class="w-full text-slate-400 py-3 font-black text-[10px] uppercase tracking-widest hover:text-slate-600">Cancel</button>
+                </div>
+            </div>
+        </div>`;
+    }
+
+    // Executes the navigation/logout action that was paused when unsaved changes were detected.
+    window.dcResolveLeave = (intent) => {
+        if (!intent) return;
+        if (intent.type === 'navigate') { activeTab = intent.tab; render(); }
+        else if (intent.type === 'logout') {
+            user = null;
+            sessionStorage.removeItem(SESSION_KEY); localStorage.removeItem(SESSION_KEY);
+            render();
+        }
+    };
+
+    function dcSummary(rows) {
+        const totalMR    = new Set(rows.map(r => r.mrNo)).size;
+        const totalPR    = new Set(rows.map(r => r.prNo)).size;
+        const poGiven    = new Set(rows.filter(r => r.status === 'PROCUREMENT').map(r => r.prNo)).size;
+        const partial    = new Set(rows.filter(r => r.status === 'PARTIAL').map(r => r.prNo)).size;
+        const received   = new Set(rows.filter(r => r.status === 'CLOSED').map(r => r.prNo)).size;
+        const hold       = new Set(rows.filter(r => r.status === 'HOLD').map(r => r.prNo)).size;
+        const cancel     = new Set(rows.filter(r => r.status === 'CANCELLED').map(r => r.prNo)).size;
+        const poPending  = new Set(rows.filter(r => r.status === 'PLANNED' && !r.poNo).map(r => r.prNo)).size;
+        const reqDelayDays      = rows.reduce((s,r) => s + Math.max(0, r.reqDelayDays||0), 0);
+        const deliveryDelayDays = rows.reduce((s,r) => s + Math.max(0, r.deliveryDelayDays||0), 0);
+        const overdueDeliveries = new Set(rows.filter(r => r.deliveryDelayDays > 0).map(r => r.prNo)).size;
+        const critical   = rows.filter(r => Math.max(r.reqDelayDays||0, r.deliveryDelayDays||0) > 15).length;
+        const value      = rows.reduce((s,r) => s + (Number(r.amount)||0), 0);
+        const todayStr   = fmtDateInput(Date.now());
+        const tomorrow   = fmtDateInput(Date.now() + 86400000);
+        const todayDel   = new Set(rows.filter(r => r.tentDelivery === todayStr).map(r => r.prNo)).size;
+        const tmrwDel    = new Set(rows.filter(r => r.tentDelivery === tomorrow).map(r => r.prNo)).size;
+        return { totalMR, totalPR, poGiven, partial, received, hold, cancel, poPending,
+                 reqDelayDays, deliveryDelayDays, overdueDeliveries, critical, value, todayDel, tmrwDel };
+    }
+
+    function dcCard(val, label, color, onclick) {
+        return `<div ${onclick?`onclick="${onclick}"`:''} class="bg-white rounded-xl border border-rule px-4 py-3 min-w-[130px] ${onclick?'cursor-pointer hover:border-brand/40 hover:shadow-md transition-all':''}">
+            <p class="text-xl font-display font-bold" style="color:${color}">${val}</p>
+            <p class="text-[9px] font-black text-slate-500 uppercase tracking-widest mt-0.5">${label}</p>
+        </div>`;
+    }
+
+    function renderDataCentre() {
+        const canEdit = (user.role === 'admin' || user.role === 'procurement');
+        const allRows = dcFilteredRows();
+        const summary = dcSummary(allRows);
+        const totalPages = Math.max(1, Math.ceil(allRows.length / dcPageSize));
+        if (dcPage > totalPages) dcPage = totalPages;
+        const pageRows = allRows.slice((dcPage-1)*dcPageSize, dcPage*dcPageSize);
+        const cols = dcOrderedColumns(DC_COLUMNS.filter(c => !dcHidden.has(c.key) && (!c.procOnly || user.role === 'procurement')));
+        const handlerNames = activeProcHandlers().map(h => h.name);
+
+        const holdCancelTooltip = (r) => {
+            if (r.status !== 'HOLD' && r.status !== 'CANCELLED') return '';
+            const lines = [
+                `Reason: ${r.holdCancelReason || '—'}`,
+                `Justification: ${r.holdCancelJustification || '—'}`,
+                `Updated By: ${r.holdCancelUpdatedBy || '—'}`,
+                `Date & Time: ${r.holdCancelTs ? fmtDateTime(r.holdCancelTs) : '—'}`
+            ];
+            return esc(lines.join('\n'));
+        };
+        const cellReadonly = (r, c) => {
+            const v = r[c.key];
+            if (c.key === 'status') return `<span title="${holdCancelTooltip(r)}">${renderStatusBadge(v)}</span>`;
+            if (c.key === 'source') return v === 'DIRECT_PR'
+                ? `<span class="status-chip" style="background:#F2ECFC;color:#6D28D9;border-color:#6D28D922"><span class="dot" style="background:#6D28D9"></span>Direct PR</span>`
+                : `<span class="status-chip" style="background:#EEF0FE;color:#4F46E5;border-color:#4F46E522"><span class="dot" style="background:#4F46E5"></span>MR Based</span>`;
+            if (c.key === 'itemCompletionPct') {
+                const pct = Number(v)||0;
+                const clr = pct>=100 ? '#047857' : (pct>0 ? '#B45309' : '#94a3b8');
+                return `<span style="font-weight:800;color:${clr}">${pct.toFixed(1)}%</span>`;
+            }
+            if (c.key === 'date') return fmtDate(v);
+            if (c.key === 'reqDate' || c.key === 'poDate' || c.key === 'tentDelivery') return v ? fmtDate(v) : '—';
+            if (c.currency) return formatCurrencyValue(v);
+            if (c.num) return (typeof v === 'number') ? (c.key==='rate'||c.key==='amount' ? v.toFixed(2) : v) : (v||'—');
+            return esc(String(v ?? '')) || '—';
+        };
+        const cellEditable = (r, c, ri, ci) => {
+            const navAttrs = `data-r="${ri}" data-c="${ci}" onkeydown="window.dcNavKey(event,${ri},${ci})"`;
+            if (c.editable === 'status') {
+                const opts = dcStatusOptions(r.status);
+                return `<span title="${holdCancelTooltip(r)}"><select id="dc-in-${ri}-${ci}" ${navAttrs} onchange="window.dcRequestStatusChange('${r.mrId}',${r.itemIdx},this.value)" style="width:100%;font-size:10px;padding:2px;border:1px solid #cbd5e1;border-radius:4px;">
+                    ${opts.map(s => `<option value="${s}" ${r.status===s?'selected':''}>${STATUS_META[s].label}</option>`).join('')}
+                </select></span>`;
+            }
+            if (c.editable === 'handler') {
+                if (!r.prHandleBy) {
+                    return `<select id="dc-in-${ri}-${ci}" ${navAttrs} onchange="window.dcAssignHandler('${r.mrId}',${r.itemIdx},this.value)" style="width:100%;font-size:10px;padding:2px;border:1px solid #cbd5e1;border-radius:4px;">
+                        <option value="">— Unassigned —</option>
+                        ${handlerNames.map(n => `<option value="${esc(n)}">${esc(n)}</option>`).join('')}
+                    </select>`;
+                }
+                const stillActive = handlerNames.includes(r.prHandleBy);
+                return `<div style="display:flex;align-items:center;gap:5px;">
+                    <span style="font-size:10px;font-weight:700;color:${stillActive?'#1f2937':'#94a3b8'};" title="${stillActive?'':'This handler is now Inactive'}">${esc(r.prHandleBy)}</span>
+                    ${canReassign() ? `<button type="button" onclick="window.openReassignModal('${r.mrId}',${r.itemIdx})" title="Reassign" style="color:#B3122E;flex-shrink:0;"><i data-lucide="repeat" style="width:12px;height:12px;"></i></button>` : ''}
+                </div>`;
+            }
+            if (c.editable === 'date') {
+                const incomplete = (c.key === 'poDate') && r.poNo && !r.poDate;
+                return `<input type="date" id="dc-in-${ri}-${ci}" ${navAttrs} value="${esc(r[c.key])}" onchange="window.dcUpdateItemField('${r.mrId}',${r.itemIdx},'${c.key}',this.value)" style="width:100%;font-size:10px;padding:2px;border:1px solid ${incomplete?'#f59e0b':'#cbd5e1'};border-radius:4px;" title="${incomplete?'Enter PO Date to auto-issue this PO':''}" />`;
+            }
+            if (c.editable === 'number') {
+                return `<input type="number" step="0.01" id="dc-in-${ri}-${ci}" ${navAttrs} value="${esc(r[c.key])}" onchange="window.dcUpdateItemField('${r.mrId}',${r.itemIdx},'${c.key}',this.value)" style="width:100%;font-size:10px;padding:2px;border:1px solid #cbd5e1;border-radius:4px;" />`;
+            }
+            if (c.key === 'poNo') {
+                const incomplete = r.poDate && !r.poNo;
+                return `<input type="text" id="dc-in-${ri}-${ci}" ${navAttrs} value="${esc(r.poNo)}" onchange="window.dcUpdateItemField('${r.mrId}',${r.itemIdx},'poNo',this.value)" style="width:100%;font-size:10px;padding:2px;border:1px solid ${incomplete?'#f59e0b':'#cbd5e1'};border-radius:4px;" placeholder="PO Number..." title="${incomplete?'Enter PO Number to auto-issue this PO':''}" />`;
+            }
+            if (c.editable === 'receivedQty') {
+                const disabled = !r.poNo;
+                return `<input type="number" min="0" max="${r.qty}" id="dc-in-${ri}-${ci}" ${navAttrs} value="${r.receivedQty}" ${disabled?'disabled':''}
+                    onchange="window.dcUpdateItemField('${r.mrId}',${r.itemIdx},'receivedQty',this.value)"
+                    style="width:100%;font-size:10px;padding:2px;border:1px solid #cbd5e1;border-radius:4px;${disabled?'background:#f1f5f9;color:#94a3b8;':''}"
+                    title="${disabled?'Issue a PO before recording receipt':'Qty received against this item'}" />`;
+            }
+            return `<input type="text" id="dc-in-${ri}-${ci}" ${navAttrs} value="${esc(r[c.key])}" onchange="window.dcUpdateItemField('${r.mrId}',${r.itemIdx},'${c.key}',this.value)" style="width:100%;font-size:10px;padding:2px;border:1px solid #cbd5e1;border-radius:4px;" placeholder="${c.key==='vendor'?'Vendor...':''}" />`;
+        };
+
+        return `
+        <div class="flex flex-col gap-4">
+            <div class="flex items-center justify-between flex-wrap gap-3">
+                <div>
+                    <h1 class="text-2xl font-display font-bold tracking-tight">Data Centre</h1>
+                    <p class="text-xs text-slate-500">Master Purchase Request database · ${allRows.length} line items across ${summary.totalPR} PRs</p>
+                </div>
+                <div class="flex flex-wrap items-center gap-2 no-print">
+                    <select onchange="if(this.value) window.dcApplySavedFilter(this.value); this.value='';" class="text-[10px] font-black uppercase tracking-widest bg-white border border-rule px-2 py-2 rounded-lg">
+                        <option value="">Saved Views (${dcSavedFilters.length})</option>
+                        ${dcSavedFilters.map(f => `<option value="${esc(f.name)}">${esc(f.name)}</option>`).join('')}
+                    </select>
+                    ${dcSavedFilters.length ? `<button onclick="window.dcPromptDeleteSavedFilter()" title="Delete a saved view" class="text-[10px] font-black uppercase tracking-widest bg-white border border-rule px-2 py-2 rounded-lg hover:bg-slate-50"><i data-lucide="trash-2" class="w-3.5 h-3.5"></i></button>` : ''}
+                    <button onclick="window.dcSaveCurrentFilterAsPreset()" title="Save current filters as a named view" class="text-[10px] font-black uppercase tracking-widest bg-white border border-rule px-3 py-2 rounded-lg hover:bg-slate-50 flex items-center gap-1.5"><i data-lucide="bookmark-plus" class="w-3.5 h-3.5"></i> Save View</button>
+                    <button onclick="window.dcUndo()" title="Undo (Ctrl+Z)" class="text-[10px] font-black uppercase tracking-widest bg-white border border-rule px-2.5 py-2 rounded-lg hover:bg-slate-50 ${dcUndoStack.length?'':'opacity-40'}"><i data-lucide="undo-2" class="w-3.5 h-3.5"></i></button>
+                    <button onclick="window.dcRedo()" title="Redo (Ctrl+Y)" class="text-[10px] font-black uppercase tracking-widest bg-white border border-rule px-2.5 py-2 rounded-lg hover:bg-slate-50 ${dcRedoStack.length?'':'opacity-40'}"><i data-lucide="redo-2" class="w-3.5 h-3.5"></i></button>
+                    <button onclick="window.dcExportExcel()" class="text-[10px] font-black uppercase tracking-widest bg-white border border-rule px-3 py-2 rounded-lg hover:bg-slate-50 flex items-center gap-1.5"><i data-lucide="file-spreadsheet" class="w-3.5 h-3.5"></i> Excel</button>
+                    <button onclick="window.dcPrintFilteredPr()" class="text-[10px] font-black uppercase tracking-widest bg-violet-700 text-white px-3 py-2 rounded-lg hover:bg-violet-800 flex items-center gap-1.5"><i data-lucide="printer" class="w-3.5 h-3.5"></i> Print PR Sheet</button>
+                    <button onclick="window.dcExportPdf()" class="text-[10px] font-black uppercase tracking-widest bg-white border border-rule px-3 py-2 rounded-lg hover:bg-slate-50 flex items-center gap-1.5"><i data-lucide="file-text" class="w-3.5 h-3.5"></i> PDF</button>
+                    <button onclick="window.print()" class="text-[10px] font-black uppercase tracking-widest bg-white border border-rule px-3 py-2 rounded-lg hover:bg-slate-50 flex items-center gap-1.5"><i data-lucide="printer" class="w-3.5 h-3.5"></i> Print</button>
+                    <button onclick="window.dcToggleColsPanel()" class="text-[10px] font-black uppercase tracking-widest bg-white border border-rule px-3 py-2 rounded-lg hover:bg-slate-50 flex items-center gap-1.5"><i data-lucide="columns-3" class="w-3.5 h-3.5"></i> Columns</button>
+                    <button onclick="window.dcClearFilters()" class="text-[10px] font-black uppercase tracking-widest text-brand px-3 py-2 rounded-lg hover:bg-brand-50 flex items-center gap-1.5"><i data-lucide="x-circle" class="w-3.5 h-3.5"></i> Clear Filters</button>
+                </div>
+            </div>
+            ${dcDirty ? `<div class="no-print flex items-center gap-2 bg-amberx-light border border-amberx/30 text-amberx px-4 py-2 rounded-xl text-[11px] font-black uppercase tracking-widest">
+                <i data-lucide="alert-triangle" class="w-3.5 h-3.5"></i> You have unsaved changes — click 💾 Save to write them, or they will be lost if you leave.
+            </div>` : ''}
+
+
+
+            ${dcShowCols ? `
+            <div class="bg-white border border-rule rounded-xl p-4 no-print">
+                <div class="flex items-center justify-between mb-2">
+                    <p class="text-[10px] font-black uppercase tracking-widest text-slate-500">Show / Hide Columns · Drag header to reorder · First two columns are frozen</p>
+                    <button onclick="window.dcResetLayout()" class="text-[9px] font-black uppercase tracking-widest text-brand hover:underline">Reset Layout</button>
+                </div>
+                <div class="flex flex-wrap gap-x-4 gap-y-1.5">
+                    ${DC_COLUMNS.map(c => `<label class="flex items-center gap-1.5 text-[11px] font-bold ${DC_FROZEN_KEYS.includes(c.key) ? 'text-slate-400' : 'text-slate-700'}">
+                        <input type="checkbox" ${dcHidden.has(c.key)?'':'checked'} ${DC_FROZEN_KEYS.includes(c.key)?'disabled':''} onchange="window.dcToggleCol('${c.key}')" /> ${c.label}${DC_FROZEN_KEYS.includes(c.key)?' 🔒':''}
+                    </label>`).join('')}
+                </div>
+            </div>` : ''}
+
+            <div class="no-print">
+                <input id="dc-global-search" value="${esc(dcGlobalQ)}" oninput="window.dcSetGlobalQ(this.value)"
+                    class="glass-input max-w-md" placeholder="Search everything — PR No, item, vendor, PO, remarks..." />
+            </div>
+
+            <div class="dc-scroll bg-white border border-rule rounded-xl" style="overflow:auto; max-height:70vh;" id="dc-table-wrap">
+                <table style="border-collapse:collapse; font-size:11px; white-space:nowrap;">
+                    <thead>
+                        <tr>
+                        <th style="position:sticky;top:0;left:0;z-index:4;background:#1e2530;border:1px solid #33404f;padding:6px 8px;width:36px;min-width:36px;text-align:center;">
+                            <input type="checkbox" id="dc-select-all" title="Select / deselect all on this page" onchange="window.dcToggleBulkAll(this.checked)" style="cursor:pointer;accent-color:#ef4444;width:14px;height:14px;" />
+                        </th>
+                        ${(() => { let acc = 0; return cols.map(c => {
+                            const w = dcColWidth(c);
+                            const left = c.sticky ? acc : null;
+                            if (c.sticky) acc += w;
+                            return `
+                            <th data-col-key="${c.key}" title="Click to sort" style="position:sticky; top:0; ${c.sticky?`left:${left}px; z-index:3;`:'z-index:2;'} background:#1e2530; color:#fff; border:1px solid #33404f; padding:6px 8px; text-align:left; min-width:${w}px; max-width:${w}px; width:${w}px;">
+                                <span onclick="window.dcSort('${c.key}')" style="cursor:pointer;">${esc(c.label)} ${dcSort.key===c.key ? (dcSort.dir==='asc'?'▲':'▼') : ''}</span>
+                                <span onmousedown="window.dcStartResize(event,'${c.key}')" title="Drag to resize" style="position:absolute; top:0; right:0; width:6px; height:100%; cursor:col-resize;"></span>
+                            </th>`; }).join(''); })()}
+                        <th style="position:sticky;top:0;right:0;z-index:5;background:#1e2530;border:1px solid #33404f;padding:2px 3px;width:22px;min-width:22px;max-width:22px;text-align:center;" title="History"><svg xmlns='http://www.w3.org/2000/svg' width='11' height='11' viewBox='0 0 24 24' fill='none' stroke='#94a3b8' stroke-width='2.2' stroke-linecap='round' stroke-linejoin='round'><circle cx='12' cy='12' r='10'/><polyline points='12 6 12 12 16 14'/></svg></th>
+                        </tr>
+                        <tr>
+                        <th style="position:sticky;top:29px;left:0;z-index:4;background:#f1f5f9;border:1px solid #dde3ea;padding:2px 4px;width:36px;min-width:36px;"></th>
+                        ${(() => { let acc = 0; return cols.map(c => {
+                            const w = dcColWidth(c);
+                            const left = c.sticky ? acc : null;
+                            if (c.sticky) acc += w;
+                            return `
+                            <th data-col-key="${c.key}" style="position:sticky; top:29px; ${c.sticky?`left:${left}px; z-index:3;`:'z-index:1;'} background:#f1f5f9; border:1px solid #dde3ea; padding:2px 4px;">
+                                <input id="dc-col-${c.key}" data-focus-key="dc-col-${c.key}" value="${esc(dcColFilter[c.key]||'')}" oninput="window.dcSetColFilter('${c.key}', this.value)"
+                                    style="width:100%; font-size:10px; padding:3px 4px; border:1px solid #cbd5e1; border-radius:4px; background:#fff;" placeholder="Filter..." />
+                            </th>`; }).join(''); })()}
+                        <th style="position:sticky;top:29px;right:0;z-index:3;background:#f1f5f9;border:1px solid #dde3ea;padding:2px 3px;width:22px;min-width:22px;max-width:22px;"></th>
+                        </tr>
+                    </thead>
+                    <tbody>
+                        ${pageRows.map((r, ri) => {
+                            const worstDelay = Math.max(r.reqDelayDays||0, r.deliveryDelayDays||0);
+                            const rowBg = worstDelay>15?'#FEE2E2':(worstDelay>0?'#FEF3E2':(ri%2?'#fafbfc':'#fff'));
+                            let acc = 0;
+                            return `
+                        <tr style="background:${rowBg};" oncontextmenu="window.dcOpenContextMenu(event,'${r.mrId}',${r.itemIdx})">
+                            <td style="border:1px solid #eef0f3;padding:3px 6px;width:36px;min-width:36px;text-align:center;position:sticky;left:0;background:${rowBg};z-index:1;">
+                                <input type="checkbox" ${window.dcBulkSelected && window.dcBulkSelected.has(r.mrId+'|'+r.itemIdx)?'checked':''} onchange="window.dcToggleBulkRow('${r.mrId}|${r.itemIdx}',this.checked)" style="cursor:pointer;accent-color:#ef4444;width:14px;height:14px;" />
+                            </td>
+                            ${cols.map((c, ci) => {
+                                const w = dcColWidth(c);
+                                const left = c.sticky ? acc : null;
+                                if (c.sticky) acc += w;
+                                const isDelayCol = (c.key === 'reqDelayDays' || c.key === 'deliveryDelayDays');
+                                return `
+                            <td data-col-key="${c.key}" ondblclick="window.dcCopyCell('${esc(String(r[c.key]??''))}')" title="Double-click to copy"
+                                style="border:1px solid #eef0f3; padding:3px 6px; min-width:${w}px; max-width:${w}px; width:${w}px; overflow:hidden; text-overflow:ellipsis; ${c.sticky?`position:sticky; left:${left}px; background:${rowBg}; z-index:1; font-weight:700;`:''} ${isDelayCol && r[c.key]>0 ?'color:#DC2626; font-weight:700;':''}">
+                                ${(canEdit && c.editable) ? cellEditable(r, c, ri, ci) : cellReadonly(r, c)}
+                            </td>`; }).join('')}
+                            <td title="View History" style="border:1px solid #eef0f3;padding:1px 2px;text-align:center;width:22px;min-width:22px;max-width:22px;">
+                                <button onclick="window.openHistoryModal('item','${r.mrId}',${r.itemIdx})" title="View full history" style="background:none;border:none;cursor:pointer;color:#6366f1;padding:2px 3px;border-radius:3px;display:inline-flex;align-items:center;justify-content:center;" onmouseover="this.style.background='#eef2ff'" onmouseout="this.style.background='none'"><svg xmlns='http://www.w3.org/2000/svg' width='12' height='12' viewBox='0 0 24 24' fill='none' stroke='currentColor' stroke-width='2.2' stroke-linecap='round' stroke-linejoin='round'><circle cx='12' cy='12' r='10'/><polyline points='12 6 12 12 16 14'/></svg></button>
+                            </td>
+                        </tr>`; }).join('') || `<tr><td colspan="${cols.length + 1}" style="padding:24px; text-align:center; color:#94a3b8;">No purchase requests match these filters.</td></tr>`}
+                    </tbody>
+                </table>
+            </div>
+
+            <div class="flex items-center justify-between no-print">
+                <p class="text-[10px] text-slate-500 font-bold uppercase tracking-widest">Page ${dcPage} of ${totalPages} · ${allRows.length} rows</p>
+                <div class="flex items-center gap-1">
+                    ${canEdit ? `
+                    <button id="dc-save-btn" onmousedown="window.dcSaveChanges()" title="${dcDirty ? 'Save Changes' : 'No unsaved changes'}"
+                        class="px-2.5 py-1.5 rounded-lg border transition-all flex items-center justify-center ${dcDirty ? 'bg-emerald-600 border-emerald-600 text-white shadow-lg' : 'bg-white border-rule text-slate-400 opacity-70'}">
+                        <span style="font-size:13px;line-height:1;">💾</span>
+                    </button>` : ''}
+                    <button onclick="window.dcSetPage(${Math.max(1,dcPage-1)})" class="px-3 py-1.5 text-[10px] font-black uppercase bg-white border border-rule rounded-lg">Prev</button>
+                    <div class="px-3 py-1.5 text-[10px] font-black bg-white border border-rule rounded-lg text-slate-500">${dcPage} / ${totalPages}</div>
+                    <button onclick="window.dcSetPage(${Math.min(totalPages,dcPage+1)})" class="px-3 py-1.5 text-[10px] font-black uppercase bg-white border border-rule rounded-lg">Next</button>
+                </div>
+            </div>
+            
+            ${window.dcBulkSelected && window.dcBulkSelected.size > 0 ? `
+            <div class="no-print fixed bottom-6 left-1/2 -translate-x-1/2 bg-ink text-white px-6 py-3 rounded-2xl shadow-2xl flex items-center gap-4 z-[999]">
+                <p class="text-[11px] font-black uppercase tracking-widest">${window.dcBulkSelected.size} rows selected</p>
+                <button onclick="window.dcOpenBulkPoModal()" class="bg-brand hover:bg-brand-dark px-4 py-2 rounded-lg font-black text-[10px] uppercase tracking-widest">Bulk Update PO</button>
+                <button onclick="window.dcBulkSelected.clear();render();" class="text-slate-400 hover:text-white text-[10px] font-black uppercase tracking-widest">Clear</button>
+            </div>` : ''}
+
+            ${window.dcBulkPoModal ? `
+            <div style="position:fixed;inset:0;background:rgba(0,0,0,0.55);z-index:99998;display:flex;align-items:center;justify-content:center;" onclick="if(event.target===this){window.dcCloseBulkPoModal();}">
+                <div style="background:#fff;border-radius:16px;box-shadow:0 25px 60px rgba(0,0,0,0.25);width:100%;max-width:420px;padding:32px;position:relative;">
+                    <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:20px;">
+                        <div>
+                            <p style="font-size:17px;font-weight:900;color:#1e2530;letter-spacing:-0.3px;">Bulk PO Update</p>
+                            <p style="font-size:11px;color:#64748b;font-weight:600;margin-top:3px;">${window.dcBulkSelected.size} item${window.dcBulkSelected.size===1?'':'s'} selected</p>
+                        </div>
+                        <button onclick="window.dcCloseBulkPoModal()" style="color:#94a3b8;padding:4px;border-radius:6px;background:none;border:none;cursor:pointer;" title="Cancel"><i data-lucide="x" style="width:18px;height:18px;"></i></button>
+                    </div>
+                    <div style="display:flex;flex-direction:column;gap:14px;">
+                        <div>
+                            <label style="display:block;font-size:10px;font-weight:900;text-transform:uppercase;letter-spacing:.08em;color:#64748b;margin-bottom:6px;">PO Number</label>
+                            <input id="bulk-po-number" type="text" placeholder="e.g. PO-2026-0042" style="width:100%;font-size:13px;padding:10px 12px;border:1.5px solid #cbd5e1;border-radius:8px;outline:none;font-weight:600;color:#1e2530;box-sizing:border-box;" />
+                        </div>
+                        <div>
+                            <label style="display:block;font-size:10px;font-weight:900;text-transform:uppercase;letter-spacing:.08em;color:#64748b;margin-bottom:6px;">PO Date</label>
+                            <input id="bulk-po-date" type="date" style="width:100%;font-size:13px;padding:10px 12px;border:1.5px solid #cbd5e1;border-radius:8px;outline:none;font-weight:600;color:#1e2530;box-sizing:border-box;" />
+                        </div>
+                    </div>
+                    <div style="display:flex;gap:10px;margin-top:24px;">
+                        <button onclick="window.dcApplyBulkPo()" style="flex:1;background:#B3122E;color:#fff;border:none;padding:12px 20px;border-radius:10px;font-size:11px;font-weight:900;text-transform:uppercase;letter-spacing:.08em;cursor:pointer;">Apply</button>
+                        <button onclick="window.dcCloseBulkPoModal()" style="flex:0 0 auto;background:#f1f5f9;color:#475569;border:none;padding:12px 20px;border-radius:10px;font-size:11px;font-weight:900;text-transform:uppercase;letter-spacing:.08em;cursor:pointer;">Cancel</button>
+                    </div>
+                </div>
+            </div>
+            ` : ''}
+        </div>`;
+    }
+
+    // Bulk PO Update Logic
+    window.dcToggleBulkRow = (key, checked) => {
+        if (checked) window.dcBulkSelected.add(key);
+        else window.dcBulkSelected.delete(key);
+        softRender();
+    };
+    window.dcToggleBulkAll = (checked) => {
+        const rows = dcFilteredRows().slice((dcPage-1)*dcPageSize, dcPage*dcPageSize);
+        rows.forEach(r => {
+            const key = r.mrId + '|' + r.itemIdx;
+            if (checked) window.dcBulkSelected.add(key);
+            else window.dcBulkSelected.delete(key);
+        });
+        softRender();
+    };
+    window.dcOpenBulkPoModal = () => {
+        if (window.dcBulkSelected.size === 0) { showToast('Select at least one row first.'); return; }
+        window.dcBulkPoModal = true;
+        render();
+        setTimeout(() => { const el = document.getElementById('bulk-po-number'); if (el) el.focus(); }, 80);
+    };
+    window.dcCloseBulkPoModal = () => { window.dcBulkPoModal = false; render(); };
+    window.dcApplyBulkPo = () => {
+        const poNumber = (document.getElementById('bulk-po-number') ? document.getElementById('bulk-po-number').value : '').trim();
+        const poDate   = (document.getElementById('bulk-po-date')   ? document.getElementById('bulk-po-date').value   : '').trim();
+        if (!poNumber && !poDate) { showToast('Please enter a PO Number or PO Date.'); return; }
+        const count = window.dcBulkSelected.size;
+        dcPushUndo();
+        window.dcBulkSelected.forEach(function(key) {
+            var parts   = key.split('|');
+            var mrId    = parts[0];
+            var itemIdx = parseInt(parts[1], 10);
+            var mr = (appData.mrs || []).find(function(m) { return m.id === mrId; });
+            if (!mr || !mr.items || !mr.items[itemIdx]) return;
+            var item = mr.items[itemIdx];
+            if (poNumber) item.poNo   = poNumber;
+            if (poDate)   item.poDate = poDate;
+            if (poNumber && item.status === 'RAISED') item.status = 'PROCUREMENT';
+            else if (!poNumber && item.status === 'PROCUREMENT') item.status = 'RAISED';
+        });
+        dcDirty = true;
+        window.dcBulkPoModal = false;
+        window.dcBulkSelected.clear();
+        saveDB();
+        showToast('PO Number and PO Date applied to ' + count + ' selected item' + (count === 1 ? '' : 's') + '.');
+    };
 
     window.dcExportExcel = () => {
         const rows = dcFilteredRows();
@@ -7009,7 +7897,7 @@ function renderMrRow(item, idx, xlInputCss) {
 
     function procHandlerCard(p) {
         const h = p.handler;
-        return `<div class="bg-white rounded-2xl border border-rule shadow-panel p-5 space-y-3">
+        return `<div class="bg-white rounded-2xl border border-rule shadow-panel p-5 space-y-3 h-full">
             <div class="flex items-center justify-between">
                 <div>
                     <p class="text-sm font-black uppercase tracking-tight">${esc(h.name)}</p>
@@ -7096,7 +7984,7 @@ function renderMrRow(item, idx, xlInputCss) {
                 ${dcCard(totals.cancelled,'Cancelled','#B91C1C')}
             </div>
 
-            <div class="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
+            <div class="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 xl:grid-cols-4 gap-4 auto-rows-fr">
                 ${perf.map(p => procHandlerCard(p)).join('')}
             </div>
 
@@ -7416,7 +8304,7 @@ function renderMrRow(item, idx, xlInputCss) {
     // and a professional multi-role signature block. Built as thead/tfoot table groups so the
     // company header + MR meta repeat on every printed page and nothing overlaps a page break.
     function getMrsByPrNumber(prNumber) {
-        return (appData.mrs || []).filter(m => m.prNumber === prNumber).sort((a, b) => (a.mrNumber || '').localeCompare(b.mrNumber || ''));
+        return (appData.mrs || []).filter(m => m.prNumber === prNumber || m.mrNumber === prNumber).sort((a, b) => (a.mrNumber || '').localeCompare(b.mrNumber || ''));
     }
 
     function buildCombinedPrPrintData(prNumber) {
@@ -7476,7 +8364,39 @@ function renderMrRow(item, idx, xlInputCss) {
         return new Date(ts).toLocaleTimeString("en-IN", { hour: "2-digit", minute: "2-digit" });
     }
 
-    function renderCombinedPrPrint(prNumber) {
+    // Department L2 approval for PR print / audit — history, legacy labels, then inferred/backfilled fields.
+    function resolveL2ApprovalEntry(historyList, mrContext) {
+        const history = (historyList || []).slice().sort((a, b) => (a.ts || 0) - (b.ts || 0));
+        const users = (appData && appData.users) || [];
+
+        const explicit = findExplicitL2HistoryEntry(history);
+        if (explicit) return explicit;
+
+        const sentFinal = history.find(h => (h.action || '').includes('Sent for Final Authorization'));
+        if (historyHadL2PendingStep(history) && sentFinal) {
+            return { ...sentFinal, action: 'Department Approved' };
+        }
+
+        const mrs = Array.isArray(mrContext) ? mrContext : (mrContext ? [mrContext] : []);
+        for (const mr of mrs) {
+            if (mr && mr.deptApprovalDate && mr.l2User) {
+                const l2UserRec = users.find(u => u.name === mr.l2User);
+                return {
+                    action: 'Department Approved',
+                    actor: mr.l2User,
+                    dept: mr.dept || (l2UserRec && l2UserRec.dept) || '',
+                    role: (l2UserRec && l2UserRec.role) || 'creator',
+                    ts: mr.deptApprovalDate,
+                    note: ''
+                };
+            }
+            const synthetic = buildSyntheticL2ApprovalEntry(mr, history.length ? history : (mr.history || []), users);
+            if (synthetic) return synthetic;
+        }
+        return null;
+    }
+
+    function renderCombinedPrPrint(prNumber, mode = 'print') {
         const d = buildCombinedPrPrintData(prNumber);
         if (!d.mrs.length) return '<div class="p-10 text-center text-slate-400">PR not found.</div>';
         const items = d.items;
@@ -7494,10 +8414,44 @@ function renderMrRow(item, idx, xlInputCss) {
         };
 
         const historyList = (d.history || []).slice();
+        const isDirectPr = historyList.some(h => (h.action||'').includes('Direct PR'));
+        const cleanHistory = [];
+        const addMilestone = (level, action, h) => {
+            if (h) cleanHistory.push({ level, action, actor: h.actor, dept: h.dept, note: h.note || h.reason || h.remarks || '', ts: h.ts });
+        };
+        const raisedEntry = historyList.find(h => (h.action||'').includes('Raised') || (h.action||'').includes('Submitted'));
+        if (raisedEntry) addMilestone(isDirectPr ? 'PR Raised' : 'MR Raised', isDirectPr ? 'PR Created' : 'MR Created', raisedEntry);
+        
+        const l2Entry = resolveL2ApprovalEntry(historyList, d.mrs);
+        if (l2Entry) addMilestone('Department L2 Approval', 'Approved', l2Entry);
+        
+        const authEntry = historyList.find(h => (h.action||'').includes('Authorization Approved'));
+        if (authEntry) addMilestone('Final Authorization', 'Authorized', authEntry);
+        
+        if (!isDirectPr) {
+            const prEntry = historyList.find(h => ((h.action||'').includes('PR') && (h.action||'').includes('Generated')) || (h.action||'').includes('Combined PR') || (h.action||'').includes('Planned'));
+            if (prEntry) addMilestone('PR Generated', (d.prNumber || 'PR') + ' Generated', prEntry);
+        }
+        
+        const prAccEntry = historyList.find(h => (h.action||'').includes('PR Accepted'));
+        if (prAccEntry) addMilestone('Procurement', 'PR Accepted', prAccEntry);
+        
+        const openEntry = historyList.find(h => (h.action||'').includes('PO') || (h.action||'').includes('Partial') || (h.action||'').includes('Data Centre: PO') || (h.action||'').includes('Receipt Qty'));
+        if (openEntry) addMilestone('Procurement', 'Open', openEntry);
+        
+        if (d.status === 'CLOSED') {
+            const closedEntry = historyList.find(h => (h.action||'').includes('Closed') || (h.newValue||'').includes('Closed')) || historyList[historyList.length - 1];
+            addMilestone('Procurement', 'Closed', closedEntry);
+        }
+
         const findEntry = (...kws) => historyList.find(h => kws.some(kw => (h.action||'').toLowerCase().includes(kw.toLowerCase())));
         const planningEntry = findEntry('Combined PR', 'Planning Approved', 'Planned');
-        const procurementEntry = findEntry('PO Given', 'PO Issued');
+        const procurementEntry = findEntry('PR Accepted', 'PO Given', 'PO Issued');
+        const deptL2Entry = resolveL2ApprovalEntry(historyList, d.mrs);
+        const finalAuthEntry = findEntry('Authorization Approved');
         const signatureBoxes = [
+            { label: 'Department L2 Approval', designation: 'L2 Approver', dept: d.depts.join(', '), h: deptL2Entry },
+            { label: 'Final Authorization', designation: 'Authorizer', dept: '', h: finalAuthEntry },
             { label: 'Combined PR — Planning', designation: 'Planner', dept: '', h: planningEntry, fallbackName: d.plannedBy },
             { label: 'Reference MRs', designation: d.mrNumbers.join(', '), dept: d.depts.join(', '), h: null },
             { label: 'Procurement', designation: 'Procurement Officer', dept: '', h: procurementEntry }
@@ -7614,33 +8568,31 @@ function renderMrRow(item, idx, xlInputCss) {
                     <td style="font-weight:700; vertical-align:top;">Remarks</td>
                     <td colspan="${COLS - 1}" style="vertical-align:top;">${esc(d.notes)}</td>
                 </tr>` : ''}
-                <tr><td colspan="${COLS}" class="mrp-section-title" style="padding-top:16px;">Approval &amp; Authorization History (All Reference MRs)</td></tr>
+                <tr><td colspan="${COLS}" class="mrp-section-title" style="padding-top:16px;">APPROVAL &amp; AUTHORIZATION HISTORY</td></tr>
                 <tr>
                     <td colspan="${COLS}" style="border:none; padding:0;">
                         <table class="mrp-hist-table" style="margin-top:4px;">
                             <thead><tr>
-                                <th style="width:10%;">MR No</th>
-                                <th style="width:12%;">Level</th>
-                                <th style="width:14%;">User Name</th>
-                                <th style="width:12%;">Department</th>
-                                <th style="width:16%;">Action</th>
+                                <th style="width:14%;">Level</th>
+                                <th style="width:16%;">User Name</th>
+                                <th style="width:14%;">Department</th>
+                                <th style="width:20%;">Action</th>
                                 <th style="width:20%;">Remarks</th>
                                 <th style="width:9%;">Date</th>
                                 <th style="width:7%;">Time</th>
                             </tr></thead>
                             <tbody>
-                            ${historyList.length ? historyList.map(h => `
+                            ${cleanHistory.length ? cleanHistory.map(h => `
                                 <tr>
-                                    <td style="text-align:center; font-weight:700; font-family:monospace; color:#92400e;">${esc(h.mrNo || '—')}</td>
-                                    <td style="text-align:center; font-weight:700;">${esc(levelForActor(h))}</td>
+                                    <td style="text-align:center; font-weight:700;">${esc(h.level)}</td>
                                     <td style="font-weight:700;">${esc(h.actor || '—')}</td>
                                     <td>${esc(h.dept || '—')}</td>
                                     <td>${esc(h.action || '—')}</td>
-                                    <td>${esc(h.note || h.reason || h.remarks || '—')}</td>
+                                    <td>${esc(h.note || '—')}</td>
                                     <td style="text-align:center; white-space:nowrap;">${fmtDate(h.ts)}</td>
                                     <td style="text-align:center; white-space:nowrap;">${fmtTimeOnly(h.ts)}</td>
                                 </tr>`).join('') : `
-                                <tr><td colspan="8" style="text-align:center; color:#94a3b8; font-style:italic;">No workflow history recorded yet.</td></tr>`}
+                                <tr><td colspan="7" style="text-align:center; color:#94a3b8; font-style:italic;">No workflow history recorded yet.</td></tr>`}
                             </tbody>
                         </table>
                     </td>
@@ -7669,10 +8621,16 @@ function renderMrRow(item, idx, xlInputCss) {
                 </tbody>
             </table>
             <div class="mt-8 flex justify-center gap-6 no-print">
+                ${mode === 'inbox' ? `
+                <button onclick="window.closeProcInboxView()" class="px-6 py-3 rounded-lg border-2 border-slate-200 text-slate-600 font-black uppercase tracking-widest text-[11px] hover:bg-slate-50 transition-all">← Back to Inbox</button>
+                <button onclick="window.procReturnPR('${procInboxMrId}')" class="px-6 py-3 rounded-lg border-2 border-brand text-brand hover:bg-brand-50 font-black uppercase tracking-widest text-[11px] transition-all"><i data-lucide="undo-2" class="w-4 h-4 inline-block align-text-bottom mr-1"></i> Return to Planner</button>
+                <button onclick="window.procAcceptPR('${procInboxMrId}')" class="px-6 py-3 rounded-lg bg-emerald-600 text-white hover:bg-emerald-700 font-black uppercase tracking-widest text-[11px] transition-all shadow-lg"><i data-lucide="check-circle-2" class="w-4 h-4 inline-block align-text-bottom mr-1"></i> Accept PR</button>
+                ` : `
                 <button onclick="window.closePrint()" class="px-10 py-3 rounded-full bg-ink text-white font-black text-[10px] uppercase shadow-lg active:scale-95 transition-all">← Back to Portal</button>
                 <button onclick="window.print()" class="px-10 py-3 rounded-full bg-brand text-white font-black text-[10px] uppercase shadow-xl hover:bg-brand-dark transition-all active:scale-95 flex items-center gap-3">
                     <i data-lucide="printer"></i> Print / Save as PDF
                 </button>
+                `}
             </div>
         </div>`;
     }
@@ -7694,13 +8652,42 @@ function renderMrRow(item, idx, xlInputCss) {
 
         // Chronological audit trail — oldest first, exactly as it happened.
         const historyList = (mr.history || []).slice().sort((a, b) => (a.ts||0) - (b.ts||0));
+        const isDirectPr = historyList.some(h => (h.action||'').includes('Direct PR'));
+        const cleanHistory = [];
+        const addMilestone = (level, action, h) => {
+            if (h) cleanHistory.push({ level, action, actor: h.actor, dept: h.dept, note: h.note || h.reason || h.remarks || '', ts: h.ts });
+        };
+        const raisedEntryM = historyList.find(h => (h.action||'').includes('Raised') || (h.action||'').includes('Submitted'));
+        if (raisedEntryM) addMilestone(isDirectPr ? 'PR Raised' : 'MR Raised', isDirectPr ? 'PR Created' : 'MR Created', raisedEntryM);
+        
+        const l2EntryM = resolveL2ApprovalEntry(historyList, mr);
+        if (l2EntryM) addMilestone('Department L2 Approval', 'Approved', l2EntryM);
+        
+        const authEntryM = historyList.find(h => (h.action||'').includes('Authorization Approved'));
+        if (authEntryM) addMilestone('Final Authorization', 'Authorized', authEntryM);
+        
+        if (!isDirectPr) {
+            const prEntryM = historyList.find(h => ((h.action||'').includes('PR') && (h.action||'').includes('Generated')) || (h.action||'').includes('Combined PR') || (h.action||'').includes('Planned'));
+            if (prEntryM) addMilestone('PR Generated', (mr.prNumber || 'PR') + ' Generated', prEntryM);
+        }
+        
+        const prAccEntryM = historyList.find(h => (h.action||'').includes('PR Accepted'));
+        if (prAccEntryM) addMilestone('Procurement', 'PR Accepted', prAccEntryM);
+        
+        const openEntryM = historyList.find(h => (h.action||'').includes('PO') || (h.action||'').includes('Partial') || (h.action||'').includes('Data Centre: PO') || (h.action||'').includes('Receipt Qty'));
+        if (openEntryM) addMilestone('Procurement', 'Open', openEntryM);
+        
+        if (mr.status === 'CLOSED') {
+            const closedEntryM = historyList.find(h => (h.action||'').includes('Closed') || (h.newValue||'').includes('Closed')) || historyList[historyList.length - 1];
+            addMilestone('Procurement', 'Closed', closedEntryM);
+        }
 
         const findEntry = (...kws) => historyList.find(h => kws.some(kw => (h.action||'').toLowerCase().includes(kw.toLowerCase())));
         const raisedEntry      = findEntry('Raised', 'Resubmitted') || (historyList[0] || null);
-        const deptL2Entry      = findEntry('Department Approved');
+        const deptL2Entry      = resolveL2ApprovalEntry(historyList, mr);
         const finalAuthEntry   = findEntry('Authorization Approved');
         const planningEntry    = findEntry('Planning Approved', 'Planned');
-        const procurementEntry = findEntry('PO Given', 'PO Issued');
+        const procurementEntry = findEntry('PR Accepted', 'PO Given', 'PO Issued');
 
         const signatureBoxes = [
             { label: 'Prepared By',              designation: 'Requester',            dept: mr.dept, h: raisedEntry, fallbackName: mr.raisedBy },
@@ -7708,7 +8695,7 @@ function renderMrRow(item, idx, xlInputCss) {
             { label: 'Final Authorization',       designation: 'Authorizer',           dept: '',      h: finalAuthEntry },
             { label: 'Planning',                  designation: 'Planner',              dept: '',      h: planningEntry },
             { label: 'Procurement',               designation: 'Procurement Officer',  dept: '',      h: procurementEntry }
-        ];
+        ].filter(box => !(isDirectPr && box.label === 'Planning'));
 
         const attachments = mr.attachments || mr.attachmentRefs || [];
         const printedAt = Date.now();
@@ -7834,7 +8821,7 @@ function renderMrRow(item, idx, xlInputCss) {
                     <td colspan="11" style="vertical-align:top;">${attachments.map(a => esc(typeof a === 'string' ? a : (a.name || 'Attachment'))).join(', ')}</td>
                 </tr>` : ''}
 
-                <tr><td colspan="12" class="mrp-section-title" style="padding-top:16px;">Approval &amp; Authorization History</td></tr>
+                <tr><td colspan="12" class="mrp-section-title" style="padding-top:16px;">APPROVAL &amp; AUTHORIZATION HISTORY</td></tr>
                 <tr>
                     <td colspan="12" style="border:none; padding:0;">
                         <table class="mrp-hist-table" style="margin-top:4px;">
@@ -7850,13 +8837,13 @@ function renderMrRow(item, idx, xlInputCss) {
                                 </tr>
                             </thead>
                             <tbody>
-                            ${historyList.length ? historyList.map(h => `
+                            ${cleanHistory.length ? cleanHistory.map(h => `
                                 <tr>
-                                    <td style="text-align:center; font-weight:700;">${esc(levelForActor(h))}</td>
+                                    <td style="text-align:center; font-weight:700;">${esc(h.level)}</td>
                                     <td style="font-weight:700;">${esc(h.actor || '—')}</td>
                                     <td>${esc(h.dept || mr.dept || '—')}</td>
                                     <td>${esc(h.action || '—')}</td>
-                                    <td>${esc(h.note || h.reason || h.remarks || '—')}</td>
+                                    <td>${esc(h.note || '—')}</td>
                                     <td style="text-align:center; white-space:nowrap;">${fmtDate(h.ts)}</td>
                                     <td style="text-align:center; white-space:nowrap;">${fmtTimeOnly(h.ts)}</td>
                                 </tr>`).join('') : `
@@ -7898,6 +8885,293 @@ function renderMrRow(item, idx, xlInputCss) {
             </div>
         </div>`;
     }
+
+
+    // ══════════════════════════════════════════════════════════════════
+    // HISTORY & AUDIT TRAIL MODULE
+    // ══════════════════════════════════════════════════════════════════
+
+    // Build a clean PR-level audit trail from raw mr.history
+    function buildPrAuditTrail(mr) {
+        const raw = (mr.history || []).slice().sort((a, b) => (a.ts||0) - (b.ts||0));
+        const isDirectPr = raw.some(h => (h.action||'').includes('Direct PR'));
+        const milestones = [];
+        const add = (level, activity, h, remarks) => {
+            if (!h) return;
+            milestones.push({
+                ts: h.ts, user: h.actor || 'System', level,
+                activity, remarks: remarks || h.note || h.reason || h.remarks || ''
+            });
+        };
+        const find = (...kws) => raw.find(h => kws.some(k => (h.action||'').toLowerCase().includes(k.toLowerCase())));
+        add(isDirectPr ? 'PR Raised' : 'MR Raised',    isDirectPr ? 'PR Created' : 'MR Created',           find('Raised', 'Submitted'));
+        add('Department L2 Approval', 'Approved', resolveL2ApprovalEntry(raw, mr));
+        add('Final Authorization','Final Authorization',    find('Authorization Approved', 'Authorization Approved'));
+        if (!isDirectPr) add('PR Generated', (mr.prNumber || 'PR') + ' Generated', find('PR Generated', 'Combined PR', 'Planning Approved', 'Planned'));
+        const prAccH = find('PR Accepted');
+        add('Procurement',        'PR Accepted',            prAccH, prAccH ? 'Procurement accepted PR into Data Centre' : '');
+        const openH = find('PO Given', 'PO Issued', 'Data Centre: PO', 'Partial');
+        add('Procurement',        'Open — Procurement Started', openH);
+        if (mr.status === 'CLOSED') {
+            const closedH = find('Closed') || raw[raw.length - 1];
+            add('Procurement', 'Closed — All Items Received', closedH);
+        }
+        return milestones;
+    }
+
+    // Build item-level audit trail from mr.history filtered by item
+    function buildItemAuditTrail(mr, itemIdx) {
+        const item = (mr.items || [])[itemIdx];
+        if (!item) return [];
+        const raw = (mr.history || []).slice().sort((a, b) => (a.ts||0) - (b.ts||0));
+        const events = [];
+        // Seed: Item Requested
+        const raiseH = raw.find(h => (h.action||'').includes('Raised') || (h.action||'').includes('Submitted'));
+        if (raiseH) events.push({ ts: raiseH.ts, user: raiseH.actor || mr.raisedBy || '—', activity: 'Item Requested — Qty ' + item.qty + ' ' + (item.unit || ''), remarks: item.spec || '' });
+        // Find DC history entries that mention this item or are generic DC actions
+        raw.forEach(h => {
+            const act = h.action || '';
+            const note = h.note || h.reason || h.remarks || '';
+            const refIdx = typeof h.itemIdx === 'number' ? h.itemIdx : (h.field && note.includes(item.name) ? itemIdx : null);
+            const isForThisItem = (h.itemIdx === itemIdx) || note.toLowerCase().includes((item.name || '').toLowerCase().substring(0, 8).toLowerCase());
+
+            if (act.includes('Data Centre: PO Number') && isForThisItem) {
+                events.push({ ts: h.ts, user: h.actor || 'Procurement', activity: 'PO Number Entered — ' + (h.newValue || note), remarks: note });
+            } else if (act.includes('Data Centre: PO Date') && isForThisItem) {
+                events.push({ ts: h.ts, user: h.actor || 'Procurement', activity: 'PO Date Set — ' + (h.newValue || note), remarks: note });
+            } else if ((act.includes('PO Given') || act.includes('PO Issued')) && isForThisItem) {
+                events.push({ ts: h.ts, user: h.actor || 'Procurement', activity: 'PO Issued — ' + (item.poNumber || h.newValue || ''), remarks: note });
+            } else if (act.includes('Data Centre: Received Qty') && isForThisItem) {
+                const newQty = h.newValue;
+                const partial = Number(newQty) < Number(item.qty);
+                events.push({ ts: h.ts, user: h.actor || 'Store', activity: (partial ? 'Partial Receipt — Qty ' : 'Full Receipt — Qty ') + newQty, remarks: note });
+            } else if (act.includes('Data Centre: Status') && isForThisItem) {
+                events.push({ ts: h.ts, user: h.actor || 'System', activity: 'Status Changed → ' + (h.newValue || note), remarks: note });
+            } else if (act.includes('Data Centre: Vendor') && isForThisItem) {
+                events.push({ ts: h.ts, user: h.actor || 'Procurement', activity: 'Vendor Updated — ' + (h.newValue || note), remarks: note });
+            } else if (act.includes('Data Centre: Tentative Delivery') && isForThisItem) {
+                events.push({ ts: h.ts, user: h.actor || 'Procurement', activity: 'Delivery Date Set — ' + (h.newValue || note), remarks: note });
+            } else if (act.includes('Data Centre: Assigned To') && isForThisItem) {
+                events.push({ ts: h.ts, user: h.actor || 'System', activity: 'Assigned to — ' + (h.newValue || note), remarks: note });
+            }
+        });
+        // Check current item state for receipt
+        if ((item.receivedQty || 0) > 0 && !events.some(e => e.activity.includes('Receipt'))) {
+            events.push({ ts: item.materialReceivedDate ? new Date(item.materialReceivedDate).getTime() : Date.now(), user: 'Procurement', activity: 'Material Received — Qty ' + item.receivedQty, remarks: '' });
+        }
+        if (item.status === 'CLOSED') {
+            events.push({ ts: Date.now(), user: 'System', activity: 'Item Closed — Fully Received', remarks: '' });
+        }
+        // Deduplicate by ts+activity
+        const seen = new Set();
+        return events.filter(e => {
+            const k = e.ts + '|' + e.activity;
+            if (seen.has(k)) return false;
+            seen.add(k);
+            return true;
+        }).sort((a, b) => a.ts - b.ts);
+    }
+
+    function renderHistoryModal() {
+        if (!historyModal) return '';
+        const { mrId, itemIdx, tab, q, activity, userF, dateFrom, dateTo } = historyModal;
+        const mr = (appData.mrs || []).find(m => m.id === mrId);
+        if (!mr) return '';
+        const item = (mr.items || [])[itemIdx];
+        const itemName = item ? item.name : 'Item';
+
+        // ── Filter helpers ─────────────────────────────────────────
+        function applyFilters(events) {
+            return events.filter(ev => {
+                if (q && q.trim()) {
+                    const hay = [ev.activity, ev.remarks, ev.user, ev.level].filter(Boolean).join(' ').toLowerCase();
+                    if (!hay.includes(q.trim().toLowerCase())) return false;
+                }
+                if (activity && activity !== 'all') {
+                    if (!(ev.activity || '').toLowerCase().includes(activity.toLowerCase())) return false;
+                }
+                if (userF && userF !== 'all') {
+                    if ((ev.user || '').toLowerCase() !== userF.toLowerCase()) return false;
+                }
+                if (dateFrom) {
+                    const from = new Date(dateFrom).getTime();
+                    if ((ev.ts || 0) < from) return false;
+                }
+                if (dateTo) {
+                    const to = new Date(dateTo).getTime() + 86399000;
+                    if ((ev.ts || 0) > to) return false;
+                }
+                return true;
+            });
+        }
+
+        const prEvents = applyFilters(buildPrAuditTrail(mr));
+        const itemEvents = applyFilters(buildItemAuditTrail(mr, itemIdx));
+
+        const allUsersSet = new Set();
+        [...buildPrAuditTrail(mr), ...buildItemAuditTrail(mr, itemIdx)].forEach(e => { if(e.user) allUsersSet.add(e.user); });
+        const allUsers = [...allUsersSet];
+
+        const fmtDT = (ts) => {
+            if (!ts) return '—';
+            const d = new Date(ts);
+            return d.toLocaleDateString('en-IN', { day:'2-digit', month:'short', year:'2-digit' }) + ' ' +
+                   d.toLocaleTimeString('en-IN', { hour:'2-digit', minute:'2-digit' });
+        };
+
+        const evRow = (ev, i, altColor) => `
+            <tr style="background:${i%2 ? '#f8fafc' : '#fff'};">
+                <td style="padding:8px 12px;font-size:11px;color:#64748b;white-space:nowrap;">${fmtDT(ev.ts)}</td>
+                <td style="padding:8px 12px;font-size:11px;font-weight:700;color:#1e2530;">${esc(ev.user || '—')}</td>
+                ${ev.level !== undefined ? `<td style="padding:8px 12px;font-size:11px;color:#6366f1;font-weight:600;">${esc(ev.level || '—')}</td>` : ''}
+                <td style="padding:8px 12px;font-size:11px;font-weight:700;color:#0f766e;">${esc(ev.activity || '—')}</td>
+                <td style="padding:8px 12px;font-size:11px;color:#64748b;">${esc(ev.remarks || '—')}</td>
+            </tr>`;
+
+        return `
+        <div id="history-modal-overlay" style="position:fixed;inset:0;background:rgba(10,15,30,0.62);z-index:99999;display:flex;align-items:center;justify-content:center;" onclick="if(event.target.id==='history-modal-overlay')window.closeHistoryModal()">
+            <div style="background:#fff;border-radius:20px;box-shadow:0 32px 80px rgba(0,0,0,0.32);width:95vw;max-width:1100px;max-height:90vh;display:flex;flex-direction:column;overflow:hidden;">
+                
+                <!-- Header -->
+                <div style="background:linear-gradient(135deg,#1e2530 0%,#2d3a4a 100%);padding:20px 28px;display:flex;align-items:center;justify-content:space-between;flex-shrink:0;">
+                    <div>
+                        <div style="font-size:11px;font-weight:800;text-transform:uppercase;letter-spacing:.1em;color:#94a3b8;margin-bottom:4px;">Complete History & Audit Trail</div>
+                        <div style="font-size:18px;font-weight:900;color:#fff;letter-spacing:-.3px;">${esc(mr.prNumber || mr.mrNumber)} — ${esc(itemName)}</div>
+                        <div style="font-size:11px;color:#94a3b8;margin-top:3px;">${esc(mr.dept || '')} • ${esc(mr.status || '')}</div>
+                    </div>
+                    <button onclick="window.closeHistoryModal()" style="color:#fff;background:rgba(255,255,255,0.1);border:none;width:36px;height:36px;border-radius:10px;cursor:pointer;font-size:18px;display:flex;align-items:center;justify-content:center;" title="Close">✕</button>
+                </div>
+
+                <!-- Tabs -->
+                <div style="background:#f8fafc;border-bottom:2px solid #e2e8f0;padding:0 28px;display:flex;gap:0;flex-shrink:0;">
+                    <button onclick="window.historySetTab('pr')" style="padding:14px 24px;font-size:11px;font-weight:900;text-transform:uppercase;letter-spacing:.08em;border:none;cursor:pointer;background:none;border-bottom:${tab==='pr'?'3px solid #6366f1;color:#6366f1':'3px solid transparent;color:#64748b'};">📋 PR History</button>
+                    <button onclick="window.historySetTab('item')" style="padding:14px 24px;font-size:11px;font-weight:900;text-transform:uppercase;letter-spacing:.08em;border:none;cursor:pointer;background:none;border-bottom:${tab==='item'?'3px solid #0f766e;color:#0f766e':'3px solid transparent;color:#64748b'};">📦 Item History — ${esc(itemName)}</button>
+                </div>
+
+                <!-- Filters -->
+                <div style="background:#fff;border-bottom:1px solid #e2e8f0;padding:12px 28px;display:flex;flex-wrap:wrap;gap:10px;align-items:center;flex-shrink:0;">
+                    <input id="hist-q" value="${esc(q||'')}" oninput="window.historyFilter('q',this.value)" placeholder="🔍 Search..." style="padding:7px 12px;font-size:12px;border:1.5px solid #cbd5e1;border-radius:8px;outline:none;width:200px;font-weight:600;"/>
+                    <select id="hist-activity" onchange="window.historyFilter('activity',this.value)" style="padding:7px 10px;font-size:12px;border:1.5px solid #cbd5e1;border-radius:8px;outline:none;font-weight:600;">
+                        <option value="all">All Activities</option>
+                        <option ${activity==='raised'||activity==='created'?'selected':''} value="raised">Raised / Created</option>
+                        <option ${activity==='approved'?'selected':''} value="approved">Approved</option>
+                        <option ${activity==='authorized'?'selected':''} value="authorized">Authorized</option>
+                        <option ${activity==='accepted'?'selected':''} value="accepted">PR Accepted</option>
+                        <option ${activity==='po'?'selected':''} value="po">PO</option>
+                        <option ${activity==='receipt'?'selected':''} value="receipt">Receipt</option>
+                        <option ${activity==='closed'?'selected':''} value="closed">Closed</option>
+                    </select>
+                    <select id="hist-user" onchange="window.historyFilter('userF',this.value)" style="padding:7px 10px;font-size:12px;border:1.5px solid #cbd5e1;border-radius:8px;outline:none;font-weight:600;">
+                        <option value="all">All Users</option>
+                        ${allUsers.map(u => `<option value="${esc(u)}" ${userF===u?'selected':''}>${esc(u)}</option>`).join('')}
+                    </select>
+                    <input type="date" id="hist-from" value="${esc(dateFrom||'')}" onchange="window.historyFilter('dateFrom',this.value)" style="padding:7px 10px;font-size:12px;border:1.5px solid #cbd5e1;border-radius:8px;outline:none;font-weight:600;" title="From Date"/>
+                    <input type="date" id="hist-to" value="${esc(dateTo||'')}" onchange="window.historyFilter('dateTo',this.value)" style="padding:7px 10px;font-size:12px;border:1.5px solid #cbd5e1;border-radius:8px;outline:none;font-weight:600;" title="To Date"/>
+                    <button onclick="window.historyExportExcel()" style="padding:7px 16px;font-size:11px;font-weight:900;text-transform:uppercase;letter-spacing:.07em;background:#0f766e;color:#fff;border:none;border-radius:8px;cursor:pointer;">⬇ Excel</button>
+                    <button onclick="window.historyExportPdf()" style="padding:7px 16px;font-size:11px;font-weight:900;text-transform:uppercase;letter-spacing:.07em;background:#6366f1;color:#fff;border:none;border-radius:8px;cursor:pointer;">⬇ PDF</button>
+                    <button onclick="window.historyClearFilters()" style="padding:7px 12px;font-size:11px;font-weight:700;color:#94a3b8;background:none;border:1.5px solid #e2e8f0;border-radius:8px;cursor:pointer;">Clear</button>
+                </div>
+
+                <!-- Table -->
+                <div style="overflow-y:auto;flex:1;padding:0;">
+                ${tab === 'pr' ? `
+                    <table style="width:100%;border-collapse:collapse;">
+                        <thead style="position:sticky;top:0;z-index:1;background:#f1f5f9;">
+                            <tr>
+                                <th style="padding:10px 12px;font-size:10px;font-weight:900;text-transform:uppercase;letter-spacing:.08em;color:#475569;text-align:left;border-bottom:2px solid #e2e8f0;white-space:nowrap;">Date & Time</th>
+                                <th style="padding:10px 12px;font-size:10px;font-weight:900;text-transform:uppercase;letter-spacing:.08em;color:#475569;text-align:left;border-bottom:2px solid #e2e8f0;">User</th>
+                                <th style="padding:10px 12px;font-size:10px;font-weight:900;text-transform:uppercase;letter-spacing:.08em;color:#475569;text-align:left;border-bottom:2px solid #e2e8f0;">Level</th>
+                                <th style="padding:10px 12px;font-size:10px;font-weight:900;text-transform:uppercase;letter-spacing:.08em;color:#475569;text-align:left;border-bottom:2px solid #e2e8f0;">Activity</th>
+                                <th style="padding:10px 12px;font-size:10px;font-weight:900;text-transform:uppercase;letter-spacing:.08em;color:#475569;text-align:left;border-bottom:2px solid #e2e8f0;">Remarks</th>
+                            </tr>
+                        </thead>
+                        <tbody id="hist-pr-body">
+                            ${prEvents.length ? prEvents.map((ev, i) => evRow(ev, i)).join('') : '<tr><td colspan="5" style="padding:32px;text-align:center;color:#94a3b8;font-style:italic;">No PR history events match your filters.</td></tr>'}
+                        </tbody>
+                    </table>
+                ` : `
+                    <table style="width:100%;border-collapse:collapse;">
+                        <thead style="position:sticky;top:0;z-index:1;background:#f1f5f9;">
+                            <tr>
+                                <th style="padding:10px 12px;font-size:10px;font-weight:900;text-transform:uppercase;letter-spacing:.08em;color:#475569;text-align:left;border-bottom:2px solid #e2e8f0;white-space:nowrap;">Date & Time</th>
+                                <th style="padding:10px 12px;font-size:10px;font-weight:900;text-transform:uppercase;letter-spacing:.08em;color:#475569;text-align:left;border-bottom:2px solid #e2e8f0;">User</th>
+                                <th style="padding:10px 12px;font-size:10px;font-weight:900;text-transform:uppercase;letter-spacing:.08em;color:#475569;text-align:left;border-bottom:2px solid #e2e8f0;">Activity</th>
+                                <th style="padding:10px 12px;font-size:10px;font-weight:900;text-transform:uppercase;letter-spacing:.08em;color:#475569;text-align:left;border-bottom:2px solid #e2e8f0;">Remarks</th>
+                            </tr>
+                        </thead>
+                        <tbody id="hist-item-body">
+                            ${itemEvents.length ? itemEvents.map((ev, i) => {
+                                const noLevel = Object.assign({}, ev); delete noLevel.level;
+                                return `<tr style="background:${i%2 ? '#f8fafc' : '#fff'};">
+                                    <td style="padding:8px 12px;font-size:11px;color:#64748b;white-space:nowrap;">${fmtDT(ev.ts)}</td>
+                                    <td style="padding:8px 12px;font-size:11px;font-weight:700;color:#1e2530;">${esc(ev.user || '—')}</td>
+                                    <td style="padding:8px 12px;font-size:11px;font-weight:700;color:#0f766e;">${esc(ev.activity || '—')}</td>
+                                    <td style="padding:8px 12px;font-size:11px;color:#64748b;">${esc(ev.remarks || '—')}</td>
+                                </tr>`;
+                            }).join('') : '<tr><td colspan="4" style="padding:32px;text-align:center;color:#94a3b8;font-style:italic;">No item history events match your filters.</td></tr>'}
+                        </tbody>
+                    </table>
+                `}
+                </div>
+
+                <!-- Footer count -->
+                <div style="padding:10px 28px;background:#f8fafc;border-top:1px solid #e2e8f0;font-size:11px;color:#64748b;font-weight:700;flex-shrink:0;">
+                    Showing ${tab === 'pr' ? prEvents.length + ' PR lifecycle events' : itemEvents.length + ' item events'} 
+                    ${(q||activity&&activity!=='all'||userF&&userF!=='all'||dateFrom||dateTo) ? ' (filtered)' : ''}
+                </div>
+            </div>
+        </div>`;
+    }
+
+    window.openHistoryModal = (type, mrId, itemIdx) => {
+        historyModal = { type, mrId, itemIdx: Number(itemIdx), tab: 'pr', q: '', activity: 'all', userF: 'all', dateFrom: '', dateTo: '' };
+        render();
+    };
+    window.closeHistoryModal = () => { historyModal = null; render(); };
+    window.historySetTab = (t) => { if (historyModal) { historyModal.tab = t; render(); } };
+    window.historyFilter = (key, val) => { if (historyModal) { historyModal[key] = val; render(); } };
+    window.historyClearFilters = () => { if (historyModal) { historyModal.q = ''; historyModal.activity = 'all'; historyModal.userF = 'all'; historyModal.dateFrom = ''; historyModal.dateTo = ''; render(); } };
+
+    window.historyExportExcel = () => {
+        if (!historyModal) return;
+        const mr = (appData.mrs || []).find(m => m.id === historyModal.mrId);
+        if (!mr) return;
+        const isItem = historyModal.tab === 'item';
+        const events = isItem ? buildItemAuditTrail(mr, historyModal.itemIdx) : buildPrAuditTrail(mr);
+        const data = events.map(e => ({
+            'Date & Time': e.ts ? new Date(e.ts).toLocaleString('en-IN') : '—',
+            'User': e.user || '—',
+            'Level': e.level || '—',
+            'Activity': e.activity || '—',
+            'Remarks': e.remarks || '—'
+        }));
+        const wb = XLSX.utils.book_new();
+        const ws = XLSX.utils.json_to_sheet(data);
+        XLSX.utils.book_append_sheet(wb, ws, isItem ? 'Item History' : 'PR History');
+        XLSX.writeFile(wb, 'History_' + (mr.prNumber || mr.mrNumber) + '_' + (isItem ? 'Item' : 'PR') + '.xlsx');
+    };
+
+    window.historyExportPdf = () => {
+        if (!historyModal || typeof jspdf === 'undefined') { alert('PDF export requires jsPDF library.'); return; }
+        const mr = (appData.mrs || []).find(m => m.id === historyModal.mrId);
+        if (!mr) return;
+        const isItem = historyModal.tab === 'item';
+        const events = isItem ? buildItemAuditTrail(mr, historyModal.itemIdx) : buildPrAuditTrail(mr);
+        const { jsPDF } = jspdf;
+        const doc = new jsPDF({ orientation: 'landscape', unit: 'pt', format: 'a4' });
+        doc.setFontSize(14); doc.text((isItem ? 'Item' : 'PR') + ' History — ' + (mr.prNumber || mr.mrNumber), 40, 40);
+        doc.setFontSize(8);
+        let y = 60;
+        events.forEach((e, i) => {
+            if (y > 540) { doc.addPage(); y = 40; }
+            doc.text([(e.ts ? new Date(e.ts).toLocaleString('en-IN') : '—'), (e.user||''), (e.level||''), (e.activity||''), (e.remarks||'')].join('   |   '), 40, y);
+            y += 16;
+        });
+        doc.save('History_' + (mr.prNumber || mr.mrNumber) + '.pdf');
+    };
+
+    // ── Inject history modal into the rendered DOM ─────────────────────────────
+
 
     // ── LOGIN ────────────────────────────────────────────────────────────────
     function loginPartSvg(type) {
@@ -8316,14 +9590,7 @@ function renderMrRow(item, idx, xlInputCss) {
                     console.log('[Realtime] Remote change detected...');
                     var newData = payload.new && payload.new.data;
                     if (!newData || typeof newData !== 'object') return;
-                    migrateToItemLevelProcurement(newData);
-                    migrateUsersAndNotifications(newData);
-                    migrateProcHandlers(newData);
-                    migrateDepartments(newData);
-                    migrateSequences(newData);
-                    if (!Array.isArray(newData.mrDrafts)) newData.mrDrafts = [];
-                    if (!Array.isArray(newData.itemRequests)) newData.itemRequests = [];
-                    appData = newData;
+                    appData = normalizeAppData(newData);
                     window.appData = appData;
                     try { localStorage.setItem(DB_KEY, JSON.stringify(appData)); } catch(e) {}
                     render();
@@ -8386,49 +9653,45 @@ function renderMrRow(item, idx, xlInputCss) {
      * This is the ONLY place the async cloud fetch happens.
      */
     async function loadDB() {
-        // Show loading indicator
-        document.getElementById('app-root').innerHTML =
-            '<div style="display:flex;align-items:center;justify-content:center;height:100vh;flex-direction:column;gap:16px;font-family:Inter,sans-serif;background:#0B1420;color:#fff;">' +
-            '<div style="width:48px;height:48px;border:3px solid rgba(255,255,255,0.1);border-top-color:#B3122E;border-radius:50%;animation:spin 0.8s linear infinite"></div>' +
-            '<p style="font-size:14px;font-weight:600;opacity:0.7;letter-spacing:0.05em;">Connecting to cloud...</p>' +
-            '<style>@keyframes spin{to{transform:rotate(360deg)}}</style>' +
-            '</div>';
+        const root = document.getElementById('app-root');
+        if (root) {
+            root.innerHTML =
+                '<div style="display:flex;align-items:center;justify-content:center;height:100vh;flex-direction:column;gap:16px;font-family:Inter,sans-serif;background:#0B1420;color:#fff;">' +
+                '<div style="width:48px;height:48px;border:3px solid rgba(255,255,255,0.1);border-top-color:#B3122E;border-radius:50%;animation:spin 0.8s linear infinite"></div>' +
+                '<p style="font-size:14px;font-weight:600;opacity:0.7;letter-spacing:0.05em;">Connecting to cloud...</p>' +
+                '<style>@keyframes spin{to{transform:rotate(360deg)}}</style>' +
+                '</div>';
+        }
+
+        const fetchCloud = _supabaseClient
+            .from('app_state')
+            .select('data')
+            .eq('id', 1)
+            .single();
+
+        const timeout = new Promise((_, reject) =>
+            setTimeout(() => reject(new Error('Cloud connection timed out')), 8000)
+        );
 
         try {
-            const { data, error } = await _supabaseClient
-                .from('app_state')
-                .select('data')
-                .eq('id', 1)
-                .single();
+            const { data, error } = await Promise.race([fetchCloud, timeout]);
 
             if (!error && data && data.data && Object.keys(data.data).length > 0) {
                 console.log('[loadDB] ✓ Loaded from Supabase cloud');
-                const d = data.data;
-                // Run all migrations to ensure compatibility
-                migrateToItemLevelProcurement(d);
-                migrateUsersAndNotifications(d);
-                migrateProcHandlers(d);
-                migrateDepartments(d);
-                migrateSequences(d);
-                if (!Array.isArray(d.mrDrafts)) d.mrDrafts = [];
-                if (!Array.isArray(d.itemRequests)) d.itemRequests = [];
-                // Also cache locally
+                const d = normalizeAppData(data.data);
                 try { localStorage.setItem(DB_KEY, JSON.stringify(d)); } catch(e) {}
                 return d;
             }
 
-            // Supabase returned empty or error — check if it's a real error
             if (error && error.code !== 'PGRST116') {
-                // PGRST116 = no rows found (expected on first run), anything else is a real error
                 console.error('[loadDB] Supabase error:', error.message);
             }
 
-            // Fall back to localStorage (last session's data)
             console.warn('[loadDB] Supabase empty/unreachable — trying localStorage fallback');
             return loadFromLocalStorage();
 
         } catch (err) {
-            console.error('[loadDB] Exception:', err);
+            console.error('[loadDB] Exception:', err.message || err);
             return loadFromLocalStorage();
         }
     }
@@ -8441,9 +9704,12 @@ function renderMrRow(item, idx, xlInputCss) {
             console.error('[init] Critical load failure, falling back to seed data:', e);
             appData = loadFromLocalStorage();
         }
+        appData = normalizeAppData(appData);
         window.appData = appData;
+        document.getElementById('login-success-overlay')?.remove();
+        document.body.classList.remove('dashboard-building', 'login-active');
         render();
-        startRealtimeSync(); // Live sync across tabs/devices
+        startRealtimeSync();
     })();
 
 </script>
