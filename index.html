@@ -17,19 +17,22 @@
     theme: {
       extend: {
         colors: {
-          ink: { DEFAULT:'#0B1420', 2:'#111C2C', 3:'#1B2A40' },
-          paper: '#F1F2F4',
-          rule: '#E3E5E9',
-          brand: { DEFAULT:'#B3122E', dark:'#7F0C21', light:'#FBE9EC', 50:'#FDF2F3' },
-          amberx: { DEFAULT:'#A6620B', light:'#FCF1DF' },
+          ink: { DEFAULT:'#1A202C', 2:'#2D3748', 3:'#4A5568' },
+          paper: '#FFFFFF',
+          rule: '#E2E8F0',
+          brand: { DEFAULT:'#1DB79C', dark:'#0B8B6F', light:'#E0F9F6', 50:'#F0FFFE' },
+          amberx: { DEFAULT:'#D97706', light:'#FEF3C7' },
+          slate: { 50:'#F9FAFB', 100:'#F3F4F6', 200:'#E5E7EB', 300:'#D1D5DB', 400:'#9CA3AF', 500:'#6B7280', 600:'#4B5563', 700:'#374151', 800:'#1F2937', 900:'#111827' },
         },
         fontFamily: {
-          display: ['"Space Grotesk"','sans-serif'],
+          display: ['"Inter"','sans-serif'],
           body: ['Inter','sans-serif'],
           mono: ['"JetBrains Mono"','monospace']
         },
         boxShadow: {
-          panel: '0 1px 2px rgba(11,20,32,0.04), 0 8px 24px -12px rgba(11,20,32,0.12)',
+          panel: '0 1px 3px rgba(0,0,0,0.08), 0 4px 12px rgba(0,0,0,0.05)',
+          sm: '0 1px 2px rgba(0,0,0,0.05)',
+          md: '0 4px 6px rgba(0,0,0,0.07)',
         }
       }
     }
@@ -37,16 +40,32 @@
     </script>
 <style>
   html, body { -webkit-tap-highlight-color: transparent; scroll-behavior: smooth; }
-  body { font-family: 'Inter', sans-serif; background-color: #F1F2F4; color: #1f2937; margin: 0; padding: 0; overflow-x: hidden; text-align: left; }
+  body { font-family: 'Inter', sans-serif; background-color: #F9FAFB; color: #1F2937; margin: 0; padding: 0; overflow-x: hidden; text-align: left; font-weight: 400; font-size: 14px; line-height: 1.5; }
   body.login-active { overflow: hidden; height: 100vh; max-height: 100vh; }
-  .font-display { font-family: 'Space Grotesk', sans-serif; }
+  .font-display { font-family: 'Inter', sans-serif; font-weight: 600; }
   .font-mono { font-family: 'JetBrains Mono', monospace; }
-  .custom-scrollbar::-webkit-scrollbar { width: 6px; height: 6px; }
+  .custom-scrollbar::-webkit-scrollbar { width: 8px; height: 8px; }
   .custom-scrollbar::-webkit-scrollbar-track { background: transparent; }
-  .custom-scrollbar::-webkit-scrollbar-thumb { background: #C7CBD3; border-radius: 10px; }
-  .custom-scrollbar::-webkit-scrollbar-thumb:hover { background: #94a3b8; }
-  *:focus-visible { outline: 2px solid #B3122E; outline-offset: 2px; }
-  .glass-panel { background: rgba(255, 255, 255, 0.95); backdrop-filter: blur(12px); border: 1px solid rgba(255,255,255,0.2); }
+  .custom-scrollbar::-webkit-scrollbar-thumb { background: #D1D5DB; border-radius: 10px; }
+  .custom-scrollbar::-webkit-scrollbar-thumb:hover { background: #9CA3AF; }
+  *:focus-visible { outline: 2px solid #1DB79C; outline-offset: 2px; }
+  .glass-panel { background: rgba(255, 255, 255, 0.98); backdrop-filter: blur(12px); border: 1px solid #E2E8F0; }
+  
+  /* Typography improvements */
+  h1 { font-weight: 600; letter-spacing: -0.02em; }
+  h2 { font-weight: 600; letter-spacing: -0.01em; }
+  h3 { font-weight: 600; }
+  h4 { font-weight: 600; }
+  h5 { font-weight: 500; }
+  h6 { font-weight: 500; }
+  
+  /* Buttons */
+  button { transition: all 0.2s ease-in-out; }
+  button:hover { box-shadow: 0 4px 12px rgba(0,0,0,0.08); }
+  
+  /* Cards */
+  .card { background: #FFFFFF; border: 1px solid #E2E8F0; border-radius: 12px; }
+
   @media print {
     .no-print { display: none !important; }
     body { background: white !important; padding: 0 !important; margin: 0 !important; }
@@ -235,7 +254,8 @@
         DEPT_APPROVED:        { label: "Department Approved",          color: "#0D9488", bg: "#E6FBF8" },
         QUERY_RAISED:  { label: "Query (QR)",      color: "#A6620B", bg: "#FCF1DF" },
         AUTHORIZED:    { label: "Authorized",      color: "#0E7490", bg: "#E7F7FA" },
-        PLANNED:       { label: "Planned",         color: "#6D28D9", bg: "#F2ECFC" },
+        PROCUREMENT_QUERY: { label: "Procurement Query", color: "#DC2626", bg: "#FEE2E2" },
+        PLANNED:       { label: "Pending Proc. Acceptance", color: "#F59E0B", bg: "#FEF3C7" },
         PR_ACCEPTED:   { label: "PR Accepted",     color: "#2563EB", bg: "#EFF6FF" },
         PROCUREMENT:   { label: "PO Given",        color: "#B45309", bg: "#FDF3E4" },
         PARTIAL:       { label: "Partial Received",color: "#BE185D", bg: "#FCE9F1" },
@@ -243,12 +263,12 @@
         HOLD:          { label: "Hold",             color: "#78716C", bg: "#F5F5F4" },
         CANCELLED:     { label: "Cancel",           color: "#B91C1C", bg: "#FEE2E2" }
     };
-    const STATUS_ORDER = ["RAISED","DEPT_APPROVAL_PENDING","DEPT_APPROVED","QUERY_RAISED","AUTHORIZED","PLANNED","PR_ACCEPTED","PROCUREMENT","PARTIAL","CLOSED","HOLD","CANCELLED"];
+    const STATUS_ORDER = ["RAISED","DEPT_APPROVAL_PENDING","DEPT_APPROVED","QUERY_RAISED","AUTHORIZED","PROCUREMENT_QUERY","PLANNED","PR_ACCEPTED","PROCUREMENT","PARTIAL","CLOSED","HOLD","CANCELLED"];
     // Statuses reachable once a PO has actually been issued - status can only move forward from here.
     const POST_PO_STATUSES = ["PROCUREMENT","PARTIAL","CLOSED","HOLD","CANCELLED"];
     // Manual status choices available before a PO exists - PROCUREMENT ("PO Given") is deliberately
     // excluded because it can only be set automatically once both PO Number and PO Date are entered.
-    const PRE_PO_STATUSES  = STATUS_ORDER.filter(s => !["PLANNED","PROCUREMENT","PARTIAL","CLOSED"].includes(s));
+    const PRE_PO_STATUSES  = STATUS_ORDER.filter(s => !["PLANNED","PROCUREMENT_QUERY","PROCUREMENT","PARTIAL","CLOSED"].includes(s));
 
     const SEED = {
         users: [
@@ -2235,7 +2255,13 @@
             mr = { id: mrId, mrNumber: mrNum, prNumber: prNum, revNo: 0, createdAt: Date.now(), history: [] };
         }
 
-        mr.status     = 'RAISED';
+        // Handle Query Resubmission Routing
+        if (isRevision && mr.queryOriginStatus) {
+            mr.status = mr.queryOriginStatus;
+        } else {
+            mr.status = 'RAISED';
+        }
+        
         mr.dept       = user.dept;
         mr.raisedBy   = user.name;
         mr.deliveryLocation = mrDeliveryLocation;
@@ -2250,7 +2276,7 @@
             };
         });
 
-        // Automatically add newly typed items to the Master Asset List
+        // Automatically add newly typed items to the Master Asset List (ALL MRs/PRs)
         mr.items.forEach(it => {
             const nameLower = (it.name || '').toLowerCase().trim();
             if (nameLower && !appData.assets.some(a => (a.name || '').toLowerCase().trim() === nameLower)) {
@@ -2295,8 +2321,13 @@
             const creatorLevel = user.approvalLevel || 'L1';
             let actionLabel = isRevision ? "Revised & Resubmitted" : "Raised";
             if (isRevision) {
-                mr.status = 'RAISED';
-                pushNotification({ level: 'FINAL_AUTH' }, `MR ${mr.mrNumber} revised and resubmitted — pending review.`, mr.id);
+                if (mr.queryOriginStatus) {
+                    actionLabel += ` — Returned to ${STATUS_META[mr.queryOriginStatus]?.label || 'Approver'}`;
+                    pushNotification({ level: 'L2' }, `MR ${mr.mrNumber} revised and resubmitted — returned to you for review.`, mr.id);
+                } else {
+                    mr.status = 'RAISED';
+                    pushNotification({ level: 'FINAL_AUTH' }, `MR ${mr.mrNumber} revised and resubmitted — pending review.`, mr.id);
+                }
             } else if (creatorLevel === 'L1') {
                 const l2 = findDeptL2(user.dept);
                 if (l2) {
@@ -2392,6 +2423,18 @@
             const oldStatus = mr.status;
             mr.status = newStatus;
 
+            // Track Query Origin
+            if (newStatus === 'QUERY_RAISED') {
+                mr.queryOriginStatus = oldStatus;
+                mr.queryOriginApprover = user.name;
+            } else if (oldStatus === 'QUERY_RAISED' && newStatus !== 'CANCELLED') {
+                // If approving after a query, we leave it alone since it just advanced properly
+            } else if (mr.queryOriginStatus) {
+                // Clear query constraints once it successfully passes the stage it was queried from
+                delete mr.queryOriginStatus;
+                delete mr.queryOriginApprover;
+            }
+
             // Record structured Final Authorization audit fields the moment an MR clears
             // Final Authorization, and notify Planning per the mandatory notification rules.
             if (newStatus === 'AUTHORIZED') {
@@ -2404,7 +2447,7 @@
             // permanent PR number here, exactly once, and record the MR ⇄ PR mapping.
             let prNote = note;
             let prJustGenerated = false;
-            if (newStatus === 'PLANNED' && !mr.prNumber) {
+            if ((newStatus === 'PLANNED' || newStatus === 'PR_ACCEPTED') && !mr.prNumber) {
                 mr.prNumber = consumeNextPrNumber();
                 mr.plannedBy = mr.plannedBy || user.name;
                 mr.planningDate = Date.now();
@@ -3033,6 +3076,119 @@
             XLSX.writeFile(wb, `indus-fire-mr-report-${Date.now()}.xlsx`);
         } catch(e) { alert('Excel export failed: ' + e.message); }
     };
+
+    window.exportPRExcel = (id) => {
+        try {
+            const mr = appData.mrs.find(m => m.id === id);
+            if (!mr) { alert('Material Request not found'); return; }
+            if (!userCanAccessMr(mr)) { alert('This MR belongs to another department and cannot be accessed.'); return; }
+            if (!mr.prNumber) { alert('This request does not have a PR number yet.'); return; }
+
+            const wb = XLSX.utils.book_new();
+            const ws = XLSX.utils.aoa_to_sheet([]);
+            
+            let row = 0;
+
+            // ── HEADER SECTION ─────────────────────────────────────────────
+            ws['!rows'] = ws['!rows'] || [];
+            ws['!rows'][row] = { hpt: 25 };
+            const headerData = [['INDUS FIRE SAFETY PVT. LTD.']];
+            XLSX.utils.sheet_add_aoa(ws, headerData, { origin: row });
+            row++;
+
+            ws['!rows'][row] = { hpt: 18 };
+            const addressData = [['Block No. 501, Opp. GSFC Main Gate, Dashrath, Vadodara, GUJARAT- 391740']];
+            XLSX.utils.sheet_add_aoa(ws, addressData, { origin: row });
+            row++;
+
+            row++; // Blank row
+            
+            ws['!rows'][row] = { hpt: 20 };
+            const titleData = [['PURCHASE REQUEST']];
+            XLSX.utils.sheet_add_aoa(ws, titleData, { origin: row });
+            row++;
+
+            row++; // Blank row
+
+            // ── PR METADATA SECTION ────────────────────────────────────────
+            const metaData = [
+                ['Requisition No-', mr.prNumber, 'DATE:', fmtDate(mr.createdAt), 'REV NO', '0'],
+                ['Delivery Location', mr.deliveryLocation || '', 'Initiator Department', mr.dept, '', ''],
+                ['Status', (STATUS_META[getMrDisplayStatus(mr)]||{}).label || getMrDisplayStatus(mr), 'PR Number', mr.prNumber, '', '']
+            ];
+            XLSX.utils.sheet_add_aoa(ws, metaData, { origin: row });
+            row += 3;
+
+            row++; // Blank row
+
+            // ── ITEMS TABLE HEADER ─────────────────────────────────────────
+            const tableHeaders = [
+                ['Sr.No', 'Item', 'Specifications', 'Sample\nMake if any', 'Sample\nprovided if any', 'Quantity', 'Unit', 'Rate', 'Amount', 'Tentative\nRequire Date', 'Cost Centre', 'Revision/Remarks/\nComments']
+            ];
+            XLSX.utils.sheet_add_aoa(ws, tableHeaders, { origin: row });
+            row++;
+
+            // ── ITEMS DATA ────────────────────────────────────────────────
+            const items = mr.items || [];
+            let totalAmount = 0;
+            items.forEach((it, idx) => {
+                const amount = (it.qty || 0) * (it.rate || 0);
+                totalAmount += amount;
+                const itemData = [
+                    [
+                        idx + 1,
+                        it.name || '',
+                        it.spec || '',
+                        it.make || '',
+                        '—',
+                        it.qty || 0,
+                        it.unit || '',
+                        it.rate || 0,
+                        amount,
+                        it.requiredDate ? fmtDate(it.requiredDate) : '',
+                        (mr.dept && (appData.projects || []).find(p => p.id === it.project)) ? 
+                            ((appData.projects.find(p => p.id === it.project) || {}).ccNo || '') : '',
+                        it.procRemarks || ''
+                    ]
+                ];
+                XLSX.utils.sheet_add_aoa(ws, itemData, { origin: row });
+                row++;
+            });
+
+            // ── TOTALS ROW ─────────────────────────────────────────────────
+            const totalsData = [['', '', '', '', 'Total', '', '', '', totalAmount]];
+            XLSX.utils.sheet_add_aoa(ws, totalsData, { origin: row });
+            row++;
+
+            // ── FOOTER SECTION ────────────────────────────────────────────
+            row++; // Blank row
+            const footerData = [
+                ['Generated On:', fmtDateTime(Date.now())],
+                ['Generated By:', user.name],
+                ['MR Number:', mr.mrNumber]
+            ];
+            XLSX.utils.sheet_add_aoa(ws, footerData, { origin: row });
+
+            // ── COLUMN WIDTHS ─────────────────────────────────────────────
+            ws['!cols'] = [
+                { wch: 6 },  // Sr.No
+                { wch: 20 }, // Item
+                { wch: 22 }, // Specifications
+                { wch: 14 }, // Sample Make
+                { wch: 14 }, // Sample provided
+                { wch: 10 }, // Quantity
+                { wch: 10 }, // Unit
+                { wch: 12 }, // Rate
+                { wch: 12 }, // Amount
+                { wch: 14 }, // Required Date
+                { wch: 16 }, // Cost Centre
+                { wch: 18 }  // Remarks
+            ];
+
+            XLSX.utils.book_append_sheet(wb, ws, 'PR');
+            XLSX.writeFile(wb, `${mr.prNumber}-${mr.dept}-${Date.now()}.xlsx`);
+        } catch(e) { alert('PR Excel export failed: ' + e.message); }
+    };
     function renderFullScreenReview() {
         const m = appData.mrs.find(x => x.id === _reviewMrId);
         if (!m) return '';
@@ -3044,7 +3200,8 @@
             approveBtn = `<button onclick="window.approveDeptLevel('${m.id}','wf-note-modal'); window.closeReviewModal();" class="py-4 px-8 bg-brand text-white rounded-xl font-black text-[11px] uppercase shadow-lg active:scale-95 transition-all hover:bg-brand-600 flex-1">Approve</button>`;
             queryBtn = `<button onclick="window.updateMrStatus('${m.id}','QUERY_RAISED','Query Raised','wf-note-modal'); window.closeReviewModal();" class="py-4 px-8 border-2 border-brand text-brand rounded-xl font-black text-[11px] uppercase hover:bg-brand-50 transition-all flex-1">Raise Query</button>`;
         } else if (_reviewMrActionType && _reviewMrActionType.type === 'PLANNING') {
-            approveBtn = `<button onclick="window.updateMrStatus('${m.id}','PLANNED','Planning Approved','wf-note-modal'); window.closeReviewModal();" class="py-4 px-8 bg-brand text-white rounded-xl font-black text-[11px] uppercase shadow-lg active:scale-95 transition-all hover:bg-brand-600 flex-1">Approve</button>`;
+            const toStatus = m.status === 'PROCUREMENT_QUERY' ? 'PLANNED' : 'PR_ACCEPTED';
+            approveBtn = `<button onclick="window.updateMrStatus('${m.id}','${toStatus}','Planning Approved','wf-note-modal'); window.closeReviewModal();" class="py-4 px-8 bg-brand text-white rounded-xl font-black text-[11px] uppercase shadow-lg active:scale-95 transition-all hover:bg-brand-600 flex-1">Approve</button>`;
             queryBtn = `<button onclick="window.updateMrStatus('${m.id}','QUERY_RAISED','Query Raised','wf-note-modal'); window.closeReviewModal();" class="py-4 px-8 border-2 border-brand text-brand rounded-xl font-black text-[11px] uppercase hover:bg-brand-50 transition-all flex-1">Raise Query</button>`;
         } else if (_reviewMrActionType && _reviewMrActionType.type === 'GENERIC') {
             approveBtn = `<button onclick="window.updateMrStatus('${m.id}','${_reviewMrActionType.toStatus}','${_reviewMrActionType.actionLabel}','wf-note-modal'); window.closeReviewModal();" class="py-4 px-8 bg-brand text-white rounded-xl font-black text-[11px] uppercase shadow-lg active:scale-95 transition-all hover:bg-brand-600 flex-1">${_reviewMrActionType.actionLabel || 'Approve'}</button>`;
@@ -3347,7 +3504,7 @@
                 ${(user.role==='admin'||user.role==='procurement') ? `
                     <div class="pt-4 mt-4 border-t border-white/10 space-y-1">
                         <div class="px-3 pb-1 text-[9px] font-black text-slate-500 uppercase tracking-widest">Procurement Team</div>
-                        ${navBtn('proc_inbox','Procurement Inbox','inbox', mrs.filter(m=>m.status==='PLANNED').length)}
+                        ${navBtn('proc_inbox','Procurement Inbox','inbox', mrs.filter(m=>m.status==='PLANNED' && (!m.procQueryOriginApprover || m.procQueryOriginApprover === user.name || user.role === 'admin')).length)}
                         ${navBtn('proc_team','Team Performance','users-round')}
                         ${navBtn('proc_performance','Performance Report','file-bar-chart')}
                     </div>` : ''}
@@ -3486,6 +3643,75 @@
                 <span class="text-[10px] uppercase tracking-widest text-slate-500">${esc(selectedLabel)}</span>
                 <p class="text-4xl font-display font-black text-emerald-600">${formatCurrencyValue(selectedValue)}</p>
                 <p class="text-xs text-slate-500">Select a previous month to view its savings amount.</p>
+            </div>
+        </div>`;
+    }
+
+    function renderMonthlyPOSummary() {
+        const rows = buildPrRows().filter(r => r.poDate || r.poNo);
+        if (!rows.length) {
+            return `
+            <div class="bg-white rounded-2xl border border-rule shadow-panel p-6">
+                <h3 class="text-xs font-black text-slate-500 uppercase tracking-widest mb-4">Monthly PO Summary</h3>
+                <p class="text-sm text-slate-500">No PO data available yet.</p>
+            </div>`;
+        }
+
+        const monthly = {};
+        rows.forEach(r => {
+            const sourceDate = r.poDate || r.date;
+            const dt = sourceDate ? new Date(sourceDate) : null;
+            if (!dt || Number.isNaN(dt.getTime())) return;
+            const key = `${dt.getFullYear()}-${String(dt.getMonth() + 1).padStart(2, '0')}`;
+            if (!monthly[key]) {
+                monthly[key] = { poValue: 0, savings: 0, count: 0 };
+            }
+            monthly[key].poValue += Number(r.poValue || 0);
+            monthly[key].savings += Number(r.saving || 0);
+            monthly[key].count += 1;
+        });
+
+        const keys = Object.keys(monthly).sort((a, b) => b.localeCompare(a));
+        const tableRows = keys.slice(0, 12).map(key => {
+            const month = new Date(key + '-01').toLocaleString('en-IN', { month: 'short', year: 'numeric' });
+            const data = monthly[key];
+            return `
+            <tr class="border-b border-rule/50 hover:bg-slate-50/50">
+                <td class="px-6 py-4 text-sm font-bold text-slate-700">${esc(month)}</td>
+                <td class="px-6 py-4 text-sm font-bold text-slate-600">${data.count}</td>
+                <td class="px-6 py-4 text-sm font-bold text-slate-900">${formatCurrencyValue(data.poValue)}</td>
+                <td class="px-6 py-4 text-sm font-bold ${data.savings >= 0 ? 'text-emerald-600' : 'text-red-600'}">${formatCurrencyValue(data.savings)}</td>
+            </tr>`;
+        }).join('');
+
+        const totalPoValue = keys.reduce((sum, k) => sum + monthly[k].poValue, 0);
+        const totalSavings = keys.reduce((sum, k) => sum + monthly[k].savings, 0);
+
+        return `
+        <div class="bg-white rounded-2xl border border-rule shadow-panel overflow-hidden">
+            <div class="px-6 py-4 border-b border-rule bg-paper">
+                <h3 class="text-xs font-black text-slate-500 uppercase tracking-widest">Monthly PO Value & Savings</h3>
+            </div>
+            <div class="overflow-x-auto">
+                <table class="w-full text-left">
+                    <thead>
+                        <tr class="bg-paper text-[10px] font-black text-slate-500 uppercase tracking-widest border-b border-rule">
+                            <th class="px-6 py-3">Month</th>
+                            <th class="px-6 py-3">POs Count</th>
+                            <th class="px-6 py-3">Total PO Value</th>
+                            <th class="px-6 py-3">Total Savings</th>
+                        </tr>
+                    </thead>
+                    <tbody>
+                        ${tableRows}
+                        <tr class="bg-brand/5 border-t-2 border-brand/20">
+                            <td class="px-6 py-4 text-sm font-black text-ink">TOTAL (Last 12 Mo.)</td>
+                            <td class="px-6 py-4 text-sm font-bold text-slate-600">${keys.length}</td>
+                            <td class="px-6 py-4 text-sm font-black text-slate-900">${formatCurrencyValue(totalPoValue)}</td>
+                            <td class="px-6 py-4 text-sm font-black text-emerald-600">${formatCurrencyValue(totalSavings)}</td>
+                        </tr>
+                    </tbody>
+                </table>
             </div>
         </div>`;
     }
@@ -4141,6 +4367,7 @@ function renderMrRow(item, idx, xlInputCss) {
                               <div class="flex justify-center gap-2">
                                   ${(m.status === 'QUERY_RAISED' && userCanAccessMr(m) && (m.raisedBy === user.name || user.role === 'admin')) ? `
                                   <button onclick="window.resolveQuery('${m.id}')" title="Revise & Resubmit" class="p-2 text-amberx bg-white border border-rule rounded-lg shadow-sm hover:bg-amberx hover:text-white transition-all"><i data-lucide="edit-3" class="w-4 h-4"></i></button>` : ''}
+                                  ${m.prNumber ? `<button onclick="window.exportPRExcel('${m.id}')" title="Download PR Excel" class="p-2 text-sky-600 bg-white border border-rule rounded-lg shadow-sm hover:bg-sky-600 hover:text-white transition-all"><i data-lucide="download" class="w-4 h-4"></i></button>` : ''}
                                   <button onclick="window.showAudit('${m.id}')" title="Audit Trail" class="p-2 text-blue-500 bg-white border border-rule rounded-lg shadow-sm hover:bg-blue-500 hover:text-white transition-all"><i data-lucide="history" class="w-4 h-4"></i></button>
                                   <button onclick="window.printMR('${m.id}')" title="${m.prNumber && (m.combinedPr || (appData.mrs||[]).filter(x=>x.prNumber===m.prNumber).length>1) ? 'Print Combined PR' : 'Print MR'}" class="p-2 text-emerald-600 bg-white border border-rule rounded-lg shadow-sm hover:bg-emerald-600 hover:text-white transition-all"><i data-lucide="printer" class="w-4 h-4"></i></button>
                               </div>
@@ -4348,7 +4575,7 @@ function renderMrRow(item, idx, xlInputCss) {
 
     // ── WORKFLOW (AUTHORIZE / PLANNER) ──────────────────────────────────────
     function renderWorkflow(fromStatus, actionLabel, toStatus, tabId, title) {
-        let queue = appData.mrs.filter(m => m.status === fromStatus);
+        let queue = appData.mrs.filter(m => m.status === fromStatus && (!m.queryOriginApprover || m.queryOriginApprover === user.name || user.role === 'admin'));
         const q = queueFilters[tabId] || '';
         if (q) queue = queue.filter(m => matchesKeyword(m, q));
         return `
@@ -4408,7 +4635,7 @@ function renderMrRow(item, idx, xlInputCss) {
     // department — "L2 users must never see requests from other departments" — and its Approve
     // button drives the two-step Department Approved → Final Authorization Pending chain.
     function renderDeptApproval() {
-        let queue = appData.mrs.filter(m => m.status === 'DEPT_APPROVAL_PENDING' && m.dept === user.dept);
+        let queue = appData.mrs.filter(m => m.status === 'DEPT_APPROVAL_PENDING' && m.dept === user.dept && (!m.queryOriginApprover || m.queryOriginApprover === user.name || user.role === 'admin'));
         const q = queueFilters.dept_approval || '';
         if (q) queue = queue.filter(m => matchesKeyword(m, q));
         return `
@@ -5069,7 +5296,7 @@ function renderMrRow(item, idx, xlInputCss) {
     }
 
     function renderApprovalQueueSection() {
-        let queue = appData.mrs.filter(m => m.status === 'AUTHORIZED');
+        let queue = appData.mrs.filter(m => m.status === 'AUTHORIZED' || m.status === 'PROCUREMENT_QUERY');
         const q = queueFilters['planner'] || '';
         if (q) queue = queue.filter(m => matchesKeyword(m, q));
         return `
@@ -5769,7 +5996,7 @@ function renderMrRow(item, idx, xlInputCss) {
         appData.projects.forEach(p => { if (p && p.name) projectCcMap[p.name] = p.ccNo || ''; });
         (appData.mrs || []).forEach(mr => {
             // Only PRs (MRs that have cleared Planning Approval) ever appear in the Data Centre.
-            if (!mr.prNumber) return;
+            if (!mr.prNumber || mr.status === 'PLANNED' || mr.status === 'PROCUREMENT_QUERY') return;
             (mr.items || []).forEach((it, idx) => {
                 const itStatus = it.status || 'PLANNED';
                 const receivedLike = (itStatus === 'CLOSED');
@@ -6352,7 +6579,7 @@ function renderMrRow(item, idx, xlInputCss) {
 
     // ── PROCUREMENT INBOX ─────────────────────────────────────────────────────────────
     function renderProcInbox() {
-        const inboxMrs = appData.mrs.filter(m => m.status === 'PLANNED');
+        const inboxMrs = appData.mrs.filter(m => m.status === 'PLANNED' && (!m.procQueryOriginApprover || m.procQueryOriginApprover === user.name || user.role === 'admin'));
 
         if (inboxMrs.length === 0) {
             return `
@@ -6487,6 +6714,7 @@ function renderMrRow(item, idx, xlInputCss) {
         const mr = appData.mrs.find(m => m.id === mrId);
         if (!mr) return;
         mr.status = 'PR_ACCEPTED';
+        delete mr.procQueryOriginApprover;
         (mr.items || []).forEach(it => { if (it.status === 'PLANNED') it.status = 'PR_ACCEPTED'; });
         mr.history.push({ 
             action: 'PR Accepted (Procurement Inbox)', 
@@ -6514,12 +6742,13 @@ function renderMrRow(item, idx, xlInputCss) {
         const mr = appData.mrs.find(m => m.id === mrId);
         if (!mr) return;
         // Returned PR → goes back to QUERY_RAISED (Planner will correct & resubmit → FINAL_AUTH → PLANNED → Procurement)
-        mr.status = 'QUERY_RAISED';
-        (mr.items || []).forEach(it => { it.status = 'QUERY_RAISED'; });
+        mr.status = 'PROCUREMENT_QUERY';
+        mr.procQueryOriginApprover = user.name;
+        (mr.items || []).forEach(it => { it.status = 'PROCUREMENT_QUERY'; });
         mr.history.push({ 
             action: 'Returned to Planner by Procurement', 
             actor: user.name, role: user.role, dept: user.dept, ts: Date.now(),
-            field: 'status', oldValue: STATUS_META.PLANNED.label, newValue: STATUS_META.QUERY_RAISED.label,
+            field: 'status', oldValue: STATUS_META.PLANNED.label, newValue: STATUS_META.PROCUREMENT_QUERY.label,
             note: reason
         });
         saveDB();
@@ -7131,6 +7360,7 @@ function renderMrRow(item, idx, xlInputCss) {
         if (!poNumber && !poDate) { showToast('Please enter a PO Number or PO Date.'); return; }
         const count = window.dcBulkSelected.size;
         dcPushUndo();
+        const modifiedMrs = new Set();
         window.dcBulkSelected.forEach(function(key) {
             var parts   = key.split('|');
             var mrId    = parts[0];
@@ -7138,16 +7368,35 @@ function renderMrRow(item, idx, xlInputCss) {
             var mr = (appData.mrs || []).find(function(m) { return m.id === mrId; });
             if (!mr || !mr.items || !mr.items[itemIdx]) return;
             var item = mr.items[itemIdx];
-            if (poNumber) item.poNo   = poNumber;
-            if (poDate)   item.poDate = poDate;
-            if (poNumber && item.status === 'RAISED') item.status = 'PROCUREMENT';
-            else if (!poNumber && item.status === 'PROCUREMENT') item.status = 'RAISED';
+            if (poNumber) item.poNumber = poNumber;
+            if (poDate)   item.poDate   = poDate;
+            
+            // Check if both PO Number and Date are now filled and status should advance to PROCUREMENT (PO Given)
+            if (item.poNumber && item.poDate && item.status !== 'PROCUREMENT' && !['PROCUREMENT','PARTIAL','CLOSED','HOLD','CANCELLED'].includes(item.status)) {
+                item.status = 'PROCUREMENT';
+            }
+            
+            mr.history = mr.history || [];
+            mr.history.push({
+                action: 'Bulk PO Update', actor: user.name, role: user.role, dept: user.dept, ts: Date.now(),
+                field: 'poNumber/poDate', oldValue: '—', newValue: `${poNumber||''} / ${poDate||''}`,
+                note: `${esc(item.name)} — Bulk updated.`
+            });
+            modifiedMrs.add(mr);
         });
+
+        modifiedMrs.forEach(mr => {
+            if (typeof window.checkAutoPoGiven === 'function') {
+                window.checkAutoPoGiven(mr);
+            }
+        });
+
         dcDirty = true;
         window.dcBulkPoModal = false;
         window.dcBulkSelected.clear();
         saveDB();
         showToast('PO Number and PO Date applied to ' + count + ' selected item' + (count === 1 ? '' : 's') + '.');
+        render(); // Immediately update the UI
     };
 
     window.dcExportExcel = () => {
@@ -7994,6 +8243,8 @@ function renderMrRow(item, idx, xlInputCss) {
                 <div class="bg-white rounded-2xl border border-rule shadow-panel p-5"><h3 class="text-xs font-black uppercase tracking-widest text-slate-500 mb-3">Current Work Status Distribution</h3><div class="pcb-chart-box" style="height:220px"><canvas id="proc-pie-status"></canvas></div></div>
             </div>
 
+            ${renderMonthlyPOSummary()}
+
             ${myHandler ? renderMyWorkQueue(myHandler, myQueue) : ''}
         </div>`;
     }
@@ -8223,30 +8474,67 @@ function renderMrRow(item, idx, xlInputCss) {
     // ── AUDIT MODAL ──────────────────────────────────────────────────────────
     function renderMrTimeline(mr) {
         const steps = [
-            { key:'RAISED',      label:'MR Raised' },
-            { key:'AUTHORIZED',  label:'Authorized' },
-            { key:'PLANNED',     label:'Planning Approved' },
-            { key:'PROCUREMENT', label:'PO Given', auto:true },
-            { key:'PARTIAL',     label:'Partial Received' },
-            { key:'CLOSED',      label:'Received' },
+            { key:'RAISED',      label:'MR Raised', icon:'document-plus' },
+            { key:'AUTHORIZED',  label:'Authorized', icon:'check-circle-2' },
+            { key:'PLANNED',     label:'Planning Approved', icon:'clipboard-check' },
+            { key:'PROCUREMENT', label:'PO Given', icon:'shopping-cart', auto:true },
+            { key:'PARTIAL',     label:'Partial Received', icon:'package' },
+            { key:'CLOSED',      label:'Received', icon:'check' },
         ];
         const order = ['RAISED','QUERY_RAISED','AUTHORIZED','PLANNED','PROCUREMENT','PARTIAL','CLOSED'];
         const curIdx = order.indexOf(mr.status);
         const wasAutoPo = (mr.history||[]).some(h => h.action === 'PO Given (Auto)');
         const sideStatus = ['HOLD','CANCELLED'].includes(mr.status) ? mr.status : null;
+        
         return `
-        <div class="flex flex-wrap gap-2 items-center px-6 pt-5 pb-1 bg-paper/40 border-b border-rule">
-            ${steps.map(s => {
-                const idx = order.indexOf(s.key);
-                const reached = curIdx >= 0 && idx <= curIdx;
-                return `<div class="flex items-center gap-1.5">
-                    <span class="text-[10px] font-black uppercase px-2.5 py-1 rounded-full ${reached ? 'bg-emerald-600 text-white' : 'bg-slate-100 text-slate-400'}">
-                        ${reached ? '✔' : '○'} ${s.label}${(s.auto && reached && wasAutoPo) ? ' · Auto' : ''}
-                    </span>
-                    ${s.key !== 'CLOSED' ? '<span class="text-slate-300">→</span>' : ''}
-                </div>`;
-            }).join('')}
-            ${sideStatus ? `<span class="text-[10px] font-black uppercase px-2.5 py-1 rounded-full" style="background:${STATUS_META[sideStatus].bg};color:${STATUS_META[sideStatus].color}">⚑ ${STATUS_META[sideStatus].label}</span>` : ''}
+        <div class="px-6 py-5 bg-gradient-to-r from-brand/5 via-slate-50 to-emerald-50/5 border-b border-rule/40">
+            <div class="flex items-center justify-between gap-0 overflow-x-auto pb-2 custom-scrollbar">
+                ${steps.map((s, idx) => {
+                    const stepOrder = order.indexOf(s.key);
+                    const isCompleted = curIdx >= 0 && stepOrder < curIdx;
+                    const isCurrent = curIdx >= 0 && stepOrder === curIdx;
+                    const isPending = curIdx < 0 || stepOrder > curIdx;
+                    
+                    return `
+                    <div class="flex items-center gap-0 flex-shrink-0">
+                        <!-- Step Badge -->
+                        <div class="flex flex-col items-center gap-1.5">
+                            <div class="relative flex items-center justify-center w-9 h-9 rounded-full font-black text-sm transition-all ${
+                                isCompleted 
+                                    ? 'bg-emerald-600 text-white shadow-lg shadow-emerald-600/30 ring-2 ring-emerald-300' 
+                                    : isCurrent
+                                    ? 'bg-brand text-white shadow-lg shadow-brand/30 ring-2 ring-brand/30 scale-110'
+                                    : 'bg-slate-200 text-slate-400'
+                            }">
+                                ${isCompleted ? '✓' : (isCurrent ? '●' : '○')}
+                            </div>
+                            <span class="text-[8.5px] font-black uppercase tracking-wider text-center whitespace-nowrap px-2 ${
+                                isCompleted ? 'text-emerald-700' : isCurrent ? 'text-brand font-bold' : 'text-slate-400'
+                            }">${s.label}${s.auto && isCompleted && wasAutoPo ? ' (AUTO)' : ''}</span>
+                        </div>
+                        
+                        <!-- Arrow Connector -->
+                        ${s.key !== 'CLOSED' ? `
+                        <div class="flex-shrink-0 w-6 h-0.5 mx-1 ${isCompleted || (isCurrent && stepOrder > 0) ? 'bg-emerald-600' : 'bg-slate-200'} transition-all" style="margin: 0 -8px;"></div>
+                        ` : ''}
+                    </div>
+                    `;
+                }).join('')}
+                
+                <!-- Side Status -->
+                ${sideStatus ? `
+                <div class="flex-shrink-0 ml-4 pl-4 border-l-2 border-rule/30">
+                    <div class="px-3 py-1.5 rounded-full font-black text-xs uppercase tracking-wider" style="background:${STATUS_META[sideStatus].bg};color:${STATUS_META[sideStatus].color}">
+                        ⚠ ${STATUS_META[sideStatus].label}
+                    </div>
+                </div>
+                ` : ''}
+            </div>
+            
+            <!-- Progress Bar -->
+            <div class="h-1 bg-slate-200 rounded-full overflow-hidden mt-3">
+                <div class="h-full bg-gradient-to-r from-emerald-500 to-emerald-600 rounded-full transition-all duration-500" style="width: ${curIdx >= 0 ? ((curIdx + 1) / order.length * 100) : 0}%"></div>
+            </div>
         </div>`;
     }
 
