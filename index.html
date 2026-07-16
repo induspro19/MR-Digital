@@ -689,14 +689,12 @@
         _reviewMrId = id;
         _reviewMrActionType = type;
         _lastRenderedTab = activeTab;
-        activeTab = 'review_document';
-        render();
+        window.navigate('review_document');
     };
     window.closeReviewModal = () => {
         _reviewMrId = null;
         _reviewMrActionType = null;
-        activeTab = _lastRenderedTab || 'dashboard';
-        render();
+        window.navigate(_lastRenderedTab || 'dashboard');
     };
     // ── ADD ITEM REQUEST STATE ────────────────────────────────────────────
     let showAddItemModal = false;
@@ -706,7 +704,7 @@
     let procDashFilters = { handler:"", project:"", vendor:"", status:"", priority:"", dateFrom:"", dateTo:"", dept:"" };
     let procPerfFilters = { handler:"", project:"", vendor:"", status:"", priority:"", dateFrom:"", dateTo:"", dept:"" };
     let procSavingMonth = null;
-    let queueFilters     = { authorize:"", planner:"", dept_approval:"" };
+    let queueFilters     = { authorize:"", planner:"", dept_approval:"", returned_queries:"" };
     let showNotifPanel = false;
 
     // ── PLANNING MODULE STATE ────────────────────────────────────────────
@@ -2376,6 +2374,7 @@
             let actionLabel = isRevision ? "Revised & Resubmitted" : "Raised";
             if (isRevision) {
                 if (mr.queryOriginStatus) {
+                    mr.status = mr.queryOriginStatus;
                     actionLabel += ` — Returned to ${STATUS_META[mr.queryOriginStatus]?.label || 'Approver'}`;
                     pushNotification({ level: 'L2' }, `MR ${mr.mrNumber} revised and resubmitted — returned to you for review.`, mr.id);
                 } else {
@@ -3532,6 +3531,8 @@
 
     function renderSidebar() {
         const mrs = appData.mrs || [];
+        const returnedQueriesCount = mrs.filter(m => (m.status === 'QUERY_RAISED' || m.status === 'PROCUREMENT_QUERY') && (m.raisedBy === user.name || m.plannedBy === user.name)).length;
+        
         return `
         <div id="app-sidebar" class="w-64 bg-ink h-screen fixed top-0 left-0 text-slate-300 flex flex-col no-print border-r border-black/20 z-50 transition-transform duration-300 ${mobileMenuOpen ? 'translate-x-0' : '-translate-x-full'} md:translate-x-0">
             <div class="shrink-0 p-6 pb-4 border-b border-white/10">
@@ -3549,6 +3550,7 @@
                 ${navBtn('dashboard','Dashboard','layout-dashboard')}
                 ${navBtn('tracking','Work Ledger','clipboard-list')}
                 ${navBtn('reports','Reports','bar-chart-3')}
+                ${returnedQueriesCount > 0 ? navBtn('returned_queries','Returned Queries','alert-circle', returnedQueriesCount) : ''}
                 ${(user.role==='admin'||user.role==='creator') ? navBtn('new_mr','Raise MR','plus-circle') : ''}
                 ${(user.approvalLevel==='L2') ? navBtn('dept_approval','Dept Approval','users-2', mrs.filter(m=>m.status==='DEPT_APPROVAL_PENDING' && m.dept===user.dept).length) : ''}
                 ${(user.role==='admin'||user.role==='authorizer') ? navBtn('authorize','Authorize','shield-check', mrs.filter(m=>m.status==='RAISED').length) : ''}
@@ -3622,6 +3624,59 @@
     }
 
     // ── CONTENT ROUTER ──────────────────────────────────────────────────────
+    function renderReturnedQueries() {
+        let queue = appData.mrs.filter(m => (m.status === 'QUERY_RAISED' || m.status === 'PROCUREMENT_QUERY') && (m.raisedBy === user.name || m.plannedBy === user.name));
+        const q = queueFilters.returned_queries || '';
+        if (q) queue = queue.filter(m => matchesKeyword(m, q));
+        return `
+        <div class="space-y-6 fade-in">
+            <div>
+                <h1 class="text-2xl font-display font-bold tracking-tight text-brand">Returned Queries</h1>
+                <p class="text-sm text-slate-500">MRs and Direct PRs that have been queried and returned to you for revision</p>
+            </div>
+            <div class="bg-white rounded-2xl border border-rule shadow-panel p-4 flex items-center gap-3">
+                <i data-lucide="search" class="w-4 h-4 text-slate-300 shrink-0"></i>
+                <input id="returned_queries-q" value="${esc(q)}" oninput="window.setQueueFilter('returned_queries', this.value)" class="glass-input border-none shadow-none p-0 focus:ring-0" placeholder="Filter queries by MR no., item, project…" />
+            </div>
+            ${queue.length === 0 ? `
+            <div class="py-16 text-center text-xs text-slate-300 font-black uppercase bg-white rounded-2xl border-2 border-dashed border-rule">
+                No Queries Pending
+            </div>` : queue.map(m => `
+            <div class="bg-white rounded-2xl border border-rule shadow-panel overflow-hidden overflow-x-auto border-l-4 border-l-amberx">
+                <div class="flex flex-col md:flex-row">
+                    <div class="flex-1 p-8">
+                        <div class="flex justify-between items-start mb-6">
+                            <div>
+                                <p class="text-2xl font-display font-bold text-brand tracking-tight font-mono">${esc(m.mrNumber)}</p>
+                                <p class="text-xs text-slate-400 mt-1">${esc(m.dept)} · ${fmtDate(m.createdAt)} · By ${esc(m.raisedBy)}${m.source === 'DIRECT_PR' ? ' · <span class="text-violet-600 font-black uppercase">Direct PR</span>' : ' (L1)'}</p>
+                            </div>
+                            <div class="flex items-center">${renderStatusBadge(m.status)}</div>
+                        </div>
+                        <div class="space-y-2">
+                            ${(m.items || []).map(it => `
+                                <div class="flex items-start gap-4 text-sm group">
+                                    <div class="w-2 h-2 rounded-full bg-slate-200 mt-1.5 shrink-0 group-hover:bg-brand transition-colors"></div>
+                                    <div class="flex-1">
+                                        <span class="font-bold text-ink">${esc(it.name)}</span>
+                                        <span class="text-slate-400 ml-2">(${it.qty} ${esc(it.unit)})</span>
+                                        ${it.project ? `<div class="text-xs text-slate-500 mt-0.5">Project: ${esc(it.project)}</div>` : ''}
+                                    </div>
+                                </div>
+                            `).join('')}
+                        </div>
+                    </div>
+                    <div class="w-full md:w-[280px] bg-amberx/5 p-8 border-l border-rule flex flex-col justify-center">
+                        <div class="text-xs text-amberx-dark font-bold mb-1 uppercase tracking-widest">Queried By ${esc(m.queryOriginApprover || m.procQueryOriginApprover || 'Approver')}</div>
+                        <div class="text-sm text-slate-600 italic bg-white p-3 border border-rule rounded-lg mb-4">"${esc(m.history?.[m.history.length-1]?.note || 'No reason provided')}"</div>
+                        <button onclick="window.resolveQuery('${m.id}')" class="w-full py-3 bg-brand text-white rounded-xl font-black text-xs uppercase shadow-xl active:scale-95 transition-all hover:bg-brand-600 flex items-center justify-center gap-2">
+                            <i data-lucide="edit-3" class="w-4 h-4"></i> Revise & Resubmit
+                        </button>
+                    </div>
+                </div>
+            </div>`).join('')}
+        </div>`;
+    }
+
     function renderContent() {
         const mrs   = appData.mrs || [];
         const myMrs = filterMrsByUserScope(mrs);
@@ -3631,6 +3686,7 @@
             case 'new_mr':      return renderNewMR();
             case 'tracking':    return renderTracking(myMrs);
             case 'reports':     return renderReports(myMrs);
+            case 'returned_queries': return renderReturnedQueries();
             case 'dept_approval': return renderDeptApproval();
             case 'authorize':   return renderWorkflow('RAISED',      'Authorization Approved', 'AUTHORIZED', 'authorize',   'Authorization Hub');
             case 'planner':     return renderPlanningModule();
@@ -3906,7 +3962,7 @@
                 </div>
                 <table class="w-full text-left">
                     <thead><tr class="bg-paper text-[10px] font-black text-slate-500 uppercase tracking-widest border-b border-rule">
-                        <th class="px-6 py-3">MR Number</th>
+                        <th class="px-6 py-3">MR / PR NO.</th>
                         <th class="px-6 py-3">Date</th>
                         <th class="px-6 py-3">Raised By</th>
                         <th class="px-6 py-3">Items</th>
@@ -3917,7 +3973,13 @@
                     ${recent.length === 0 ? `<tr><td colspan="6" class="px-6 py-12 text-center text-slate-300 font-bold uppercase text-xs">No MRs for ${esc(user.dept)} yet</td></tr>` :
                       recent.map(m => `
                       <tr class="text-xs font-bold hover:bg-paper/60">
-                          <td class="px-6 py-4"><span class="idx-chip text-brand">${esc(m.mrNumber)}</span></td>
+                          <td class="px-6 py-4">
+                              <div class="flex flex-col gap-1 items-start">
+                                  ${m.mrNumber ? `<span class="idx-chip text-brand">${esc(m.mrNumber)}</span>` : ''}
+                                  ${m.prNumber ? `<span class="idx-chip text-[#0E7490]">${esc(m.prNumber)}</span>` : ''}
+                                  ${!m.mrNumber && !m.prNumber ? `<span class="text-slate-400">—</span>` : ''}
+                              </div>
+                          </td>
                           <td class="px-6 py-4 text-slate-400">${fmtDate(m.createdAt)}</td>
                           <td class="px-6 py-4 text-slate-600 normal-case">${esc(m.raisedBy)}</td>
                           <td class="px-6 py-4 text-slate-500">${(m.items || []).length}</td>
@@ -4504,14 +4566,20 @@ function renderMrRow(item, idx, xlInputCss) {
                 </div>
                 <table class="w-full text-left">
                     <thead><tr class="bg-paper text-[10px] font-black text-slate-500 uppercase tracking-widest border-b border-rule">
-                        <th class="px-6 py-3">MR Number</th><th class="px-6 py-3">Date</th><th class="px-6 py-3">Dept</th>
+                        <th class="px-6 py-3">MR / PR NO.</th><th class="px-6 py-3">Date</th><th class="px-6 py-3">Dept</th>
                         <th class="px-6 py-3">Raised By</th><th class="px-6 py-3">Items</th><th class="px-6 py-3">Status</th><th class="px-6 py-3">PO No.</th>
                     </tr></thead>
                     <tbody class="divide-y divide-rule">
                     ${preview.length === 0 ? `<tr><td colspan="7" class="px-6 py-12 text-center text-slate-300 font-bold uppercase text-xs">No material requests match these filters</td></tr>` :
                       preview.map(m => `
                       <tr class="text-xs font-bold hover:bg-paper/60">
-                          <td class="px-6 py-4"><span class="idx-chip text-brand">${esc(m.mrNumber)}</span></td>
+                          <td class="px-6 py-4">
+                              <div class="flex flex-col gap-1 items-start">
+                                  ${m.mrNumber ? `<span class="idx-chip text-brand">${esc(m.mrNumber)}</span>` : ''}
+                                  ${m.prNumber ? `<span class="idx-chip text-[#0E7490]">${esc(m.prNumber)}</span>` : ''}
+                                  ${!m.mrNumber && !m.prNumber ? `<span class="text-slate-400">—</span>` : ''}
+                              </div>
+                          </td>
                           <td class="px-6 py-4 text-slate-400">${fmtDate(m.createdAt)}</td>
                           <td class="px-6 py-4 text-slate-600">${esc(m.dept)}</td>
                           <td class="px-6 py-4 text-slate-600">${esc(m.raisedBy)}</td>
@@ -4666,7 +4734,10 @@ function renderMrRow(item, idx, xlInputCss) {
                         const l2Name = l2Approve ? l2Approve.actor : ((m.deptApprovalDate && m.l2User) ? m.l2User : 'N/A');
                         return `
                         <tr>
-                            <td class="px-2.5 py-2 font-mono font-bold text-brand">${esc(m.mrNumber)}</td>
+                            <td class="px-2.5 py-2 font-mono font-bold text-brand">
+                                ${esc(m.mrNumber)}
+                                ${(m.history && m.history.length > 0 && m.history[m.history.length - 1].action && m.history[m.history.length - 1].action.startsWith('Revised & Resubmitted')) ? '<div class="mt-0.5"><span class="inline-block px-1.5 py-0.5 bg-amberx text-white text-[8px] uppercase font-black rounded border border-amberx-dark/30">Resubmitted</span></div>' : ''}
+                            </td>
                             <td class="px-2.5 py-2 truncate" title="${esc(itemNames)}">${esc(itemNames)}</td>
                             <td class="px-2.5 py-2">
                                 <div class="font-bold leading-tight">${esc(m.raisedBy)}</div>
@@ -4711,7 +4782,10 @@ function renderMrRow(item, idx, xlInputCss) {
                     <div class="flex-1 p-8">
                         <div class="flex justify-between items-start mb-6">
                             <div>
-                                <p class="text-2xl font-display font-bold text-brand tracking-tight font-mono">${esc(m.mrNumber)}</p>
+                                <p class="text-2xl font-display font-bold text-brand tracking-tight font-mono">
+                                    ${esc(m.mrNumber)}
+                                    ${(m.history && m.history.length > 0 && m.history[m.history.length - 1].action && m.history[m.history.length - 1].action.startsWith('Revised & Resubmitted')) ? '<span class="ml-3 inline-block px-2.5 py-1 bg-amberx text-white text-[10px] uppercase font-black rounded-lg shadow-sm align-middle mb-1 border border-amberx-dark/30">Resubmitted</span>' : ''}
+                                </p>
                                 <p class="text-xs text-slate-400 mt-1">${esc(m.dept)} · ${fmtDate(m.createdAt)} · By ${esc(m.raisedBy)}${m.source === 'DIRECT_PR' ? ' · <span class="text-violet-600 font-black uppercase">Direct PR</span>' : ' (L1)'}</p>
                             </div>
                             <div class="flex items-center">${renderStatusBadge(m.status)}${renderEscalationBadge(m)}</div>
@@ -5002,7 +5076,10 @@ function renderMrRow(item, idx, xlInputCss) {
             });
         });
 
-        const activeProjects = appData.projects.filter(p => p.status === 'Active').sort((a,b) => (a.priority || 999) - (b.priority || 999));
+        let activeProjects = appData.projects.filter(p => p.status === 'Active').sort((a,b) => (a.priority || 999) - (b.priority || 999));
+        if (pcbState.projects && pcbState.projects.length > 0) {
+            activeProjects = activeProjects.filter(p => pcbState.projects.includes(p.name));
+        }
 
         const exec = {
             totalProjects: activeProjects.length,
@@ -5041,6 +5118,7 @@ function renderMrRow(item, idx, xlInputCss) {
                 id: p.id,
                 name: p.name,
                 priority: p.priority || '',
+                shortlisted: p.shortlisted,
                 bom: bom,
                 pendingPrBom: p.pendingPrBom || 0,
                 prGiven,
@@ -5103,7 +5181,7 @@ function renderMrRow(item, idx, xlInputCss) {
                             <th class="px-1.5 py-1.5 w-[28%]" title="Remarks">Remarks</th>
                         </tr></thead>
                         <tbody class="divide-y divide-rule text-[10px]">
-                            ${projectRows.length === 0 ? '<tr><td colspan="9" class="p-6 text-center text-slate-400 text-xs">No active projects found.</td></tr>' : ''}
+                            ${projectRows.length === 0 ? '<tr><td colspan="10" class="p-6 text-center text-slate-400 text-xs">No active projects found.</td></tr>' : ''}
                             ${projectRows.map(p => `
                             <tr class="hover:bg-slate-50 transition-colors">
                                 <td class="px-1 py-1 sticky left-0 bg-white z-10 shadow-[1px_0_0_#E3E5E9]"><input type="number" value="${p.priority}" onchange="window.updateProjectField('${p.id}','priority',this.value)" class="w-full text-center glass-input !py-0.5 !px-0.5 !text-[10px] font-bold" /></td>
@@ -5368,7 +5446,10 @@ function renderMrRow(item, idx, xlInputCss) {
                     <div class="flex-1 p-8">
                         <div class="flex justify-between items-start mb-6">
                             <div>
-                                <p class="text-2xl font-display font-bold text-brand tracking-tight font-mono">${esc(m.prNumber || m.mrNumber)}</p>
+                                <p class="text-2xl font-display font-bold text-brand tracking-tight font-mono">
+                                    ${esc(m.prNumber || m.mrNumber)}
+                                    ${(m.history && m.history.length > 0 && m.history[m.history.length - 1].action && m.history[m.history.length - 1].action.startsWith('Revised & Resubmitted')) ? '<span class="ml-3 inline-block px-2.5 py-1 bg-amberx text-white text-[10px] uppercase font-black rounded-lg shadow-sm align-middle mb-1 border border-amberx-dark/30">Resubmitted</span>' : ''}
+                                </p>
                                 <p class="text-xs text-slate-400 mt-1">${esc(m.dept)} · ${fmtDate(m.createdAt)} · By ${esc(m.raisedBy)}${m.source==='DIRECT_PR' ? ' · <span class="text-violet-600 font-black">Direct PR</span>' : ''}</p>
                             </div>
                             <div class="flex items-center">${renderStatusBadge(m.status)}${renderEscalationBadge(m)}</div>
@@ -5395,7 +5476,7 @@ function renderMrRow(item, idx, xlInputCss) {
     // appData.mrs / appData.projects / buildPrRows() / dcSummary() — no new
     // storage, no changes to any existing record shape.
     function computePlanningControlData() {
-        const mrs = appData.mrs || [];
+        let mrs = appData.mrs || [];
         const today = new Date(); today.setHours(0,0,0,0);
         const todayStr = fmtDateInput(Date.now());
 
@@ -5408,14 +5489,7 @@ function renderMrRow(item, idx, xlInputCss) {
             });
         });
 
-        const prRows = buildPrRows();          // items that have already cleared into a PR
-        const dcSum  = dcSummary(prRows);
-
-        const pendingPlanningMrs = mrs.filter(m => m.status === 'AUTHORIZED');
-        const pendingDirectPr    = mrs.filter(m => m.source === 'DIRECT_PR' && m.status === 'RAISED');
-        const prGeneratedToday   = mrs.filter(m => (m.history || []).some(h =>
-            (h.action || '').includes('Planning Approved') && fmtDateInput(h.ts) === todayStr)).length;
-        const totalPrGenerated   = mrs.filter(m => !!m.prNumber).length;
+        let prRows = buildPrRows();          // items that have already cleared into a PR
 
         const activeProjects = (appData.projects || []).filter(p => p.status === 'Active')
             .sort((a,b) => (a.priority || 999) - (b.priority || 999));
@@ -5443,6 +5517,19 @@ function renderMrRow(item, idx, xlInputCss) {
                 mrReceived, prGenerated, pendingPR, poGiven, receivedItems, pendingItems, matPct,
                 planningStatus, delayPct, remarks: p.remarks || '' };
         });
+
+        if (pcbState.projects && pcbState.projects.length > 0) {
+            mrs = mrs.filter(m => (m.items || []).some(it => pcbState.projects.includes(it.project)));
+            prRows = prRows.filter(r => pcbState.projects.includes(r.costCentre));
+        }
+
+        const dcSum  = dcSummary(prRows);
+
+        const pendingPlanningMrs = mrs.filter(m => m.status === 'AUTHORIZED');
+        const pendingDirectPr    = mrs.filter(m => m.source === 'DIRECT_PR' && m.status === 'RAISED');
+        const prGeneratedToday   = mrs.filter(m => (m.history || []).some(h =>
+            (h.action || '').includes('Planning Approved') && fmtDateInput(h.ts) === todayStr)).length;
+        const totalPrGenerated   = mrs.filter(m => !!m.prNumber).length;
 
         const workQueue = {
             pendingMrApproval: pendingPlanningMrs.length,
@@ -5540,12 +5627,21 @@ function renderMrRow(item, idx, xlInputCss) {
         if (!pcbState.projects.includes(name)) pcbState.projects.push(name);
         else pcbState.projects = pcbState.projects.filter(n => n !== name);
         localStorage.setItem('pcbState', JSON.stringify(pcbState));
-        softRender();
+        const dd = document.getElementById('pcb-proj-dd');
+        if (dd) {
+            const clearCb = dd.querySelector('input[type="checkbox"][onchange*="setPcbProjects"]');
+            if (clearCb) clearCb.checked = (pcbState.projects.length === 0);
+        }
     };
     window.setPcbProjects = (arr) => {
         pcbState.projects = arr;
         localStorage.setItem('pcbState', JSON.stringify(pcbState));
-        softRender();
+        const dd = document.getElementById('pcb-proj-dd');
+        if (dd) {
+            dd.querySelectorAll('input[type="checkbox"]').forEach(cb => cb.checked = false);
+            const clearCb = dd.querySelector('input[type="checkbox"][onchange*="setPcbProjects"]');
+            if (clearCb && arr.length === 0) clearCb.checked = true;
+        }
     };
     window.setPcbChartType = (which, type) => { pcbChartTypes[which] = type; window.renderPcbCharts(); };
 
@@ -5747,10 +5843,9 @@ function renderMrRow(item, idx, xlInputCss) {
             </div>
 
             <!-- Section 3 — Project Planning Dashboard -->
-            <div class="bg-white rounded-2xl border border-rule shadow-panel overflow-hidden mb-8">
-                <div class="p-3.5 border-b border-rule bg-paper flex flex-wrap items-center gap-2">
-                    <h3 class="text-[11px] font-display font-bold text-slate-600 uppercase tracking-widest mr-auto">Project Planning Dashboard</h3>
-                    <input id="pcb-q" value="${esc(pcbState.q)}" oninput="window.setPcbFilter('q', this.value)" placeholder="Search project / remarks…" class="glass-input !w-48 !py-1.5 !text-xs" />
+            <div class="bg-white rounded-2xl border border-rule shadow-panel mb-8">
+                <div class="p-3.5 border-b border-rule bg-paper flex flex-wrap items-center gap-2 rounded-t-2xl">
+                    <h3 class="text-[11px] font-display font-bold text-slate-600 uppercase tracking-widest">Project Planning Dashboard</h3>
                     
                       ${(() => {
                           let selPr = 0; let selRec = 0;
@@ -5763,37 +5858,53 @@ function renderMrRow(item, idx, xlInputCss) {
                               ? `<div class="bg-brand/10 border border-brand/20 text-brand px-3 py-1.5 rounded-lg text-xs font-bold whitespace-nowrap shadow-sm">Selected Completion: ${selPct}%</div>` 
                               : '';
                       })()}
-                      <div class="relative group">
-                          <button id="pcb-proj-btn" type="button" onclick="window.pcbProjectDropdownOpen = !window.pcbProjectDropdownOpen; softRender()" class="glass-input !w-40 !py-1.5 !text-xs flex justify-between items-center text-left bg-white text-slate-700 truncate shadow-sm">
-                              ${pcbState.projects.length ? pcbState.projects.length + ' Selected' : 'All Projects'}
-                              <i data-lucide="chevron-down" class="w-3.5 h-3.5 opacity-50"></i>
-                          </button>
-                          <div id="pcb-proj-dd" class="${window.pcbProjectDropdownOpen ? '' : 'hidden'} absolute top-full left-0 mt-1 w-64 bg-white border border-rule shadow-2xl rounded-xl z-[100] max-h-80 flex flex-col p-1.5">
-                              <label class="flex items-center gap-2 px-2 py-2 hover:bg-slate-50 cursor-pointer rounded-lg text-[10px] uppercase font-black tracking-widest text-brand border-b border-rule mb-1 shrink-0">
-                                  <input type="checkbox" onchange="window.setPcbProjects([])" ${pcbState.projects.length===0?'checked':''} class="accent-brand rounded border-slate-300 w-3.5 h-3.5" />
-                                  Clear / Select All
-                              </label>
-                              <div class="overflow-y-auto custom-scrollbar flex-1">
-                                  ${d.projectRows.map(p => `
-                                      <label class="flex items-center gap-2 px-2 py-1.5 hover:bg-slate-50 cursor-pointer rounded-lg text-xs">
-                                          <input type="checkbox" onchange="window.togglePcbProject('${esc(p.name)}')" ${pcbState.projects.includes(p.name)?'checked':''} class="accent-brand rounded border-slate-300 w-3.5 h-3.5" />
-                                          <span class="truncate" title="${esc(p.name)}">${esc(p.name)}</span>
-                                      </label>
-                                  `).join('')}
-                              </div>
-                              <div class="pt-2 mt-1 border-t border-rule shrink-0">
-                                  <button type="button" onclick="window.pcbProjectDropdownOpen = false; softRender()" class="w-full bg-slate-800 text-white font-bold py-2 rounded-lg text-xs hover:bg-slate-900 active:scale-95 transition-all shadow-md flex items-center justify-center gap-2">
-                                      <i data-lucide="check-circle" class="w-3.5 h-3.5"></i> Save & Close
-                                  </button>
-                              </div>
-                          </div>
-                      </div>
-                    <select onchange="window.setPcbFilter('status', this.value)" class="glass-input !w-40 !py-1.5 !text-xs">
-                        <option value="">All Statuses</option>
-                        ${['Pending Planning','In Procurement','Completed','No BOM / MR'].map(s => `<option value="${esc(s)}" ${pcbState.status===s?'selected':''}>${esc(s)}</option>`).join('')}
-                    </select>
+
+                    <div class="ml-auto flex flex-wrap items-center justify-end gap-2">
+                        <input id="pcb-q" value="${esc(pcbState.q)}" oninput="window.setPcbFilter('q', this.value)" placeholder="Search project / remarks…" class="glass-input !w-48 !py-1.5 !text-xs" />
+                        
+                        <div class="relative group">
+                            <button id="pcb-proj-btn" type="button" onclick="window.pcbProjectDropdownOpen = !window.pcbProjectDropdownOpen; softRender()" class="glass-input !w-40 !py-1.5 !text-xs flex justify-between items-center text-left bg-white text-slate-700 truncate shadow-sm">
+                                ${pcbState.projects.length ? pcbState.projects.length + ' Selected' : 'All Projects'}
+                                <i data-lucide="chevron-down" class="w-3.5 h-3.5 opacity-50"></i>
+                            </button>
+                            <div id="pcb-proj-dd" class="${window.pcbProjectDropdownOpen ? '' : 'hidden'} absolute top-full right-0 mt-1 w-72 bg-white border border-rule shadow-2xl rounded-xl z-[100] max-h-[28rem] flex flex-col p-1.5">
+                                <div class="px-2 pb-2 pt-1 border-b border-rule shrink-0">
+                                    <input type="text" onkeyup="
+                                        const q = this.value.toLowerCase();
+                                        const lbls = this.parentElement.nextElementSibling.nextElementSibling.querySelectorAll('label');
+                                        lbls.forEach(l => {
+                                            if (l.innerText.toLowerCase().includes(q)) l.style.display = 'flex';
+                                            else l.style.display = 'none';
+                                        });
+                                    " placeholder="Search project..." class="glass-input w-full !py-1 !text-xs font-bold" />
+                                </div>
+                                <label class="flex items-center gap-2 px-2 py-2 hover:bg-slate-50 cursor-pointer rounded-lg text-[10px] uppercase font-black tracking-widest text-brand border-b border-rule mb-1 shrink-0">
+                                    <input type="checkbox" onchange="window.setPcbProjects([])" ${pcbState.projects.length===0?'checked':''} class="accent-brand rounded border-slate-300 w-3.5 h-3.5" />
+                                    Clear / Select All
+                                </label>
+                                <div class="overflow-y-auto custom-scrollbar flex-1">
+                                    ${d.projectRows.map(p => `
+                                        <label class="flex items-start gap-2 px-2 py-1.5 hover:bg-slate-50 cursor-pointer rounded-lg text-xs break-words whitespace-normal leading-tight">
+                                            <input type="checkbox" onchange="window.togglePcbProject('${esc(p.name)}')" ${pcbState.projects.includes(p.name)?'checked':''} class="accent-brand rounded border-slate-300 w-3.5 h-3.5 shrink-0 mt-0.5" />
+                                            <span>${esc(p.name)}</span>
+                                        </label>
+                                    `).join('')}
+                                </div>
+                                <div class="pt-2 mt-1 border-t border-rule shrink-0">
+                                    <button type="button" onclick="window.pcbProjectDropdownOpen = false; render()" class="w-full bg-slate-800 text-white font-bold py-2 rounded-lg text-xs hover:bg-slate-900 active:scale-95 transition-all shadow-md flex items-center justify-center gap-2">
+                                        <i data-lucide="check-circle" class="w-3.5 h-3.5"></i> Save & Reflect Dashboard
+                                    </button>
+                                </div>
+                            </div>
+                        </div>
+
+                        <select onchange="window.setPcbFilter('status', this.value)" class="glass-input !w-40 !py-1.5 !text-xs">
+                            <option value="">All Statuses</option>
+                            ${['Pending Planning','In Procurement','Completed','No BOM / MR'].map(s => `<option value="${esc(s)}" ${pcbState.status===s?'selected':''}>${esc(s)}</option>`).join('')}
+                        </select>
+                    </div>
                 </div>
-                <div class="overflow-x-auto max-h-[420px] custom-scrollbar">
+                <div class="overflow-auto max-h-[420px] custom-scrollbar rounded-b-2xl">
                     <table class="w-full text-left whitespace-nowrap">
                         <thead class="sticky top-0 z-10"><tr class="bg-slate-50 text-[9px] font-black text-slate-400 uppercase tracking-widest border-b border-rule">
                             <th class="px-3 py-2 text-center w-[48px] min-w-[48px] sticky left-0 bg-slate-50 z-20 shadow-[1px_0_0_#E3E5E9]">Priority</th>
