@@ -256,7 +256,7 @@
         AUTHORIZED:    { label: "Authorized",      color: "#0E7490", bg: "#E7F7FA" },
         PROCUREMENT_QUERY: { label: "Procurement Query", color: "#DC2626", bg: "#FEE2E2" },
         PLANNED:       { label: "Pending Proc. Acceptance", color: "#F59E0B", bg: "#FEF3C7" },
-        PR_ACCEPTED:   { label: "PR Accepted",     color: "#2563EB", bg: "#EFF6FF" },
+        PR_ACCEPTED:   { label: "PO Pending",     color: "#2563EB", bg: "#EFF6FF" },
         PROCUREMENT:   { label: "PO Given",        color: "#B45309", bg: "#FDF3E4" },
         PARTIAL:       { label: "Partial Received",color: "#BE185D", bg: "#FCE9F1" },
         CLOSED:        { label: "Received",        color: "#047857", bg: "#E5F6EF" },
@@ -882,6 +882,29 @@
         migrateProcHandlers(data);
         migrateDepartments(data);
         migrateSequences(data);
+        
+        // Self-Healing: Fix corrupted statuses
+        if (data.mrs) {
+            data.mrs.forEach(mr => {
+                // 1. Fix MRs that bypassed Procurement Inbox due to Planning Appoval bug
+                if (mr.status === 'PR_ACCEPTED') {
+                    const hasPlannedItems = (mr.items || []).some(it => it.status === 'PLANNED');
+                    if (hasPlannedItems) mr.status = 'PLANNED'; 
+                    // 3. Fix Direct PR items that never got their status upgraded to PR_ACCEPTED because they were undefined
+                    (mr.items || []).forEach(it => {
+                        if (!it.status) it.status = 'PR_ACCEPTED';
+                    });
+                }
+                // 2. Fix Direct PRs that got stuck in AUTHORIZED and leaked into Data Center
+                if (mr.status === 'AUTHORIZED' && mr.source === 'DIRECT_PR') {
+                    mr.status = 'PLANNED';
+                    (mr.items || []).forEach(it => {
+                        if (!it.status || !['PROCUREMENT','PARTIAL','CLOSED','HOLD','CANCELLED'].includes(it.status)) it.status = 'PLANNED';
+                    });
+                }
+            });
+        }
+        
         return data;
     }
 
@@ -974,7 +997,12 @@
     function consumeNextMrNumber() {
         const cfg = getSequences().mr;
         ensureSequenceYear(cfg);
-        const num = formatDocNumber(cfg);
+        let num;
+        while (true) {
+            num = formatDocNumber(cfg);
+            if (!(appData.mrs || []).some(m => m.mrNumber === num)) break;
+            cfg.next = (Number(cfg.next) || 1) + 1;
+        }
         cfg.next = (Number(cfg.next) || 1) + 1;
         cfg._userSet = true;
         return num;
@@ -989,7 +1017,12 @@
     function consumeNextPrNumber() {
         const cfg = getSequences().pr;
         ensureSequenceYear(cfg);
-        const num = formatDocNumber(cfg);
+        let num;
+        while (true) {
+            num = formatDocNumber(cfg);
+            if (!(appData.mrs || []).some(m => m.prNumber === num)) break;
+            cfg.next = (Number(cfg.next) || 1) + 1;
+        }
         cfg.next = (Number(cfg.next) || 1) + 1;
         cfg._userSet = true;
         return num;
@@ -1130,6 +1163,8 @@
         if (active.every(s => s === 'CLOSED')) return 'CLOSED';
         if (active.some(s => s === 'PARTIAL') || (active.some(s=>s==='CLOSED') && active.some(s=>s!=='CLOSED'))) return 'PARTIAL';
         if (active.some(s => s === 'PROCUREMENT')) return 'PROCUREMENT';
+        if (active.some(s => s === 'PLANNED')) return 'PLANNED';
+        if (active.some(s => s === 'PR_ACCEPTED')) return 'PR_ACCEPTED';
         return 'PLANNED';
     }
     // Effective status for Work Ledger / Reports — item-level statuses roll up once a PR exists.
@@ -2226,7 +2261,7 @@
         input.click();
     };
 
-    window.submitMR = () => {
+    window.submitMR = async () => {
         harvestMrItemsFromDom();
 
         if (currentMrItems.some(i => !i.assetName)) { alert("Please enter an item for every row."); return; }
@@ -2243,6 +2278,25 @@
         const noteEl = document.getElementById('mr-overall-notes');
         const notes  = noteEl ? noteEl.value : "";
         const isRevision = !!currentEditRevisionId;
+        
+        // JIT Cloud Pre-Check to eliminate sequence race conditions
+        if (!isRevision && typeof _supabaseClient !== 'undefined') {
+            try {
+                const btn = document.querySelector('button[onclick="window.submitMR()"]');
+                if (btn) { btn.style.opacity = '0.7'; btn.innerText = 'Syncing...'; btn.disabled = true; }
+                
+                const { data, error } = await _supabaseClient.from('app_state').select('data').eq('id', 1).single();
+                if (!error && data && data.data) {
+                    if (data.data.mrs) appData.mrs = data.data.mrs;
+                    if (data.data.settings && data.data.settings.sequences) {
+                        const cloudSeq = data.data.settings.sequences;
+                        if (cloudSeq.mr && cloudSeq.mr.next > appData.settings.sequences.mr.next) appData.settings.sequences.mr.next = cloudSeq.mr.next;
+                        if (cloudSeq.pr && cloudSeq.pr.next > appData.settings.sequences.pr.next) appData.settings.sequences.pr.next = cloudSeq.pr.next;
+                    }
+                }
+            } catch (e) { console.warn("Pre-check failed, continuing with local state", e); }
+        }
+
         const mrId   = isRevision ? currentEditRevisionId : `MR-${Date.now()}`;
 
         let mr;
@@ -2408,7 +2462,7 @@
         if (current === 'CANCELLED') return ['CANCELLED'];
         if (current === 'HOLD')      return ['HOLD', 'PROCUREMENT', 'PARTIAL', 'CLOSED', 'CANCELLED'];
         if (POST_PO_STATUSES.includes(current)) return ['PROCUREMENT', 'PARTIAL', 'CLOSED', 'HOLD', 'CANCELLED'];
-        return ['PLANNED', 'HOLD', 'CANCELLED'];
+        return ['PR_ACCEPTED', 'HOLD', 'CANCELLED'];
     }
 
     window.updateMrStatus = (id, newStatus, actionLabel, noteInputId) => {
@@ -3200,7 +3254,7 @@
             approveBtn = `<button onclick="window.approveDeptLevel('${m.id}','wf-note-modal'); window.closeReviewModal();" class="py-4 px-8 bg-brand text-white rounded-xl font-black text-[11px] uppercase shadow-lg active:scale-95 transition-all hover:bg-brand-600 flex-1">Approve</button>`;
             queryBtn = `<button onclick="window.updateMrStatus('${m.id}','QUERY_RAISED','Query Raised','wf-note-modal'); window.closeReviewModal();" class="py-4 px-8 border-2 border-brand text-brand rounded-xl font-black text-[11px] uppercase hover:bg-brand-50 transition-all flex-1">Raise Query</button>`;
         } else if (_reviewMrActionType && _reviewMrActionType.type === 'PLANNING') {
-            const toStatus = m.status === 'PROCUREMENT_QUERY' ? 'PLANNED' : 'PR_ACCEPTED';
+            const toStatus = 'PLANNED';
             approveBtn = `<button onclick="window.updateMrStatus('${m.id}','${toStatus}','Planning Approved','wf-note-modal'); window.closeReviewModal();" class="py-4 px-8 bg-brand text-white rounded-xl font-black text-[11px] uppercase shadow-lg active:scale-95 transition-all hover:bg-brand-600 flex-1">Approve</button>`;
             queryBtn = `<button onclick="window.updateMrStatus('${m.id}','QUERY_RAISED','Query Raised','wf-note-modal'); window.closeReviewModal();" class="py-4 px-8 border-2 border-brand text-brand rounded-xl font-black text-[11px] uppercase hover:bg-brand-50 transition-all flex-1">Raise Query</button>`;
         } else if (_reviewMrActionType && _reviewMrActionType.type === 'GENERIC') {
@@ -6715,7 +6769,7 @@ function renderMrRow(item, idx, xlInputCss) {
         if (!mr) return;
         mr.status = 'PR_ACCEPTED';
         delete mr.procQueryOriginApprover;
-        (mr.items || []).forEach(it => { if (it.status === 'PLANNED') it.status = 'PR_ACCEPTED'; });
+        (mr.items || []).forEach(it => { if (!it.status || it.status === 'PLANNED') it.status = 'PR_ACCEPTED'; });
         mr.history.push({ 
             action: 'PR Accepted (Procurement Inbox)', 
             actor: user.name, role: user.role, dept: user.dept, ts: Date.now(),
@@ -9344,7 +9398,7 @@ function renderMrRow(item, idx, xlInputCss) {
                         <option ${activity==='raised'||activity==='created'?'selected':''} value="raised">Raised / Created</option>
                         <option ${activity==='approved'?'selected':''} value="approved">Approved</option>
                         <option ${activity==='authorized'?'selected':''} value="authorized">Authorized</option>
-                        <option ${activity==='accepted'?'selected':''} value="accepted">PR Accepted</option>
+                        <option ${activity==='accepted'?'selected':''} value="accepted">PO Pending</option>
                         <option ${activity==='po'?'selected':''} value="po">PO</option>
                         <option ${activity==='receipt'?'selected':''} value="receipt">Receipt</option>
                         <option ${activity==='closed'?'selected':''} value="closed">Closed</option>
