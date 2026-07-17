@@ -253,22 +253,27 @@
         DEPT_APPROVAL_PENDING:{ label: "Department Approval Pending",  color: "#7C3AED", bg: "#F3EEFE" },
         DEPT_APPROVED:        { label: "Department Approved",          color: "#0D9488", bg: "#E6FBF8" },
         QUERY_RAISED:  { label: "Query (QR)",      color: "#A6620B", bg: "#FCF1DF" },
+        RETURNED_TO_CREATOR:   { label: "Query (Returned to Creator)", color: "#A6620B", bg: "#FCF1DF" },
+        RETURNED_TO_L2:        { label: "Query (Returned to Dept Head)", color: "#A6620B", bg: "#FCF1DF" },
+        RETURNED_TO_FINAL_AUTH:{ label: "Query (Returned to Final Auth)", color: "#A6620B", bg: "#FCF1DF" },
+        RETURNED_TO_PLANNING:  { label: "Query (Returned to Planning)", color: "#DC2626", bg: "#FEE2E2" },
         AUTHORIZED:    { label: "Authorized",      color: "#0E7490", bg: "#E7F7FA" },
         PROCUREMENT_QUERY: { label: "Procurement Query", color: "#DC2626", bg: "#FEE2E2" },
         PLANNED:       { label: "Pending Proc. Acceptance", color: "#F59E0B", bg: "#FEF3C7" },
         PR_ACCEPTED:   { label: "PO Pending",     color: "#2563EB", bg: "#EFF6FF" },
         PROCUREMENT:   { label: "PO Given",        color: "#B45309", bg: "#FDF3E4" },
         PARTIAL:       { label: "Partial Received",color: "#BE185D", bg: "#FCE9F1" },
+        ONLY_RECEIVED: { label: "Only Received",   color: "#8B5CF6", bg: "#EDE9FE" },
         CLOSED:        { label: "Received",        color: "#047857", bg: "#E5F6EF" },
         HOLD:          { label: "Hold",             color: "#78716C", bg: "#F5F5F4" },
         CANCELLED:     { label: "Cancel",           color: "#B91C1C", bg: "#FEE2E2" }
     };
-    const STATUS_ORDER = ["RAISED","DEPT_APPROVAL_PENDING","DEPT_APPROVED","QUERY_RAISED","AUTHORIZED","PROCUREMENT_QUERY","PLANNED","PR_ACCEPTED","PROCUREMENT","PARTIAL","CLOSED","HOLD","CANCELLED"];
+    const STATUS_ORDER = ["RAISED","DEPT_APPROVAL_PENDING","DEPT_APPROVED","QUERY_RAISED","RETURNED_TO_CREATOR","RETURNED_TO_L2","RETURNED_TO_FINAL_AUTH","RETURNED_TO_PLANNING","AUTHORIZED","PROCUREMENT_QUERY","PLANNED","PR_ACCEPTED","PROCUREMENT","PARTIAL","ONLY_RECEIVED","CLOSED","HOLD","CANCELLED"];
     // Statuses reachable once a PO has actually been issued - status can only move forward from here.
-    const POST_PO_STATUSES = ["PROCUREMENT","PARTIAL","CLOSED","HOLD","CANCELLED"];
+    const POST_PO_STATUSES = ["PROCUREMENT","PARTIAL","ONLY_RECEIVED","CLOSED","HOLD","CANCELLED"];
     // Manual status choices available before a PO exists - PROCUREMENT ("PO Given") is deliberately
     // excluded because it can only be set automatically once both PO Number and PO Date are entered.
-    const PRE_PO_STATUSES  = STATUS_ORDER.filter(s => !["PLANNED","PROCUREMENT_QUERY","PROCUREMENT","PARTIAL","CLOSED"].includes(s));
+    const PRE_PO_STATUSES  = STATUS_ORDER.filter(s => !["PLANNED","PROCUREMENT_QUERY","PROCUREMENT","PARTIAL","ONLY_RECEIVED","CLOSED"].includes(s));
 
     const SEED = {
         users: [
@@ -648,6 +653,8 @@
 
     // ── STATE ──────────────────────────────────────────────────────────────
     let mobileMenuOpen = false;
+    window.sidebarCollapsed = false;
+    window.toggleSidebar = () => { window.sidebarCollapsed = !window.sidebarCollapsed; render(); };
     window.toggleMobileMenu = () => { mobileMenuOpen = !mobileMenuOpen; render(); };
     let appData = null; // Initialized asynchronously from Supabase — see bottom of script
     let user = null;
@@ -805,6 +812,7 @@
     let dcContextMenu = null;
     // Hold/Cancel requires mandatory Reason + Justification before the status can save.
     let dcHoldCancelModal = null; // { mrId, itemIdx, status, prevStatus }
+    let partialReceiptModal = null;
     let toastTimer = null;
 
     // ── DATA CENTRE: MANUAL SAVE ONLY ────────────────────────────────────
@@ -1159,7 +1167,8 @@
         if (!active.length) return 'CANCELLED';
         if (active.some(s => s === 'HOLD')) return 'HOLD';
         if (active.every(s => s === 'CLOSED')) return 'CLOSED';
-        if (active.some(s => s === 'PARTIAL') || (active.some(s=>s==='CLOSED') && active.some(s=>s!=='CLOSED'))) return 'PARTIAL';
+        if (active.every(s => s === 'CLOSED' || s === 'ONLY_RECEIVED')) return 'ONLY_RECEIVED';
+        if (active.some(s => ['CLOSED', 'ONLY_RECEIVED', 'PARTIAL'].includes(s))) return 'PARTIAL';
         if (active.some(s => s === 'PROCUREMENT')) return 'PROCUREMENT';
         if (active.some(s => s === 'PLANNED')) return 'PLANNED';
         if (active.some(s => s === 'PR_ACCEPTED')) return 'PR_ACCEPTED';
@@ -1429,7 +1438,7 @@
 
     function findExplicitL2HistoryEntry(history) {
         const deptApprovedLabel = (STATUS_META.DEPT_APPROVED || {}).label || 'Department Approved';
-        return (history || []).find(h => {
+        const matches = (history || []).filter(h => {
             const a = (h.action || '');
             if (a.includes('Department Approved')) return true;
             if (a === 'Dept Approved') return true;
@@ -1439,6 +1448,9 @@
             if (/l2/i.test(a) && /approv/i.test(a) && !/pending/i.test(a)) return true;
             return false;
         });
+        // history is expected pre-sorted ascending by ts — the last match is the most recent
+        // approval, which matters when a query cycle sent it back to L2 for re-approval.
+        return matches.length ? matches[matches.length - 1] : null;
     }
 
     function mrWorkflowPassedDeptApproval(mr, history) {
@@ -2476,12 +2488,17 @@
             const oldStatus = mr.status;
             mr.status = newStatus;
 
-            // Track Query Origin
-            if (newStatus === 'QUERY_RAISED') {
+            // Track Query Origin. Any of these four statuses means "a query was just raised" —
+            // QUERY_RAISED is kept only for backward compatibility with old saved data.
+            // Each specific status routes the MR to the stage immediately before the one that
+            // raised the query (Creator, L2, or Final Authorization), per the mandatory
+            // "return to immediate previous working stage" rule.
+            const QUERY_STATUSES = ['QUERY_RAISED', 'RETURNED_TO_CREATOR', 'RETURNED_TO_L2', 'RETURNED_TO_FINAL_AUTH'];
+            if (QUERY_STATUSES.includes(newStatus)) {
                 mr.queryOriginStatus = oldStatus;
                 mr.queryOriginApprover = user.name;
-            } else if (oldStatus === 'QUERY_RAISED' && newStatus !== 'CANCELLED') {
-                // If approving after a query, we leave it alone since it just advanced properly
+            } else if (QUERY_STATUSES.includes(oldStatus) && newStatus !== 'CANCELLED') {
+                // If approving/forwarding after a query, we leave it alone since it just advanced properly
             } else if (mr.queryOriginStatus) {
                 // Clear query constraints once it successfully passes the stage it was queried from
                 delete mr.queryOriginStatus;
@@ -2552,14 +2569,19 @@
         const note   = noteEl ? noteEl.value : "";
         const mr     = appData.mrs.find(m => m.id === id);
         if (!mr) return;
-        if (mr.status !== 'DEPT_APPROVAL_PENDING') { alert('This MR is no longer pending Department Approval.'); return; }
+        const wasReturnedFromFinalAuth = mr.status === 'RETURNED_TO_L2';
+        if (!['DEPT_APPROVAL_PENDING', 'RETURNED_TO_L2'].includes(mr.status)) { alert('This MR is no longer pending Department Approval.'); return; }
         if (mr.dept !== user.dept) { alert('You can only approve Material Requests from your own department.'); return; }
 
         mr.l2User = user.name;
         mr.deptApprovalDate = Date.now();
+        const fromLabel = wasReturnedFromFinalAuth ? STATUS_META.RETURNED_TO_L2.label : STATUS_META.DEPT_APPROVAL_PENDING.label;
         mr.status = 'DEPT_APPROVED';
-        mr.history.push({ action: 'Department Approved', actor: user.name, role: user.role, dept: user.dept, ts: Date.now(),
-            field: 'status', oldValue: STATUS_META.DEPT_APPROVAL_PENDING.label, newValue: STATUS_META.DEPT_APPROVED.label, note });
+        mr.history.push({ action: wasReturnedFromFinalAuth ? 'Department Approved (Re-approval after Final Authorization Query)' : 'Department Approved', actor: user.name, role: user.role, dept: user.dept, ts: Date.now(),
+            field: 'status', oldValue: fromLabel, newValue: STATUS_META.DEPT_APPROVED.label, note });
+        // Clear any query tracking now that L2 has resolved it and is forwarding it back on.
+        delete mr.queryOriginStatus;
+        delete mr.queryOriginApprover;
 
         // Direct PR approved by Planning L2 must be forwarded to Final Authorization before procurement.
         mr.status = 'RAISED';
@@ -3250,15 +3272,19 @@
         let queryBtn = '';
         
         if (_reviewMrActionType && _reviewMrActionType.type === 'DEPT_L2') {
+            // L2's immediate previous stage is the Creator — query goes there.
             approveBtn = `<button onclick="window.approveDeptLevel('${m.id}','wf-note-modal'); window.closeReviewModal();" class="py-4 px-8 bg-brand text-white rounded-xl font-black text-[11px] uppercase shadow-lg active:scale-95 transition-all hover:bg-brand-600 flex-1">Approve</button>`;
-            queryBtn = `<button onclick="window.updateMrStatus('${m.id}','QUERY_RAISED','Query Raised','wf-note-modal'); window.closeReviewModal();" class="py-4 px-8 border-2 border-brand text-brand rounded-xl font-black text-[11px] uppercase hover:bg-brand-50 transition-all flex-1">Raise Query</button>`;
+            queryBtn = `<button onclick="window.updateMrStatus('${m.id}','RETURNED_TO_CREATOR','Query Raised','wf-note-modal'); window.closeReviewModal();" class="py-4 px-8 border-2 border-brand text-brand rounded-xl font-black text-[11px] uppercase hover:bg-brand-50 transition-all flex-1">Raise Query</button>`;
         } else if (_reviewMrActionType && _reviewMrActionType.type === 'PLANNING') {
+            // Planning's immediate previous stage is Final Authorization — query goes there, not to the Creator.
             const toStatus = 'PLANNED';
             approveBtn = `<button onclick="window.updateMrStatus('${m.id}','${toStatus}','Planning Approved','wf-note-modal'); window.closeReviewModal();" class="py-4 px-8 bg-brand text-white rounded-xl font-black text-[11px] uppercase shadow-lg active:scale-95 transition-all hover:bg-brand-600 flex-1">Approve</button>`;
-            queryBtn = `<button onclick="window.updateMrStatus('${m.id}','QUERY_RAISED','Query Raised','wf-note-modal'); window.closeReviewModal();" class="py-4 px-8 border-2 border-brand text-brand rounded-xl font-black text-[11px] uppercase hover:bg-brand-50 transition-all flex-1">Raise Query</button>`;
+            queryBtn = `<button onclick="window.updateMrStatus('${m.id}','RETURNED_TO_FINAL_AUTH','Query Raised','wf-note-modal'); window.closeReviewModal();" class="py-4 px-8 border-2 border-brand text-brand rounded-xl font-black text-[11px] uppercase hover:bg-brand-50 transition-all flex-1">Raise Query</button>`;
         } else if (_reviewMrActionType && _reviewMrActionType.type === 'GENERIC') {
+            // GENERIC currently only backs the Final Authorization ("authorize") queue, whose
+            // immediate previous stage is L2 — query goes there, not to the Creator.
             approveBtn = `<button onclick="window.updateMrStatus('${m.id}','${_reviewMrActionType.toStatus}','${_reviewMrActionType.actionLabel}','wf-note-modal'); window.closeReviewModal();" class="py-4 px-8 bg-brand text-white rounded-xl font-black text-[11px] uppercase shadow-lg active:scale-95 transition-all hover:bg-brand-600 flex-1">${_reviewMrActionType.actionLabel || 'Approve'}</button>`;
-            queryBtn = `<button onclick="window.updateMrStatus('${m.id}','QUERY_RAISED','Query Raised','wf-note-modal'); window.closeReviewModal();" class="py-4 px-8 border-2 border-brand text-brand rounded-xl font-black text-[11px] uppercase hover:bg-brand-50 transition-all flex-1">Raise Query</button>`;
+            queryBtn = `<button onclick="window.updateMrStatus('${m.id}','RETURNED_TO_L2','Query Raised','wf-note-modal'); window.closeReviewModal();" class="py-4 px-8 border-2 border-brand text-brand rounded-xl font-black text-[11px] uppercase hover:bg-brand-50 transition-all flex-1">Raise Query</button>`;
         }
         
         return `
@@ -3354,12 +3380,13 @@
             </div>
                 ${mobileMenuOpen ? '<div onclick="window.toggleMobileMenu()" class="fixed inset-0 bg-black/50 z-40 md:hidden no-print transition-opacity fade-in"></div>' : ''}
                 ${renderSidebar()}
-                <main class="flex-1 md:ml-64 w-full ${activeTab==='data_centre' ? 'p-2 md:p-4' : 'p-4 md:p-10'} overflow-y-auto min-h-0 ${mobileMenuOpen ? 'opacity-30 pointer-events-none md:opacity-100 md:pointer-events-auto' : ''}">
+                <main class="flex-1 ${window.sidebarCollapsed ? 'md:ml-[80px]' : 'md:ml-64'} transition-[margin] duration-300 w-full ${activeTab==='data_centre' ? 'p-2 md:p-4' : 'p-4 md:p-10'} overflow-y-auto min-h-0 ${mobileMenuOpen ? 'opacity-30 pointer-events-none md:opacity-100 md:pointer-events-auto' : ''}">
                     <div class="fade-in">${renderContent()}</div>
                 </main>
             </div>
             ${showAuditTrailId ? renderAuditModal(showAuditTrailId) : ''}
             ${showUserAddModal ? renderUserModal() : ''}
+            ${typeof partialReceiptModal !== 'undefined' && partialReceiptModal ? renderPartialReceiptModal() : ''}
             ${showProjectAddModal ? renderProjectModal() : ''}
             ${showAssetAddModal ? renderAssetModal() : ''}
             ${showDeptAddModal ? renderDeptModal() : ''}
@@ -3531,42 +3558,45 @@
 
     function renderSidebar() {
         const mrs = appData.mrs || [];
-        const returnedQueriesCount = mrs.filter(m => (m.status === 'QUERY_RAISED' || m.status === 'PROCUREMENT_QUERY') && (m.raisedBy === user.name || m.plannedBy === user.name)).length;
+        const returnedQueriesCount = mrs.filter(m => m.status === 'RETURNED_TO_CREATOR' && m.raisedBy === user.name).length;
         
         return `
-        <div id="app-sidebar" class="w-64 bg-ink h-screen fixed top-0 left-0 text-slate-300 flex flex-col no-print border-r border-black/20 z-50 transition-transform duration-300 ${mobileMenuOpen ? 'translate-x-0' : '-translate-x-full'} md:translate-x-0">
-            <div class="shrink-0 p-6 pb-4 border-b border-white/10">
+        <div id="app-sidebar" class="${window.sidebarCollapsed ? 'w-64 md:w-[80px]' : 'w-64'} bg-ink h-screen fixed top-0 left-0 text-slate-300 flex flex-col no-print border-r border-black/20 z-50 transition-[transform,width] duration-300 ${mobileMenuOpen ? 'translate-x-0' : '-translate-x-full'} md:translate-x-0">
+            <div class="shrink-0 ${window.sidebarCollapsed ? 'p-4' : 'p-6'} pb-4 border-b border-white/10 relative">
+                <button onclick="window.toggleSidebar()" class="hidden md:flex absolute -right-3 top-6 bg-brand text-white rounded-full w-6 h-6 items-center justify-center shadow-lg hover:bg-brand-dark transition-colors z-50 border-2 border-ink">
+                    <i data-lucide="${window.sidebarCollapsed ? 'chevron-right' : 'chevron-left'}" class="w-3.5 h-3.5"></i>
+                </button>
                 <div class="flex items-center gap-3">
                     <div class="w-10 h-10 rounded-lg bg-brand flex items-center justify-center shrink-0 shadow-lg shadow-brand/20">
                         <i data-lucide="flame" class="text-white w-5 h-5"></i>
                     </div>
-                    <div>
+                    <div class="${window.sidebarCollapsed ? 'hidden' : 'block'}">
                         <div class="font-display font-bold text-white text-base leading-tight tracking-tight">Indus Fire</div>
                         <div class="text-[9px] text-brand-light/70 font-mono tracking-widest uppercase mt-0.5">MR Portal · v4</div>
                     </div>
                 </div>
             </div>
-            <nav id="app-sidebar-nav" class="flex-1 overflow-y-auto custom-scrollbar px-6 py-4 space-y-1 min-h-0">
+            <nav id="app-sidebar-nav" class="flex-1 overflow-y-auto custom-scrollbar ${window.sidebarCollapsed ? 'px-2' : 'px-6'} py-4 space-y-1 min-h-0">
                 ${navBtn('dashboard','Dashboard','layout-dashboard')}
                 ${navBtn('tracking','Work Ledger','clipboard-list')}
                 ${navBtn('reports','Reports','bar-chart-3')}
                 ${returnedQueriesCount > 0 ? navBtn('returned_queries','Returned Queries','alert-circle', returnedQueriesCount) : ''}
                 ${(user.role==='admin'||user.role==='creator') ? navBtn('new_mr','Raise MR','plus-circle') : ''}
-                ${(user.approvalLevel==='L2') ? navBtn('dept_approval','Dept Approval','users-2', mrs.filter(m=>m.status==='DEPT_APPROVAL_PENDING' && m.dept===user.dept).length) : ''}
-                ${(user.role==='admin'||user.role==='authorizer') ? navBtn('authorize','Authorize','shield-check', mrs.filter(m=>m.status==='RAISED').length) : ''}
-                ${(user.role==='admin'||user.role==='planner') ? navBtn('planner','Planning','file-search', mrs.filter(m=>m.status==='AUTHORIZED').length) : ''}
+                ${(user.approvalLevel==='L2') ? navBtn('dept_approval','Dept Approval','users-2', mrs.filter(m=>(m.status==='DEPT_APPROVAL_PENDING'||m.status==='RETURNED_TO_L2') && m.dept===user.dept).length) : ''}
+                ${(user.role==='admin'||user.role==='authorizer') ? navBtn('authorize','Authorize','shield-check', mrs.filter(m=>m.status==='RAISED'||m.status==='RETURNED_TO_FINAL_AUTH').length) : ''}
+                ${(user.role==='admin'||user.role==='planner') ? navBtn('planner','Planning','file-search', mrs.filter(m=>m.status==='AUTHORIZED'||m.status==='PROCUREMENT_QUERY').length) : ''}
                 ${(user.role==='admin'||user.role==='planner') ? navBtn('direct_pr','+ Create Direct PR','zap') : ''}
                 ${(user.role==='admin'||user.role==='planner'||user.role==='procurement'||user.role==='authorizer') ? navBtn('data_centre','Data Centre','database') : ''}
                 ${(user.role==='admin'||user.role==='procurement') ? `
                     <div class="pt-4 mt-4 border-t border-white/10 space-y-1">
-                        <div class="px-3 pb-1 text-[9px] font-black text-slate-500 uppercase tracking-widest">Procurement Team</div>
+                        <div class="${window.sidebarCollapsed ? 'hidden' : 'px-3 pb-1 text-[9px] font-black text-slate-500 uppercase tracking-widest'}">Procurement Team</div>
                         ${navBtn('proc_inbox','Procurement Inbox','inbox', mrs.filter(m=>m.status==='PLANNED' && (!m.procQueryOriginApprover || m.procQueryOriginApprover === user.name || user.role === 'admin')).length)}
                         ${navBtn('proc_team','Team Performance','users-round')}
                         ${navBtn('proc_performance','Performance Report','file-bar-chart')}
                     </div>` : ''}
                 ${user.role==='admin' ? `
                     <div class="pt-4 mt-4 border-t border-white/10 space-y-1">
-                        <div class="px-3 pb-1 text-[9px] font-black text-slate-500 uppercase tracking-widest">Administration</div>
+                        <div class="${window.sidebarCollapsed ? 'hidden' : 'px-3 pb-1 text-[9px] font-black text-slate-500 uppercase tracking-widest'}">Administration</div>
                         ${navBtn('admin_users','User Management','users')}
                         ${navBtn('admin_departments','Department Master','building-2')}
                         ${navBtn('admin_assets','Asset Master','package')}
@@ -3575,13 +3605,14 @@
                         ${navBtn('admin_sequences','MR / PR Sequences','hash')}
                     </div>` : ''}
             </nav>
-            <div class="shrink-0 border-t border-white/10 pt-4 px-6 pb-6 relative">
-                <button onclick="window.toggleNotifPanel()" class="w-full flex items-center gap-3 px-3 py-2.5 mb-2 rounded-lg font-bold text-[13px] hover:bg-white/5 text-slate-300 transition-all">
-                    <i data-lucide="bell" class="w-4 h-4 shrink-0"></i> <span class="flex-1 text-left">Notifications</span>
-                    ${myUnreadNotifications().length ? `<span class="text-[9px] font-black rounded-full px-1.5 py-0.5 leading-none bg-brand text-white">${myUnreadNotifications().length}</span>` : ''}
+            <div class="shrink-0 border-t border-white/10 pt-4 ${window.sidebarCollapsed ? 'px-2' : 'px-6'} pb-6 relative">
+                <button onclick="window.toggleNotifPanel()" title="${window.sidebarCollapsed ? 'Notifications' : ''}" class="w-full relative flex items-center ${window.sidebarCollapsed ? 'justify-center px-0' : 'gap-3 px-3'} py-2.5 mb-2 rounded-lg font-bold text-[13px] hover:bg-white/5 text-slate-300 transition-all">
+                    <i data-lucide="bell" class="w-4 h-4 shrink-0"></i> <span class="${window.sidebarCollapsed ? 'hidden' : 'flex-1 text-left'}">Notifications</span>
+                    ${myUnreadNotifications().length && !window.sidebarCollapsed ? `<span class="text-[9px] font-black rounded-full px-1.5 py-0.5 leading-none bg-brand text-white">${myUnreadNotifications().length}</span>` : ''}
+                    ${myUnreadNotifications().length && window.sidebarCollapsed ? `<div class="absolute right-1/4 top-1 w-2 h-2 rounded-full bg-brand border border-ink"></div>` : ''}
                 </button>
                 ${showNotifPanel ? renderNotifPanel() : ''}
-                <div class="bg-ink-2/70 p-3 rounded-xl mb-4 border border-white/10">
+                <div class="bg-ink-2/70 p-3 rounded-xl mb-4 border border-white/10 ${window.sidebarCollapsed ? 'hidden' : 'block'}">
                     <p class="text-xs font-black text-white uppercase truncate">${esc(user.name)}</p>
                     <p class="text-[9px] text-slate-500 uppercase tracking-widest mt-1 font-mono">${esc(user.role)} · ${esc(user.dept)} · ${esc(APPROVAL_LEVELS[user.approvalLevel]||user.approvalLevel||'L1')}</p>
                     <div class="mt-2 pt-2 border-t border-white/10">
@@ -3589,8 +3620,8 @@
                         <p class="text-[9px] text-brand-light font-medium">${esc(user.responsibility||'Not Defined')}</p>
                     </div>
                 </div>
-                <button onclick="window.logout()" class="text-xs font-black text-brand-light/90 uppercase tracking-widest hover:text-white flex items-center gap-2">
-                    <i data-lucide="log-out" class="w-3.5 h-3.5"></i> Sign Out
+                <button onclick="window.logout()" title="${window.sidebarCollapsed ? 'Sign Out' : ''}" class="${window.sidebarCollapsed ? 'w-full justify-center px-0 py-2.5 rounded-lg hover:bg-white/5 text-slate-300' : 'text-xs font-black text-brand-light/90 uppercase tracking-widest hover:text-white'} flex items-center gap-2 transition-all">
+                    <i data-lucide="log-out" class="${window.sidebarCollapsed ? 'w-4 h-4' : 'w-3.5 h-3.5'} shrink-0"></i> <span class="${window.sidebarCollapsed ? 'hidden' : ''}">Sign Out</span>
                 </button>
             </div>
         </div>`;
@@ -3617,15 +3648,16 @@
 
     function navBtn(id, label, icon, count) {
         const active = activeTab === id;
-        return `<button onclick="window.navigate('${id}')" class="w-full flex items-center gap-3 px-3 py-2.5 rounded-lg font-bold text-[13px] transition-all ${active ? 'bg-brand text-white shadow-lg shadow-brand/20' : 'hover:bg-white/5 text-slate-300'}">
-            <i data-lucide="${icon}" class="w-4 h-4 shrink-0"></i> <span class="flex-1 text-left">${label}</span>
-            ${count ? `<span class="text-[9px] font-black rounded-full px-1.5 py-0.5 leading-none ${active ? 'bg-white text-brand' : 'bg-brand text-white'}">${count}</span>` : ''}
+        return `<button onclick="window.navigate('${id}')" title="${window.sidebarCollapsed ? label : ''}" class="w-full relative flex items-center ${window.sidebarCollapsed ? 'justify-center px-0' : 'gap-3 px-3'} py-2.5 rounded-lg font-bold text-[13px] transition-all ${active ? 'bg-brand text-white shadow-lg shadow-brand/20' : 'hover:bg-white/5 text-slate-300'}">
+            <i data-lucide="${icon}" class="w-4 h-4 shrink-0"></i> <span class="${window.sidebarCollapsed ? 'hidden' : 'flex-1 text-left'}">${label}</span>
+            ${count && !window.sidebarCollapsed ? `<span class="text-[9px] font-black rounded-full px-1.5 py-0.5 leading-none ${active ? 'bg-white text-brand' : 'bg-brand text-white'}">${count}</span>` : ''}
+            ${count && window.sidebarCollapsed ? `<div class="absolute right-1/4 top-1 w-2 h-2 rounded-full ${active ? 'bg-white' : 'bg-brand'} border border-ink"></div>` : ''}
         </button>`;
     }
 
     // ── CONTENT ROUTER ──────────────────────────────────────────────────────
     function renderReturnedQueries() {
-        let queue = appData.mrs.filter(m => (m.status === 'QUERY_RAISED' || m.status === 'PROCUREMENT_QUERY') && (m.raisedBy === user.name || m.plannedBy === user.name));
+        let queue = appData.mrs.filter(m => m.status === 'RETURNED_TO_CREATOR' && m.raisedBy === user.name);
         const q = queueFilters.returned_queries || '';
         if (q) queue = queue.filter(m => matchesKeyword(m, q));
         return `
@@ -4697,7 +4729,12 @@ function renderMrRow(item, idx, xlInputCss) {
 
     // ── WORKFLOW (AUTHORIZE / PLANNER) ──────────────────────────────────────
     function renderWorkflow(fromStatus, actionLabel, toStatus, tabId, title) {
-        let queue = appData.mrs.filter(m => m.status === fromStatus && (!m.queryOriginApprover || m.queryOriginApprover === user.name || user.role === 'admin'));
+        let targetStatuses = [fromStatus];
+        // This function currently only backs the Final Authorization ("authorize") queue,
+        // whose pending status is 'RAISED' — also surface items Planning queried back to
+        // Final Authorization, and items L2 has re-approved and forwarded on.
+        if (fromStatus === 'RAISED') targetStatuses.push('RETURNED_TO_FINAL_AUTH');
+        let queue = appData.mrs.filter(m => targetStatuses.includes(m.status));
         const q = queueFilters[tabId] || '';
         if (q) queue = queue.filter(m => matchesKeyword(m, q));
         return `
@@ -4760,7 +4797,7 @@ function renderMrRow(item, idx, xlInputCss) {
     // department — "L2 users must never see requests from other departments" — and its Approve
     // button drives the two-step Department Approved → Final Authorization Pending chain.
     function renderDeptApproval() {
-        let queue = appData.mrs.filter(m => m.status === 'DEPT_APPROVAL_PENDING' && m.dept === user.dept && (!m.queryOriginApprover || m.queryOriginApprover === user.name || user.role === 'admin'));
+        let queue = appData.mrs.filter(m => (m.status === 'DEPT_APPROVAL_PENDING' || m.status === 'RETURNED_TO_L2') && m.dept === user.dept);
         const q = queueFilters.dept_approval || '';
         if (q) queue = queue.filter(m => matchesKeyword(m, q));
         return `
@@ -5428,7 +5465,7 @@ function renderMrRow(item, idx, xlInputCss) {
     }
 
     function renderApprovalQueueSection() {
-        let queue = appData.mrs.filter(m => m.status === 'AUTHORIZED' || m.status === 'PROCUREMENT_QUERY');
+        let queue = appData.mrs.filter(m => m.status === 'AUTHORIZED' || m.status === 'RETURNED_TO_PLANNING' || m.status === 'PROCUREMENT_QUERY');
         const q = queueFilters['planner'] || '';
         if (q) queue = queue.filter(m => matchesKeyword(m, q));
         return `
@@ -5525,7 +5562,7 @@ function renderMrRow(item, idx, xlInputCss) {
 
         const dcSum  = dcSummary(prRows);
 
-        const pendingPlanningMrs = mrs.filter(m => m.status === 'AUTHORIZED');
+        const pendingPlanningMrs = mrs.filter(m => m.status === 'AUTHORIZED' || m.status === 'RETURNED_TO_PLANNING' || m.status === 'PROCUREMENT_QUERY');
         const pendingDirectPr    = mrs.filter(m => m.source === 'DIRECT_PR' && m.status === 'RAISED');
         const prGeneratedToday   = mrs.filter(m => (m.history || []).some(h =>
             (h.action || '').includes('Planning Approved') && fmtDateInput(h.ts) === todayStr)).length;
@@ -5832,7 +5869,7 @@ function renderMrRow(item, idx, xlInputCss) {
             </div>
 
             <!-- Section 2 — Planning Performance -->
-            <div class="grid grid-cols-1 lg:grid-cols-2 gap-4 mb-8">
+            <div class="flex flex-col gap-4 mb-8">
                 <div class="bg-white rounded-2xl border border-rule shadow-panel p-4">
                     ${pcbChartToolbar('Project Wise PR', 'project', 'pcb-project-chart')}
                     ${!d.pieData.length ? '<p class="text-center text-[10px] text-slate-400 font-black uppercase -mt-48 relative z-10 pointer-events-none">No PR line items yet — generate PRs to see this chart</p>' : ''}
@@ -5967,23 +6004,7 @@ function renderMrRow(item, idx, xlInputCss) {
                 </div>
             </div>
 
-            <div class="grid grid-cols-1 lg:grid-cols-2 gap-4 mb-8">
-                <!-- Section 5 — Planner Activity Timeline -->
-                <div class="bg-white rounded-2xl border border-rule shadow-panel p-4">
-                    <h3 class="text-[11px] font-display font-bold text-slate-600 uppercase tracking-widest mb-3">Planner Activity Timeline</h3>
-                    <div class="max-h-[360px] overflow-y-auto custom-scrollbar pr-2">
-                        ${d.timeline.length === 0 ? '<div class="py-10 text-center text-xs text-slate-300 font-black uppercase">No activity yet</div>' : d.timeline.slice(0, 15).map((t,i) => `
-                        <div class="flex gap-3 pb-4 relative">
-                            ${i < Math.min(d.timeline.length,15)-1 ? '<div class="absolute left-[7px] top-4 bottom-0 w-px bg-rule"></div>' : ''}
-                            <div class="w-4 h-4 rounded-full bg-brand shrink-0 mt-0.5 ring-4 ring-brand-50"></div>
-                            <div class="flex-1 min-w-0">
-                                <p class="text-xs font-bold text-ink truncate">${esc(t.action)}</p>
-                                <p class="text-[10px] text-slate-400 mt-0.5">${esc(t.prNo || t.mrNo)} · ${esc(t.actor||'')} · ${fmtDateTime(t.ts)}</p>
-                            </div>
-                        </div>`).join('')}
-                    </div>
-                </div>
-
+            <div class="flex flex-col gap-6 mb-8">
                 <!-- Section 6 — Upcoming Material Requirement -->
                 <div class="bg-white rounded-2xl border border-rule shadow-panel overflow-hidden overflow-x-auto">
                     <div class="p-3.5 border-b border-rule bg-paper">
@@ -6011,7 +6032,23 @@ function renderMrRow(item, idx, xlInputCss) {
                         </table>
                     </div>
                 </div>
-            </div>
+            <!-- Section 5 — Planner Activity Timeline -->
+                <div class="bg-white rounded-2xl border border-rule shadow-panel p-4">
+                    <h3 class="text-[11px] font-display font-bold text-slate-600 uppercase tracking-widest mb-3">Planner Activity Timeline</h3>
+                    <div class="max-h-[360px] overflow-y-auto custom-scrollbar pr-2">
+                        ${d.timeline.length === 0 ? '<div class="py-10 text-center text-xs text-slate-300 font-black uppercase">No activity yet</div>' : d.timeline.slice(0, 15).map((t,i) => `
+                        <div class="flex gap-3 pb-4 relative">
+                            ${i < Math.min(d.timeline.length,15)-1 ? '<div class="absolute left-[7px] top-4 bottom-0 w-px bg-rule"></div>' : ''}
+                            <div class="w-4 h-4 rounded-full bg-brand shrink-0 mt-0.5 ring-4 ring-brand-50"></div>
+                            <div class="flex-1 min-w-0">
+                                <p class="text-xs font-bold text-ink truncate">${esc(t.action)}</p>
+                                <p class="text-[10px] text-slate-400 mt-0.5">${esc(t.prNo || t.mrNo)} · ${esc(t.actor||'')} · ${fmtDateTime(t.ts)}</p>
+                            </div>
+                        </div>`).join('')}
+                    </div>
+                </div>
+
+                </div>
 
             <!-- Section 7 — Project Progress -->
             <div class="bg-white rounded-2xl border border-rule shadow-panel p-5 mb-8">
@@ -6422,8 +6459,145 @@ function renderMrRow(item, idx, xlInputCss) {
             render();
             return;
         }
+        if (newStatus === 'PARTIAL') {
+            window.openPartialReceiptModal(mrId, itemIdx);
+            return;
+        }
+        if (newStatus === 'ONLY_RECEIVED') {
+            const qty = Number(it.qty) || 0;
+            const recv = Number(it.receivedQty) || 0;
+            if (recv < qty) {
+                alert('Cannot mark "Only Received". Balance quantity must be 0 (all items received).');
+                softRender();
+                return;
+            }
+        }
+        if (newStatus === 'CLOSED' && it.status !== 'ONLY_RECEIVED') {
+            alert('Must go through "Only Received" before marking as "Received" (Closed).');
+            softRender();
+            return;
+        }
         window.dcUpdateItemField(mrId, itemIdx, 'status', newStatus);
     };
+
+    
+    window.openPartialReceiptModal = (mrId, itemIdx) => {
+        partialReceiptModal = { mrId, itemIdx };
+        render();
+    };
+
+    window.closePartialReceiptModal = () => {
+        partialReceiptModal = null;
+        render();
+    };
+
+    window.submitPartialReceipt = () => {
+        if (!partialReceiptModal) return;
+        const { mrId, itemIdx } = partialReceiptModal;
+        const mr = appData.mrs.find(m => m.id === mrId);
+        const it = mr && mr.items && mr.items[itemIdx];
+        if (!mr || !it) return;
+
+        const qtyEl = document.getElementById('pr-qty');
+        const dateEl = document.getElementById('pr-date');
+        const remarksEl = document.getElementById('pr-remarks');
+
+        const qty = Number(qtyEl.value);
+        const date = dateEl.value;
+        const remarks = remarksEl.value.trim();
+
+        if (isNaN(qty) || qty <= 0) { alert('Please enter a valid received quantity.'); return; }
+        if (!date) { alert('Please enter the received date.'); return; }
+
+        const maxAllowed = Math.max(0, (Number(it.qty) || 0) - (Number(it.receivedQty) || 0));
+        if (qty > maxAllowed) {
+            alert('Cannot receive more than the balance quantity (' + maxAllowed + ').');
+            return;
+        }
+
+        const newReceivedQty = (Number(it.receivedQty) || 0) + qty;
+        
+        mr.history = mr.history || [];
+        mr.history.push({
+            action: 'Partial Receipt Updated', actor: user.name, role: user.role, dept: user.dept, ts: Date.now(),
+            field: 'receivedQty', oldValue: String(it.receivedQty || 0), newValue: String(newReceivedQty),
+            note: `${esc(it.name)} - Received ${qty} ${esc(it.unit)}. ${remarks}`
+        });
+
+        dcSnapshotForUndo();
+        it.receivedQty = newReceivedQty;
+        it.materialReceivedDate = date;
+        it.status = 'PARTIAL';
+        dcMarkDirty();
+
+        closePartialReceiptModal();
+        showToast('Partial Receipt logged. Balance updated.');
+    };
+
+    function renderPartialReceiptModal() {
+        if (!partialReceiptModal) return '';
+        const { mrId, itemIdx } = partialReceiptModal;
+        const mr = appData.mrs.find(m => m.id === mrId);
+        const it = mr && mr.items && mr.items[itemIdx];
+        if (!mr || !it) return '';
+
+        const totalQty = Number(it.qty) || 0;
+        const previouslyReceived = Number(it.receivedQty) || 0;
+        const balance = Math.max(0, totalQty - previouslyReceived);
+        const todayStr = new Date().toISOString().split('T')[0];
+
+        return `
+        <div id="pr-modal-overlay" class="fixed inset-0 bg-slate-900/60 z-[99999] flex items-center justify-center backdrop-blur-sm" onclick="if(event.target.id==='pr-modal-overlay')window.closePartialReceiptModal()">
+            <div class="bg-white rounded-2xl shadow-2xl w-[90vw] max-w-lg overflow-hidden flex flex-col">
+                <div class="bg-brand p-5 flex justify-between items-center shrink-0">
+                    <div>
+                        <h2 class="text-lg font-black text-white">Partial Receipt Entry</h2>
+                        <p class="text-xs text-brand-100 mt-1">${esc(it.name)} (${esc(mr.prNumber || mr.mrNumber)})</p>
+                    </div>
+                    <button onclick="window.closePartialReceiptModal()" class="text-white hover:bg-white/20 p-2 rounded-xl transition-all">
+                        <i data-lucide="x" class="w-5 h-5"></i>
+                    </button>
+                </div>
+                
+                <div class="p-6 overflow-y-auto">
+                    <div class="flex gap-4 mb-6">
+                        <div class="flex-1 bg-slate-50 border border-slate-200 rounded-xl p-3 text-center">
+                            <p class="text-[10px] font-bold text-slate-400 uppercase">Ordered</p>
+                            <p class="text-lg font-black text-slate-700">${totalQty}</p>
+                        </div>
+                        <div class="flex-1 bg-emerald-50 border border-emerald-100 rounded-xl p-3 text-center">
+                            <p class="text-[10px] font-bold text-emerald-600 uppercase">Received</p>
+                            <p class="text-lg font-black text-emerald-700">${previouslyReceived}</p>
+                        </div>
+                        <div class="flex-1 bg-amber-50 border border-amber-100 rounded-xl p-3 text-center">
+                            <p class="text-[10px] font-bold text-amber-600 uppercase">Balance</p>
+                            <p class="text-lg font-black text-amber-700">${balance}</p>
+                        </div>
+                    </div>
+
+                    <div class="space-y-4">
+                        <div>
+                            <label class="block text-xs font-bold text-slate-700 mb-1">New Received Qty <span class="text-red-500">*</span></label>
+                            <input type="number" id="pr-qty" max="${balance}" min="1" class="w-full border border-slate-300 rounded-lg p-2.5 text-sm" placeholder="Enter quantity..." />
+                        </div>
+                        <div>
+                            <label class="block text-xs font-bold text-slate-700 mb-1">Received Date <span class="text-red-500">*</span></label>
+                            <input type="date" id="pr-date" value="${todayStr}" class="w-full border border-slate-300 rounded-lg p-2.5 text-sm" />
+                        </div>
+                        <div>
+                            <label class="block text-xs font-bold text-slate-700 mb-1">Remarks</label>
+                            <textarea id="pr-remarks" class="w-full border border-slate-300 rounded-lg p-2.5 text-sm" rows="3" placeholder="Enter any notes about this receipt..."></textarea>
+                        </div>
+                    </div>
+                </div>
+
+                <div class="p-5 border-t border-rule bg-slate-50 flex justify-end gap-3 shrink-0">
+                    <button onclick="window.closePartialReceiptModal()" class="px-5 py-2 text-xs font-bold text-slate-600 hover:bg-slate-200 rounded-xl transition-all">Cancel</button>
+                    <button onclick="window.submitPartialReceipt()" class="px-5 py-2 text-xs font-bold text-white bg-brand hover:bg-brand-600 rounded-xl transition-all shadow-md">Save Receipt</button>
+                </div>
+            </div>
+        </div>`;
+    }
 
     window.dcCloseHoldCancelModal = () => { dcHoldCancelModal = null; render(); };
 
@@ -6461,22 +6635,6 @@ function renderMrRow(item, idx, xlInputCss) {
     // item auto-advances to "Received" (CLOSED); a partial fill auto-advances it to "Partial
     // Received". Only fires once a PO exists on that item and it isn't already Hold/Cancelled.
     function checkAutoReceiptStatus(mr, item) {
-        if (!item.poNumber || ['HOLD','CANCELLED'].includes(item.status)) return false;
-        const qty = Number(item.qty) || 0;
-        const recvQty = Math.min(qty, Number(item.receivedQty) || 0);
-        let target = null;
-        if (qty > 0 && recvQty >= qty) target = 'CLOSED';
-        else if (recvQty > 0) target = 'PARTIAL';
-        else if (item.status === 'PARTIAL' || item.status === 'CLOSED') target = 'PROCUREMENT'; // qty was reduced back to 0
-        if (target && target !== item.status) {
-            const oldStatus = item.status;
-            item.status = target;
-            mr.history = mr.history || [];
-            mr.history.push({ action: 'Receipt Qty Updated (Auto Status)', actor: user.name, role: user.role, dept: user.dept, ts: Date.now(),
-                field: 'status', oldValue: STATUS_META[oldStatus]?.label || oldStatus, newValue: STATUS_META[target]?.label || target,
-                note: `${item.name || 'Item'} — Received ${recvQty} of ${qty}.` });
-            return true;
-        }
         return false;
     }
 
@@ -6489,20 +6647,9 @@ function renderMrRow(item, idx, xlInputCss) {
         if (!mr || !it) return;
         dcSnapshotForUndo();
 
-        if (field === 'receivedQty') {
-            const qty = Number(it.qty) || 0;
-            let v = Number(val);
-            if (isNaN(v) || v < 0) v = 0;
-            if (v > qty) v = qty;
-            const oldVal = Number(it.receivedQty) || 0;
-            it.receivedQty = v;
-            const autoAdvanced = checkAutoReceiptStatus(mr, it);
-            mr.history = mr.history || [];
-            mr.history.push({ action: 'Data Centre: Received Qty', actor: user.name, role: user.role, dept: user.dept, ts: Date.now(),
-                field: 'receivedQty', oldValue: String(oldVal), newValue: String(v),
-                note: `${esc(it.name)} — Received ${v} / ${qty} ${esc(it.unit)}${autoAdvanced ? ' (status auto-updated)' : ''}` });
-            dcMarkDirty();
-            showToast('Marked — click Save to write changes');
+                if (field === 'receivedQty') {
+            alert('Please use the Status dropdown and select "Partial Received" to enter receipt quantities.');
+            softRender();
             return;
         }
 
@@ -8238,10 +8385,10 @@ function renderMrRow(item, idx, xlInputCss) {
         return (appData.procHandlers || []).map(h => {
             const hRows = rows.filter(r => r.prHandleBy === h.name);
             const assigned = hRows.length;
-            const completed = hRows.filter(r => r.status === 'CLOSED');
+            const completed = hRows.filter(r => r.status === 'CLOSED' || r.status === 'ONLY_RECEIVED');
             const cancelled = hRows.filter(r => r.status === 'CANCELLED').length;
             const onHold = hRows.filter(r => r.status === 'HOLD').length;
-            const delayed = hRows.filter(r => !['CLOSED','CANCELLED','HOLD'].includes(r.status) && (r.reqDelayDays > 0 || r.deliveryDelayDays > 0)).length;
+            const delayed = hRows.filter(r => !['CLOSED','ONLY_RECEIVED','CANCELLED','HOLD'].includes(r.status) && (r.reqDelayDays > 0 || r.deliveryDelayDays > 0)).length;
             const pending = Math.max(0, assigned - completed.length - cancelled - onHold - delayed);
             const completionPct = assigned ? +((completed.length / assigned) * 100).toFixed(1) : 0;
             const procDays = [];
@@ -8868,36 +9015,16 @@ function renderMrRow(item, idx, xlInputCss) {
 
         const historyList = (d.history || []).slice();
         const isDirectPr = historyList.some(h => (h.action||'').includes('Direct PR'));
-        const cleanHistory = [];
-        const addMilestone = (level, action, h) => {
-            if (h) cleanHistory.push({ level, action, actor: h.actor, dept: h.dept, note: h.note || h.reason || h.remarks || '', ts: h.ts });
+        // Full audit trail — every action ever taken on this PR (raises, approvals, every
+        // query raised and every resubmission) is shown, not a curated subset of milestones.
+        const cleanHistory = historyList.map(h => ({
+            level: levelForActor(h), action: h.action || '—', actor: h.actor, dept: h.dept,
+            note: h.note || h.reason || h.remarks || '', ts: h.ts
+        }));
+        const findEntry = (...kws) => {
+            const matches = historyList.filter(h => kws.some(kw => (h.action||'').toLowerCase().includes(kw.toLowerCase())));
+            return matches.length ? matches[matches.length - 1] : null;
         };
-        const raisedEntry = historyList.find(h => (h.action||'').includes('Raised') || (h.action||'').includes('Submitted'));
-        if (raisedEntry) addMilestone(isDirectPr ? 'PR Raised' : 'MR Raised', isDirectPr ? 'PR Created' : 'MR Created', raisedEntry);
-        
-        const l2Entry = resolveL2ApprovalEntry(historyList, d.mrs);
-        if (l2Entry) addMilestone('Department L2 Approval', 'Approved', l2Entry);
-        
-        const authEntry = historyList.find(h => (h.action||'').includes('Authorization Approved'));
-        if (authEntry) addMilestone('Final Authorization', 'Authorized', authEntry);
-        
-        if (!isDirectPr) {
-            const prEntry = historyList.find(h => ((h.action||'').includes('PR') && (h.action||'').includes('Generated')) || (h.action||'').includes('Combined PR') || (h.action||'').includes('Planned'));
-            if (prEntry) addMilestone('PR Generated', (d.prNumber || 'PR') + ' Generated', prEntry);
-        }
-        
-        const prAccEntry = historyList.find(h => (h.action||'').includes('PR Accepted'));
-        if (prAccEntry) addMilestone('Procurement', 'PR Accepted', prAccEntry);
-        
-        const openEntry = historyList.find(h => (h.action||'').includes('PO') || (h.action||'').includes('Partial') || (h.action||'').includes('Data Centre: PO') || (h.action||'').includes('Receipt Qty'));
-        if (openEntry) addMilestone('Procurement', 'Open', openEntry);
-        
-        if (d.status === 'CLOSED') {
-            const closedEntry = historyList.find(h => (h.action||'').includes('Closed') || (h.newValue||'').includes('Closed')) || historyList[historyList.length - 1];
-            addMilestone('Procurement', 'Closed', closedEntry);
-        }
-
-        const findEntry = (...kws) => historyList.find(h => kws.some(kw => (h.action||'').toLowerCase().includes(kw.toLowerCase())));
         const planningEntry = findEntry('Combined PR', 'Planning Approved', 'Planned');
         const procurementEntry = findEntry('PR Accepted', 'PO Given', 'PO Issued');
         const deptL2Entry = resolveL2ApprovalEntry(historyList, d.mrs);
@@ -9106,36 +9233,16 @@ function renderMrRow(item, idx, xlInputCss) {
         // Chronological audit trail — oldest first, exactly as it happened.
         const historyList = (mr.history || []).slice().sort((a, b) => (a.ts||0) - (b.ts||0));
         const isDirectPr = historyList.some(h => (h.action||'').includes('Direct PR'));
-        const cleanHistory = [];
-        const addMilestone = (level, action, h) => {
-            if (h) cleanHistory.push({ level, action, actor: h.actor, dept: h.dept, note: h.note || h.reason || h.remarks || '', ts: h.ts });
+        // Full audit trail — every action ever taken on this MR/PR (raise, every query raised,
+        // every resubmission, every approval) is shown, not a curated subset of milestones.
+        const cleanHistory = historyList.map(h => ({
+            level: levelForActor(h), action: h.action || '—', actor: h.actor, dept: h.dept,
+            note: h.note || h.reason || h.remarks || '', ts: h.ts
+        }));
+        const findEntry = (...kws) => {
+            const matches = historyList.filter(h => kws.some(kw => (h.action||'').toLowerCase().includes(kw.toLowerCase())));
+            return matches.length ? matches[matches.length - 1] : null;
         };
-        const raisedEntryM = historyList.find(h => (h.action||'').includes('Raised') || (h.action||'').includes('Submitted'));
-        if (raisedEntryM) addMilestone(isDirectPr ? 'PR Raised' : 'MR Raised', isDirectPr ? 'PR Created' : 'MR Created', raisedEntryM);
-        
-        const l2EntryM = resolveL2ApprovalEntry(historyList, mr);
-        if (l2EntryM) addMilestone('Department L2 Approval', 'Approved', l2EntryM);
-        
-        const authEntryM = historyList.find(h => (h.action||'').includes('Authorization Approved'));
-        if (authEntryM) addMilestone('Final Authorization', 'Authorized', authEntryM);
-        
-        if (!isDirectPr) {
-            const prEntryM = historyList.find(h => ((h.action||'').includes('PR') && (h.action||'').includes('Generated')) || (h.action||'').includes('Combined PR') || (h.action||'').includes('Planned'));
-            if (prEntryM) addMilestone('PR Generated', (mr.prNumber || 'PR') + ' Generated', prEntryM);
-        }
-        
-        const prAccEntryM = historyList.find(h => (h.action||'').includes('PR Accepted'));
-        if (prAccEntryM) addMilestone('Procurement', 'PR Accepted', prAccEntryM);
-        
-        const openEntryM = historyList.find(h => (h.action||'').includes('PO') || (h.action||'').includes('Partial') || (h.action||'').includes('Data Centre: PO') || (h.action||'').includes('Receipt Qty'));
-        if (openEntryM) addMilestone('Procurement', 'Open', openEntryM);
-        
-        if (mr.status === 'CLOSED') {
-            const closedEntryM = historyList.find(h => (h.action||'').includes('Closed') || (h.newValue||'').includes('Closed')) || historyList[historyList.length - 1];
-            addMilestone('Procurement', 'Closed', closedEntryM);
-        }
-
-        const findEntry = (...kws) => historyList.find(h => kws.some(kw => (h.action||'').toLowerCase().includes(kw.toLowerCase())));
         const raisedEntry      = findEntry('Raised', 'Resubmitted') || (historyList[0] || null);
         const deptL2Entry      = resolveL2ApprovalEntry(historyList, mr);
         const finalAuthEntry   = findEntry('Authorization Approved');
@@ -9427,153 +9534,138 @@ function renderMrRow(item, idx, xlInputCss) {
 
     function renderHistoryModal() {
         if (!historyModal) return '';
-        const { mrId, itemIdx, tab, q, activity, userF, dateFrom, dateTo } = historyModal;
+        const { mrId, itemIdx, tab } = historyModal;
         const mr = (appData.mrs || []).find(m => m.id === mrId);
         if (!mr) return '';
         const item = (mr.items || [])[itemIdx];
         const itemName = item ? item.name : 'Item';
 
-        // ── Filter helpers ─────────────────────────────────────────
-        function applyFilters(events) {
-            return events.filter(ev => {
-                if (q && q.trim()) {
-                    const hay = [ev.activity, ev.remarks, ev.user, ev.level].filter(Boolean).join(' ').toLowerCase();
-                    if (!hay.includes(q.trim().toLowerCase())) return false;
-                }
-                if (activity && activity !== 'all') {
-                    if (!(ev.activity || '').toLowerCase().includes(activity.toLowerCase())) return false;
-                }
-                if (userF && userF !== 'all') {
-                    if ((ev.user || '').toLowerCase() !== userF.toLowerCase()) return false;
-                }
-                if (dateFrom) {
-                    const from = new Date(dateFrom).getTime();
-                    if ((ev.ts || 0) < from) return false;
-                }
-                if (dateTo) {
-                    const to = new Date(dateTo).getTime() + 86399000;
-                    if ((ev.ts || 0) > to) return false;
-                }
-                return true;
-            });
+        let events = [];
+        if (tab === 'pr') {
+            events = (mr.history || []).map(h => ({
+                ts: h.ts || 0,
+                user: h.actor || 'System',
+                dept: h.dept || '',
+                action: h.action || '',
+                remarks: h.note || h.remarks || '',
+                queryReason: h.queryReason || '',
+                newValue: h.newValue || ''
+            }));
+        } else {
+            // Item specific history
+            events = (mr.history || []).filter(h => h.note && h.note.includes(itemName)).map(h => ({
+                ts: h.ts || 0,
+                user: h.actor || 'System',
+                dept: h.dept || '',
+                action: h.action || '',
+                remarks: h.note || h.remarks || '',
+                queryReason: h.queryReason || '',
+                newValue: h.newValue || ''
+            }));
         }
-
-        const prEvents = applyFilters(buildPrAuditTrail(mr));
-        const itemEvents = applyFilters(buildItemAuditTrail(mr, itemIdx));
-
-        const allUsersSet = new Set();
-        [...buildPrAuditTrail(mr), ...buildItemAuditTrail(mr, itemIdx)].forEach(e => { if(e.user) allUsersSet.add(e.user); });
-        const allUsers = [...allUsersSet];
+        
+        events.sort((a, b) => a.ts - b.ts);
 
         const fmtDT = (ts) => {
-            if (!ts) return '—';
+            if (!ts) return '-';
             const d = new Date(ts);
-            return d.toLocaleDateString('en-IN', { day:'2-digit', month:'short', year:'2-digit' }) + ' ' +
-                   d.toLocaleTimeString('en-IN', { hour:'2-digit', minute:'2-digit' });
+            return {
+                date: d.toLocaleDateString('en-IN', { day:'2-digit', month:'short', year:'numeric' }),
+                time: d.toLocaleTimeString('en-IN', { hour:'2-digit', minute:'2-digit' })
+            };
         };
 
-        const evRow = (ev, i, altColor) => `
-            <tr style="background:${i%2 ? '#f8fafc' : '#fff'};">
-                <td style="padding:8px 12px;font-size:11px;color:#64748b;white-space:nowrap;">${fmtDT(ev.ts)}</td>
-                <td style="padding:8px 12px;font-size:11px;font-weight:700;color:#1e2530;">${esc(ev.user || '—')}</td>
-                ${ev.level !== undefined ? `<td style="padding:8px 12px;font-size:11px;color:#6366f1;font-weight:600;">${esc(ev.level || '—')}</td>` : ''}
-                <td style="padding:8px 12px;font-size:11px;font-weight:700;color:#0f766e;">${esc(ev.activity || '—')}</td>
-                <td style="padding:8px 12px;font-size:11px;color:#64748b;">${esc(ev.remarks || '—')}</td>
-            </tr>`;
+        const getStatusColor = (action, newValue) => {
+            const str = (action + ' ' + newValue).toLowerCase();
+            if (str.includes('query') || str.includes('returned')) return 'border-amber-500 bg-amber-100 text-amber-700';
+            if (str.includes('reject') || str.includes('cancel')) return 'border-red-500 bg-red-100 text-red-700';
+            if (str.includes('submit') || str.includes('rais') || str.includes('creat')) return 'border-blue-500 bg-blue-100 text-blue-700';
+            if (str.includes('convert') || str.includes('pr generated') || str.includes('planned')) return 'border-purple-500 bg-purple-100 text-purple-700';
+            if (str.includes('approv') || str.includes('accept') || str.includes('receiv') || str.includes('clos')) return 'border-emerald-500 bg-emerald-100 text-emerald-700';
+            return 'border-slate-400 bg-slate-100 text-slate-700';
+        };
+
+        const timelineHtml = events.length === 0 ? 
+            `<div class="text-center p-8 text-slate-400 font-bold text-sm">No history recorded yet.</div>` :
+            events.map((ev, idx) => {
+                const isLast = idx === events.length - 1;
+                const dt = fmtDT(ev.ts);
+                const colorClasses = getStatusColor(ev.action, ev.newValue);
+                
+                return `
+                <div class="relative flex gap-6 w-full">
+                    ${!isLast ? '<div class="absolute top-8 left-[11px] bottom-[-24px] w-0.5 bg-slate-200"></div>' : ''}
+                    
+                    <div class="flex flex-col items-center mt-1 z-10 shrink-0">
+                        <div class="w-6 h-6 rounded-full border-2 shadow-sm flex items-center justify-center ${colorClasses}">
+                            <div class="w-2 h-2 rounded-full bg-current"></div>
+                        </div>
+                    </div>
+                    
+                    <div class="flex-1 bg-white border border-slate-200 rounded-xl p-4 shadow-sm mb-6 hover:shadow-md transition-shadow">
+                        <div class="flex justify-between items-start mb-2">
+                            <div>
+                                <h4 class="font-black text-sm text-slate-800">${esc(ev.action || 'Updated')}</h4>
+                                <div class="flex gap-2 items-center text-xs font-bold text-slate-500 mt-1">
+                                    <span class="flex items-center gap-1"><i data-lucide="user" class="w-3 h-3"></i>${esc(ev.user)}</span>
+                                    ${ev.dept ? `<span class="flex items-center gap-1"><i data-lucide="building" class="w-3 h-3"></i>${esc(ev.dept)}</span>` : ''}
+                                </div>
+                            </div>
+                            <div class="text-right">
+                                <div class="text-xs font-bold text-slate-700">${dt.date}</div>
+                                <div class="text-[10px] font-bold text-slate-400 uppercase">${dt.time}</div>
+                            </div>
+                        </div>
+                        
+                        ${ev.remarks && !ev.remarks.includes(ev.action) ? `
+                            <div class="mt-3 bg-slate-50 rounded-lg p-3 border border-slate-100">
+                                <p class="text-xs text-slate-600 font-medium whitespace-pre-line"><span class="font-bold text-slate-800">Remarks:</span> ${esc(ev.remarks)}</p>
+                            </div>
+                        ` : ''}
+                        
+                        ${ev.queryReason ? `
+                            <div class="mt-3 bg-amber-50 rounded-lg p-3 border border-amber-100">
+                                <p class="text-xs text-amber-800 font-medium whitespace-pre-line"><span class="font-bold text-amber-900">Query Reason:</span> ${esc(ev.queryReason)}</p>
+                            </div>
+                        ` : ''}
+                    </div>
+                </div>
+                `;
+            }).join('');
 
         return `
-        <div id="history-modal-overlay" style="position:fixed;inset:0;background:rgba(10,15,30,0.62);z-index:99999;display:flex;align-items:center;justify-content:center;" onclick="if(event.target.id==='history-modal-overlay')window.closeHistoryModal()">
-            <div style="background:#fff;border-radius:20px;box-shadow:0 32px 80px rgba(0,0,0,0.32);width:95vw;max-width:1100px;max-height:90vh;display:flex;flex-direction:column;overflow:hidden;">
+        <div id="history-modal-overlay" class="fixed inset-0 bg-slate-900/60 z-[99999] flex items-center justify-center backdrop-blur-sm p-4" onclick="if(event.target.id==='history-modal-overlay')window.closeHistoryModal()">
+            <div class="bg-white rounded-3xl shadow-2xl w-full max-w-4xl max-h-[90vh] flex flex-col overflow-hidden animate-in fade-in zoom-in duration-200">
                 
                 <!-- Header -->
-                <div style="background:linear-gradient(135deg,#1e2530 0%,#2d3a4a 100%);padding:20px 28px;display:flex;align-items:center;justify-content:space-between;flex-shrink:0;">
+                <div class="px-6 py-5 border-b border-rule flex justify-between items-center bg-slate-50 shrink-0">
                     <div>
-                        <div style="font-size:11px;font-weight:800;text-transform:uppercase;letter-spacing:.1em;color:#94a3b8;margin-bottom:4px;">Complete History & Audit Trail</div>
-                        <div style="font-size:18px;font-weight:900;color:#fff;letter-spacing:-.3px;">${esc(mr.prNumber || mr.mrNumber)} — ${esc(itemName)}</div>
-                        <div style="font-size:11px;color:#94a3b8;margin-top:3px;">${esc(mr.dept || '')} • ${esc(mr.status || '')}</div>
+                        <h2 class="text-xl font-black text-slate-800 flex items-center gap-2">
+                            <i data-lucide="clock" class="w-6 h-6 text-brand"></i>
+                            Document History Timeline
+                        </h2>
+                        <p class="text-xs font-bold text-slate-500 mt-1 uppercase tracking-wider">${esc(mr.prNumber || mr.mrNumber)}</p>
                     </div>
-                    <button onclick="window.closeHistoryModal()" style="color:#fff;background:rgba(255,255,255,0.1);border:none;width:36px;height:36px;border-radius:10px;cursor:pointer;font-size:18px;display:flex;align-items:center;justify-content:center;" title="Close">✕</button>
+                    <button onclick="window.closeHistoryModal()" class="w-8 h-8 flex items-center justify-center rounded-xl hover:bg-slate-200 text-slate-500 transition-colors">
+                        <i data-lucide="x" class="w-5 h-5"></i>
+                    </button>
                 </div>
 
                 <!-- Tabs -->
-                <div style="background:#f8fafc;border-bottom:2px solid #e2e8f0;padding:0 28px;display:flex;gap:0;flex-shrink:0;">
-                    <button onclick="window.historySetTab('pr')" style="padding:14px 24px;font-size:11px;font-weight:900;text-transform:uppercase;letter-spacing:.08em;border:none;cursor:pointer;background:none;border-bottom:${tab==='pr'?'3px solid #6366f1;color:#6366f1':'3px solid transparent;color:#64748b'};">📋 PR History</button>
-                    <button onclick="window.historySetTab('item')" style="padding:14px 24px;font-size:11px;font-weight:900;text-transform:uppercase;letter-spacing:.08em;border:none;cursor:pointer;background:none;border-bottom:${tab==='item'?'3px solid #0f766e;color:#0f766e':'3px solid transparent;color:#64748b'};">📦 Item History — ${esc(itemName)}</button>
+                <div class="flex px-6 border-b border-rule bg-white shrink-0">
+                    <button onclick="window.historySetTab('pr')" class="px-6 py-4 font-bold text-sm border-b-2 transition-colors ${tab==='pr'?'border-brand text-brand':'border-transparent text-slate-500 hover:text-slate-700'}">Document Timeline</button>
+                    <button onclick="window.historySetTab('item')" class="px-6 py-4 font-bold text-sm border-b-2 transition-colors ${tab==='item'?'border-brand text-brand':'border-transparent text-slate-500 hover:text-slate-700'}">${esc(itemName)} Timeline</button>
                 </div>
-
-                <!-- Filters -->
-                <div style="background:#fff;border-bottom:1px solid #e2e8f0;padding:12px 28px;display:flex;flex-wrap:wrap;gap:10px;align-items:center;flex-shrink:0;">
-                    <input id="hist-q" value="${esc(q||'')}" oninput="window.historyFilter('q',this.value)" placeholder="🔍 Search..." style="padding:7px 12px;font-size:12px;border:1.5px solid #cbd5e1;border-radius:8px;outline:none;width:200px;font-weight:600;"/>
-                    <select id="hist-activity" onchange="window.historyFilter('activity',this.value)" style="padding:7px 10px;font-size:12px;border:1.5px solid #cbd5e1;border-radius:8px;outline:none;font-weight:600;">
-                        <option value="all">All Activities</option>
-                        <option ${activity==='raised'||activity==='created'?'selected':''} value="raised">Raised / Created</option>
-                        <option ${activity==='approved'?'selected':''} value="approved">Approved</option>
-                        <option ${activity==='authorized'?'selected':''} value="authorized">Authorized</option>
-                        <option ${activity==='accepted'?'selected':''} value="accepted">PO Pending</option>
-                        <option ${activity==='po'?'selected':''} value="po">PO</option>
-                        <option ${activity==='receipt'?'selected':''} value="receipt">Receipt</option>
-                        <option ${activity==='closed'?'selected':''} value="closed">Closed</option>
-                    </select>
-                    <select id="hist-user" onchange="window.historyFilter('userF',this.value)" style="padding:7px 10px;font-size:12px;border:1.5px solid #cbd5e1;border-radius:8px;outline:none;font-weight:600;">
-                        <option value="all">All Users</option>
-                        ${allUsers.map(u => `<option value="${esc(u)}" ${userF===u?'selected':''}>${esc(u)}</option>`).join('')}
-                    </select>
-                    <input type="date" id="hist-from" value="${esc(dateFrom||'')}" onchange="window.historyFilter('dateFrom',this.value)" style="padding:7px 10px;font-size:12px;border:1.5px solid #cbd5e1;border-radius:8px;outline:none;font-weight:600;" title="From Date"/>
-                    <input type="date" id="hist-to" value="${esc(dateTo||'')}" onchange="window.historyFilter('dateTo',this.value)" style="padding:7px 10px;font-size:12px;border:1.5px solid #cbd5e1;border-radius:8px;outline:none;font-weight:600;" title="To Date"/>
-                    <button onclick="window.historyExportExcel()" style="padding:7px 16px;font-size:11px;font-weight:900;text-transform:uppercase;letter-spacing:.07em;background:#0f766e;color:#fff;border:none;border-radius:8px;cursor:pointer;">⬇ Excel</button>
-                    <button onclick="window.historyExportPdf()" style="padding:7px 16px;font-size:11px;font-weight:900;text-transform:uppercase;letter-spacing:.07em;background:#6366f1;color:#fff;border:none;border-radius:8px;cursor:pointer;">⬇ PDF</button>
-                    <button onclick="window.historyClearFilters()" style="padding:7px 12px;font-size:11px;font-weight:700;color:#94a3b8;background:none;border:1.5px solid #e2e8f0;border-radius:8px;cursor:pointer;">Clear</button>
-                </div>
-
-                <!-- Table -->
-                <div style="overflow-y:auto;flex:1;padding:0;">
-                ${tab === 'pr' ? `
-                    <table style="width:100%;border-collapse:collapse;">
-                        <thead style="position:sticky;top:0;z-index:1;background:#f1f5f9;">
-                            <tr>
-                                <th style="padding:10px 12px;font-size:10px;font-weight:900;text-transform:uppercase;letter-spacing:.08em;color:#475569;text-align:left;border-bottom:2px solid #e2e8f0;white-space:nowrap;">Date & Time</th>
-                                <th style="padding:10px 12px;font-size:10px;font-weight:900;text-transform:uppercase;letter-spacing:.08em;color:#475569;text-align:left;border-bottom:2px solid #e2e8f0;">User</th>
-                                <th style="padding:10px 12px;font-size:10px;font-weight:900;text-transform:uppercase;letter-spacing:.08em;color:#475569;text-align:left;border-bottom:2px solid #e2e8f0;">Level</th>
-                                <th style="padding:10px 12px;font-size:10px;font-weight:900;text-transform:uppercase;letter-spacing:.08em;color:#475569;text-align:left;border-bottom:2px solid #e2e8f0;">Activity</th>
-                                <th style="padding:10px 12px;font-size:10px;font-weight:900;text-transform:uppercase;letter-spacing:.08em;color:#475569;text-align:left;border-bottom:2px solid #e2e8f0;">Remarks</th>
-                            </tr>
-                        </thead>
-                        <tbody id="hist-pr-body">
-                            ${prEvents.length ? prEvents.map((ev, i) => evRow(ev, i)).join('') : '<tr><td colspan="5" style="padding:32px;text-align:center;color:#94a3b8;font-style:italic;">No PR history events match your filters.</td></tr>'}
-                        </tbody>
-                    </table>
-                ` : `
-                    <table style="width:100%;border-collapse:collapse;">
-                        <thead style="position:sticky;top:0;z-index:1;background:#f1f5f9;">
-                            <tr>
-                                <th style="padding:10px 12px;font-size:10px;font-weight:900;text-transform:uppercase;letter-spacing:.08em;color:#475569;text-align:left;border-bottom:2px solid #e2e8f0;white-space:nowrap;">Date & Time</th>
-                                <th style="padding:10px 12px;font-size:10px;font-weight:900;text-transform:uppercase;letter-spacing:.08em;color:#475569;text-align:left;border-bottom:2px solid #e2e8f0;">User</th>
-                                <th style="padding:10px 12px;font-size:10px;font-weight:900;text-transform:uppercase;letter-spacing:.08em;color:#475569;text-align:left;border-bottom:2px solid #e2e8f0;">Activity</th>
-                                <th style="padding:10px 12px;font-size:10px;font-weight:900;text-transform:uppercase;letter-spacing:.08em;color:#475569;text-align:left;border-bottom:2px solid #e2e8f0;">Remarks</th>
-                            </tr>
-                        </thead>
-                        <tbody id="hist-item-body">
-                            ${itemEvents.length ? itemEvents.map((ev, i) => {
-                                const noLevel = Object.assign({}, ev); delete noLevel.level;
-                                return `<tr style="background:${i%2 ? '#f8fafc' : '#fff'};">
-                                    <td style="padding:8px 12px;font-size:11px;color:#64748b;white-space:nowrap;">${fmtDT(ev.ts)}</td>
-                                    <td style="padding:8px 12px;font-size:11px;font-weight:700;color:#1e2530;">${esc(ev.user || '—')}</td>
-                                    <td style="padding:8px 12px;font-size:11px;font-weight:700;color:#0f766e;">${esc(ev.activity || '—')}</td>
-                                    <td style="padding:8px 12px;font-size:11px;color:#64748b;">${esc(ev.remarks || '—')}</td>
-                                </tr>`;
-                            }).join('') : '<tr><td colspan="4" style="padding:32px;text-align:center;color:#94a3b8;font-style:italic;">No item history events match your filters.</td></tr>'}
-                        </tbody>
-                    </table>
-                `}
-                </div>
-
-                <!-- Footer count -->
-                <div style="padding:10px 28px;background:#f8fafc;border-top:1px solid #e2e8f0;font-size:11px;color:#64748b;font-weight:700;flex-shrink:0;">
-                    Showing ${tab === 'pr' ? prEvents.length + ' PR lifecycle events' : itemEvents.length + ' item events'} 
-                    ${(q||activity&&activity!=='all'||userF&&userF!=='all'||dateFrom||dateTo) ? ' (filtered)' : ''}
+                
+                <!-- Timeline Content -->
+                <div class="p-8 overflow-y-auto bg-slate-50/50 flex-1 relative">
+                    <div class="max-w-3xl mx-auto pl-4">
+                        ${timelineHtml}
+                    </div>
                 </div>
             </div>
-        </div>`;
+        </div>
+        `;
     }
 
     window.openHistoryModal = (type, mrId, itemIdx) => {
@@ -10031,29 +10123,131 @@ function renderMrRow(item, idx, xlInputCss) {
     let _realtimeChannel = null;
     let _lastSaveTs = 0; // prevents echo — our own save triggering a reload
 
-    function startRealtimeSync() {
+    // ===== REALTIME START =====
+
+    function isUserEditing() {
+        // 1. Check if any modal is open (modals contain forms)
+        if (typeof _reviewMrId !== 'undefined' && _reviewMrId) return true;
+        if (typeof showUserAddModal !== 'undefined' && showUserAddModal) return true;
+        if (typeof showProjectAddModal !== 'undefined' && showProjectAddModal) return true;
+        if (typeof showAssetAddModal !== 'undefined' && showAssetAddModal) return true;
+        if (typeof showDeptAddModal !== 'undefined' && showDeptAddModal) return true;
+        if (typeof showProcHandlerModal !== 'undefined' && showProcHandlerModal) return true;
+        if (typeof showAddItemModal !== 'undefined' && showAddItemModal) return true;
+        if (typeof showReassignModal !== 'undefined' && showReassignModal) return true;
+        if (typeof dcHoldCancelModal !== 'undefined' && dcHoldCancelModal) return true;
+        if (typeof historyModal !== 'undefined' && historyModal) return true;
+        if (typeof showAssignHistoryModal !== 'undefined' && showAssignHistoryModal) return true;
+        if (typeof showMrDraftsPanel !== 'undefined' && showMrDraftsPanel) return true;
+        
+        // 2. Check if the user is in a creation tab
+        if (activeTab === 'new_mr' || activeTab === 'direct_pr') return true;
+        
+        // 3. Check if the user is actively focused on an input element
+        const activeTag = document.activeElement ? document.activeElement.tagName : '';
+        if (['INPUT', 'TEXTAREA', 'SELECT'].includes(activeTag)) return true;
+        
+        return false;
+    }
+
+    function refreshSidebar() {
+        const sidebar = document.getElementById('app-sidebar');
+        if (sidebar) {
+            sidebar.outerHTML = renderSidebar();
+            if (typeof lucide !== 'undefined') lucide.createIcons();
+        }
+    }
+
+    function refreshContent() {
+        const main = document.querySelector('main > div.fade-in');
+        if (main) {
+            main.innerHTML = renderContent();
+            if (typeof lucide !== 'undefined') lucide.createIcons();
+        }
+    }
+
+    function refreshMRQueue() {
+        if (['tracking', 'data_centre'].includes(activeTab)) refreshContent();
+    }
+
+    function refreshPRQueue() {
+        if (['proc_inbox', 'proc_team'].includes(activeTab)) refreshContent();
+    }
+
+    function refreshDashboard() {
+        if (activeTab === 'dashboard') refreshContent();
+    }
+
+    function refreshNotifications() {
+        refreshSidebar();
+        if (typeof showNotifPanel !== 'undefined' && showNotifPanel) {
+            const notifWrapper = document.getElementById('notif-panel-wrapper');
+            if (notifWrapper) notifWrapper.outerHTML = renderNotifPanel();
+        }
+    }
+
+    function refreshApprovalList() {
+        if (['authorize', 'dept_approval'].includes(activeTab)) refreshContent();
+    }
+
+    function handleRealtimeEvent(payload) {
+        if (Date.now() - _lastSaveTs < 3000) return; // suppress echo
+        console.log('[Realtime] Remote change detected...');
+        var newData = payload.new && payload.new.data;
+        if (!newData || typeof newData !== 'object') return;
+        
+        // Update background data
+        appData = normalizeAppData(newData);
+        window.appData = appData;
+        
+        // Preserve local compatibility for localStorage
+        try { localStorage.setItem(DB_KEY, JSON.stringify(appData)); } catch(e) {}
+        
+        if (isUserEditing()) {
+            showToast('New data received. Background updated.');
+            // We can still refresh sidebar silently if they are editing a form, so badges update
+            refreshSidebar();
+            return;
+        }
+
+        // Trigger granular updates based on active tab
+        refreshSidebar();
+        refreshNotifications();
+        refreshDashboard();
+        refreshMRQueue();
+        refreshPRQueue();
+        refreshApprovalList();
+        
+        // If they are on an admin screen, just refresh content
+        if (activeTab.startsWith('admin_') || activeTab === 'reports' || activeTab === 'proc_performance' || activeTab === 'returned_queries') {
+            refreshContent();
+        }
+        
+        showToast('Data synced instantly from cloud ✓');
+        console.log('[Realtime] UI surgically updated from remote change');
+    }
+
+    function subscribeRealtime() {
         if (_realtimeChannel) return;
         _realtimeChannel = _supabaseClient
             .channel('app_state_changes')
             .on(
                 'postgres_changes',
                 { event: 'UPDATE', schema: 'public', table: 'app_state', filter: 'id=eq.1' },
-                function(payload) {
-                    if (Date.now() - _lastSaveTs < 3000) return; // suppress echo
-                    console.log('[Realtime] Remote change detected...');
-                    var newData = payload.new && payload.new.data;
-                    if (!newData || typeof newData !== 'object') return;
-                    appData = normalizeAppData(newData);
-                    window.appData = appData;
-                    try { localStorage.setItem(DB_KEY, JSON.stringify(appData)); } catch(e) {}
-                    render();
-                    showToast('Data refreshed from cloud ✓');
-                    console.log('[Realtime] UI updated from remote change');
-                }
+                handleRealtimeEvent
             )
             .subscribe(function(status) {
                 console.log('[Realtime] Subscription status:', status);
             });
+    }
+    
+    function startRealtime() {
+        subscribeRealtime();
+    }
+
+    // Keep old alias for backward compatibility with initialization calls
+    function startRealtimeSync() {
+        startRealtime();
     }
 
     function stopRealtimeSync() {
@@ -10062,6 +10256,8 @@ function renderMrRow(item, idx, xlInputCss) {
             _realtimeChannel = null;
         }
     }
+
+    // ===== REALTIME END =====
 
     /**
      * Save the entire app state to Supabase (cloud) + localStorage (local backup).
