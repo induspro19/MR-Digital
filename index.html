@@ -2460,8 +2460,8 @@
     // never appears as a manual pre-PO choice — see PRE_PO_STATUSES / checkAutoPoGiven above.
     function dcAllowedStatuses(current) {
         if (current === 'CANCELLED') return ['CANCELLED'];
-        if (current === 'HOLD')      return ['HOLD', 'PROCUREMENT', 'PARTIAL', 'CLOSED', 'CANCELLED'];
-        if (POST_PO_STATUSES.includes(current)) return ['PROCUREMENT', 'PARTIAL', 'CLOSED', 'HOLD', 'CANCELLED'];
+        if (current === 'HOLD')      return ['HOLD', 'PROCUREMENT', 'PARTIAL', 'ONLY_RECEIVED', 'CLOSED', 'CANCELLED'];
+        if (POST_PO_STATUSES.includes(current)) return ['PROCUREMENT', 'PARTIAL', 'ONLY_RECEIVED', 'CLOSED', 'HOLD', 'CANCELLED'];
         return PRE_PO_STATUSES;
     }
 
@@ -2471,10 +2471,60 @@
     // starting point before a PO exists — it is shown but cannot be manually re-selected.
     function dcStatusOptions(current) {
         if (current === 'CANCELLED') return ['CANCELLED'];
-        if (current === 'HOLD')      return ['HOLD', 'PROCUREMENT', 'PARTIAL', 'CLOSED', 'CANCELLED'];
-        if (POST_PO_STATUSES.includes(current)) return ['PROCUREMENT', 'PARTIAL', 'CLOSED', 'HOLD', 'CANCELLED'];
+        if (current === 'HOLD')      return ['HOLD', 'PROCUREMENT', 'PARTIAL', 'ONLY_RECEIVED', 'CLOSED', 'CANCELLED'];
+        if (POST_PO_STATUSES.includes(current)) return ['PROCUREMENT', 'PARTIAL', 'ONLY_RECEIVED', 'CLOSED', 'HOLD', 'CANCELLED'];
         return ['PR_ACCEPTED', 'HOLD', 'CANCELLED'];
     }
+
+    window.cancelFullMR = (id) => {
+        const mr = appData.mrs.find(m => m.id === id);
+        if (!mr) return;
+        
+        // Prevent cancelling if any items have reached Procurement/PO Given.
+        const hasProcurementItems = mr.items && mr.items.some(it => POST_PO_STATUSES.includes(it.status));
+        if (hasProcurementItems) {
+            alert('Cannot cancel this entire request because some items have already been processed by Procurement (PO Given). You must handle cancellations from the Data Centre.');
+            return;
+        }
+
+        if (!confirm('Are you sure you want to cancel this entire request? This cannot be undone.')) return;
+        
+        const reason = prompt("Enter cancellation reason (optional):");
+        if (reason === null) return; // User pressed Cancel on prompt
+        
+        const oldStatus = mr.status;
+        mr.status = 'CANCELLED';
+        mr.history.push({
+            action: 'Request Cancelled',
+            actor: user.name,
+            role: user.role,
+            dept: user.dept,
+            ts: Date.now(),
+            field: 'status',
+            oldValue: STATUS_META[oldStatus]?.label || oldStatus,
+            newValue: STATUS_META.CANCELLED.label,
+            note: reason || 'Cancelled by user'
+        });
+        
+        // Cancel all child items
+        if (mr.items && Array.isArray(mr.items)) {
+            mr.items.forEach(it => {
+                it.status = 'CANCELLED';
+                it.holdCancelReason = 'Full Request Cancelled';
+                it.holdCancelJustification = reason || 'Cancelled by user';
+                it.holdCancelUpdatedBy = user.name;
+                it.holdCancelTs = Date.now();
+            });
+        }
+        
+        saveDB();
+        
+        if (typeof _reviewMrId !== 'undefined' && _reviewMrId === id) {
+            window.closeReviewModal();
+        } else {
+            render();
+        }
+    };
 
     window.updateMrStatus = (id, newStatus, actionLabel, noteInputId) => {
         const noteEl = noteInputId ? document.getElementById(noteInputId) : null;
@@ -3307,7 +3357,8 @@
                 <div class="flex-1 w-full">
                     <textarea id="wf-note-modal" class="glass-input w-full min-h-[60px]" placeholder="Add remarks or reason for query..."></textarea>
                 </div>
-                <div class="flex gap-4 shrink-0 min-w-[320px]">
+                <div class="flex gap-4 shrink-0 min-w-[320px] flex-wrap justify-end">
+                    ${m.status !== 'CANCELLED' ? `<button onclick="window.cancelFullMR('${m.id}')" class="py-4 px-8 border-2 border-red-500 text-red-500 rounded-xl font-black text-[11px] uppercase hover:bg-red-50 transition-all flex-1 md:flex-none">Cancel Request</button>` : ''}
                     ${queryBtn}
                     ${approveBtn}
                 </div>
@@ -4492,32 +4543,34 @@ function renderMrRow(item, idx, xlInputCss) {
             ${renderKeywordFilterBar({ scope:'track', filters: trackingFilters, setFn:'setTrackFilter', clearFn:'clearTrackFilters', showDept: canSeeAllDepartmentMrs(), showProject:true, showDateRange:true })}
             <div class="bg-white rounded-2xl border border-rule shadow-panel overflow-hidden overflow-x-auto">
                 <table class="w-full text-left">
-                    <thead><tr class="bg-paper text-[10px] font-black text-slate-500 uppercase tracking-widest border-b border-rule">
-                        <th class="px-6 py-4">MR / PR Number</th>
-                        <th class="px-6 py-4">Date</th>
-                        ${canSeeAllDepartmentMrs() ? '<th class="px-6 py-4">Dept</th>' : ''}
-                        <th class="px-6 py-4">Raised By</th>
-                        <th class="px-6 py-4">Items</th>
-                        <th class="px-6 py-4">Status</th>
-                        <th class="px-6 py-4 text-center">Actions</th>
+                    <thead><tr class="bg-paper text-[10px] font-black text-slate-500 uppercase tracking-widest border-b border-rule whitespace-nowrap">
+                        <th class="px-4 py-4">MR / PR Number</th>
+                        <th class="px-4 py-4">Date</th>
+                        ${canSeeAllDepartmentMrs() ? '<th class="px-4 py-4">Dept</th>' : ''}
+                        <th class="px-4 py-4">Raised By</th>
+                        <th class="px-4 py-4">Items</th>
+                        <th class="px-4 py-4">Status</th>
+                        <th class="px-4 py-4 text-center">Actions</th>
                     </tr></thead>
                     <tbody class="divide-y divide-rule">
                     ${sorted.length === 0 ? `<tr><td colspan="${canSeeAllDepartmentMrs() ? 7 : 6}" class="px-6 py-12 text-center text-slate-300 font-bold uppercase text-xs">No material requests match these filters</td></tr>` :
                       sorted.map(m => `
                       <tr class="hover:bg-paper/60 text-xs font-bold transition-all">
-                          <td class="px-6 py-5"><span class="idx-chip text-brand">${esc(m.mrNumber || m.prNumber)}</span></td>
-                          <td class="px-6 py-5 text-slate-400">${fmtDate(m.createdAt)}</td>
-                          ${canSeeAllDepartmentMrs() ? `<td class="px-6 py-5 text-slate-600">${esc(m.dept)}</td>` : ''}
-                          <td class="px-6 py-5 text-slate-600 normal-case">${esc(m.raisedBy)}</td>
-                          <td class="px-6 py-5 text-slate-500">${(m.items||[]).length} item(s)</td>
-                          <td class="px-6 py-5">${renderStatusBadge(getMrDisplayStatus(m))}</td>
-                          <td class="px-6 py-5">
-                              <div class="flex justify-center gap-2">
+                          <td class="px-4 py-5 whitespace-nowrap"><span class="idx-chip text-brand">${esc(m.mrNumber || m.prNumber)}</span></td>
+                          <td class="px-4 py-5 text-slate-400 whitespace-nowrap">${fmtDate(m.createdAt)}</td>
+                          ${canSeeAllDepartmentMrs() ? `<td class="px-4 py-5 text-slate-600">${esc(m.dept)}</td>` : ''}
+                          <td class="px-4 py-5 text-slate-600 normal-case">${esc(m.raisedBy)}</td>
+                          <td class="px-4 py-5 text-slate-500 whitespace-nowrap">${(m.items||[]).length} item(s)</td>
+                          <td class="px-4 py-5 whitespace-nowrap">${renderStatusBadge(getMrDisplayStatus(m))}</td>
+                          <td class="px-4 py-5">
+                              <div class="flex justify-center gap-1 flex-nowrap">
                                   ${(m.status === 'QUERY_RAISED' && userCanAccessMr(m) && (m.raisedBy === user.name || user.role === 'admin')) ? `
-                                  <button onclick="window.resolveQuery('${m.id}')" title="Revise & Resubmit" class="p-2 text-amberx bg-white border border-rule rounded-lg shadow-sm hover:bg-amberx hover:text-white transition-all"><i data-lucide="edit-3" class="w-4 h-4"></i></button>` : ''}
-                                  ${m.prNumber ? `<button onclick="window.exportPRExcel('${m.id}')" title="Download PR Excel" class="p-2 text-sky-600 bg-white border border-rule rounded-lg shadow-sm hover:bg-sky-600 hover:text-white transition-all"><i data-lucide="download" class="w-4 h-4"></i></button>` : ''}
-                                  <button onclick="window.showAudit('${m.id}')" title="Audit Trail" class="p-2 text-blue-500 bg-white border border-rule rounded-lg shadow-sm hover:bg-blue-500 hover:text-white transition-all"><i data-lucide="history" class="w-4 h-4"></i></button>
-                                  <button onclick="window.printMR('${m.id}')" title="${m.prNumber && (m.combinedPr || (appData.mrs||[]).filter(x=>x.prNumber===m.prNumber).length>1) ? 'Print Combined PR' : 'Print MR'}" class="p-2 text-emerald-600 bg-white border border-rule rounded-lg shadow-sm hover:bg-emerald-600 hover:text-white transition-all"><i data-lucide="printer" class="w-4 h-4"></i></button>
+                                  <button onclick="window.resolveQuery('${m.id}')" title="Revise & Resubmit" class="p-1.5 text-amberx bg-white border border-rule rounded-md shadow-sm hover:bg-amberx hover:text-white transition-all"><i data-lucide="edit-3" class="w-3.5 h-3.5"></i></button>` : ''}
+                                  ${(m.status !== 'CANCELLED' && m.raisedBy === user.name && !(m.items||[]).some(it => POST_PO_STATUSES.includes(it.status))) ? `
+                                  <button onclick="window.cancelFullMR('${m.id}')" title="Cancel Request" class="p-1.5 text-red-600 bg-white border border-rule rounded-md shadow-sm hover:bg-red-600 hover:text-white transition-all"><i data-lucide="x-circle" class="w-3.5 h-3.5"></i></button>` : ''}
+                                  ${m.prNumber ? `<button onclick="window.exportPRExcel('${m.id}')" title="Download PR Excel" class="p-1.5 text-sky-600 bg-white border border-rule rounded-md shadow-sm hover:bg-sky-600 hover:text-white transition-all"><i data-lucide="download" class="w-3.5 h-3.5"></i></button>` : ''}
+                                  <button onclick="window.showAudit('${m.id}')" title="Audit Trail" class="p-1.5 text-blue-500 bg-white border border-rule rounded-md shadow-sm hover:bg-blue-500 hover:text-white transition-all"><i data-lucide="history" class="w-3.5 h-3.5"></i></button>
+                                  <button onclick="window.printMR('${m.id}')" title="${m.prNumber && (m.combinedPr || (appData.mrs||[]).filter(x=>x.prNumber===m.prNumber).length>1) ? 'Print Combined PR' : 'Print MR'}" class="p-1.5 text-emerald-600 bg-white border border-rule rounded-md shadow-sm hover:bg-emerald-600 hover:text-white transition-all"><i data-lucide="printer" class="w-3.5 h-3.5"></i></button>
                               </div>
                           </td>
                       </tr>`).join('')}
@@ -10190,54 +10243,67 @@ function renderMrRow(item, idx, xlInputCss) {
         if (['authorize', 'dept_approval'].includes(activeTab)) refreshContent();
     }
 
-    function handleRealtimeEvent(payload) {
-        if (Date.now() - _lastSaveTs < 3000) return; // suppress echo
-        console.log('[Realtime] Remote change detected...');
-        var newData = payload.new && payload.new.data;
-        if (!newData || typeof newData !== 'object') return;
-        
-        // Update background data
-        appData = normalizeAppData(newData);
-        window.appData = appData;
-        
-        // Preserve local compatibility for localStorage
-        try { localStorage.setItem(DB_KEY, JSON.stringify(appData)); } catch(e) {}
-        
+    async function handleRealtimeEvent(payload) {
+        if (Date.now() - _lastSaveTs < 3000) return; // suppress echo from our own save
+        console.log('[Realtime] Remote change detected:', payload);
+
         if (isUserEditing()) {
-            showToast('New data received. Background updated.');
-            // We can still refresh sidebar silently if they are editing a form, so badges update
-            refreshSidebar();
+            // User is mid-edit — silently update background data without disrupting their form
+            var newData = payload.new && payload.new.data;
+            if (newData && typeof newData === 'object') {
+                appData = normalizeAppData(newData);
+                window.appData = appData;
+                try { localStorage.setItem(DB_KEY, JSON.stringify(appData)); } catch(e) {}
+                refreshSidebar();
+                showToast('New data received. Will refresh when you finish editing.');
+            }
             return;
         }
 
-        // Trigger granular updates based on active tab
-        refreshSidebar();
-        refreshNotifications();
-        refreshDashboard();
-        refreshMRQueue();
-        refreshPRQueue();
-        refreshApprovalList();
-        
-        // If they are on an admin screen, just refresh content
-        if (activeTab.startsWith('admin_') || activeTab === 'reports' || activeTab === 'proc_performance' || activeTab === 'returned_queries') {
-            refreshContent();
+        // Silent background fetch — NO loading screen, NO DOM replacement
+        try {
+            const { data, error } = await _supabaseClient
+                .from('app_state')
+                .select('data')
+                .eq('id', 1)
+                .single();
+
+            if (!error && data && data.data && typeof data.data === 'object') {
+                appData = normalizeAppData(data.data);
+                window.appData = appData;
+                try { localStorage.setItem(DB_KEY, JSON.stringify(appData)); } catch(e) {}
+                render();
+                showToast('Data synced from cloud ✓');
+                console.log('[Realtime] Silent background sync complete');
+            }
+        } catch (err) {
+            console.error('[Realtime] Background fetch failed, using payload:', err);
+            // Fallback: use the data from the realtime payload directly
+            var fallbackData = payload.new && payload.new.data;
+            if (fallbackData && typeof fallbackData === 'object') {
+                appData = normalizeAppData(fallbackData);
+                window.appData = appData;
+                try { localStorage.setItem(DB_KEY, JSON.stringify(appData)); } catch(e) {}
+                render();
+                showToast('Data synced from cloud ✓');
+            }
         }
-        
-        showToast('Data synced instantly from cloud ✓');
-        console.log('[Realtime] UI surgically updated from remote change');
     }
 
     function subscribeRealtime() {
         if (_realtimeChannel) return;
         _realtimeChannel = _supabaseClient
-            .channel('app_state_changes')
+            .channel('app-state')
             .on(
                 'postgres_changes',
-                { event: 'UPDATE', schema: 'public', table: 'app_state', filter: 'id=eq.1' },
-                handleRealtimeEvent
+                { event: 'UPDATE', schema: 'public', table: 'app_state' },
+                async (payload) => {
+                    console.log('Realtime update:', payload);
+                    await handleRealtimeEvent(payload);
+                }
             )
-            .subscribe(function(status) {
-                console.log('[Realtime] Subscription status:', status);
+            .subscribe((status) => {
+                console.log('Realtime status:', status);
             });
     }
     
@@ -10347,17 +10413,36 @@ function renderMrRow(item, idx, xlInputCss) {
 
     // ── ASYNC BOOT ─────────────────────────────────────────────────────────────
     (async function init() {
-        try {
-            appData = await loadDB();
-        } catch (e) {
-            console.error('[init] Critical load failure, falling back to seed data:', e);
-            appData = loadFromLocalStorage();
-        }
+        // 1. INSTANT — load from localStorage cache and render immediately (no loading screen)
+        appData = loadFromLocalStorage();
         appData = normalizeAppData(appData);
         window.appData = appData;
         document.getElementById('login-success-overlay')?.remove();
         document.body.classList.remove('dashboard-building', 'login-active');
         render();
+
+        // 2. BACKGROUND — silently fetch latest from Supabase cloud (no spinner, no screen change)
+        try {
+            const { data, error } = await _supabaseClient
+                .from('app_state')
+                .select('data')
+                .eq('id', 1)
+                .single();
+
+            if (!error && data && data.data && typeof data.data === 'object' && Object.keys(data.data).length > 0) {
+                console.log('[init] ✓ Cloud data loaded silently');
+                appData = normalizeAppData(data.data);
+                window.appData = appData;
+                try { localStorage.setItem(DB_KEY, JSON.stringify(appData)); } catch(e) {}
+                render(); // re-render with fresh cloud data — no flicker, just content update
+            } else {
+                console.warn('[init] Cloud empty or unreachable — using local cache');
+            }
+        } catch (err) {
+            console.warn('[init] Cloud sync failed (offline?) — using local cache:', err.message || err);
+        }
+
+        // 3. Start listening for realtime changes from other users
         startRealtimeSync();
     })();
 
