@@ -911,6 +911,9 @@
             });
         }
         
+        // OCC Versioning
+        data.vsn = data.vsn || 1;
+        
         return data;
     }
 
@@ -1824,14 +1827,14 @@
         const isPwd = p.type === 'password';
         p.type = isPwd ? 'text' : 'password';
         btn.innerHTML = isPwd ? '<i data-lucide="eye-off" class="w-5 h-5"></i>' : '<i data-lucide="eye" class="w-5 h-5"></i>';
-        lucide.createIcons();
+        try { lucide.createIcons(); } catch(e){}
     };
 
     window.handleLogin = (id, pw, btnElement) => {
         if(btnElement) {
             btnElement.disabled = true;
             btnElement.innerHTML = `<i data-lucide="loader-2" class="w-4 h-4 animate-spin"></i> Authenticating...`;
-            lucide.createIcons();
+            try { lucide.createIcons(); } catch(e){}
         }
         
         // Simulating network delay for effect
@@ -1841,7 +1844,7 @@
                 if(btnElement) {
                     btnElement.disabled = false;
                     btnElement.innerHTML = `<i data-lucide="log-in" class="w-4 h-4"></i> Sign In`;
-                    lucide.createIcons();
+                    try { lucide.createIcons(); } catch(e){}
                 }
                 return;
             }
@@ -1860,7 +1863,7 @@
                 if(btnElement) {
                     btnElement.disabled = false;
                     btnElement.innerHTML = `<i data-lucide="log-in" class="w-4 h-4"></i> Sign In`;
-                    lucide.createIcons();
+                    try { lucide.createIcons(); } catch(e){}
                 }
             }
         }, 400);
@@ -3386,7 +3389,7 @@
             _lastRenderedTab = null;
             document.body.classList.add('login-active');
             root.innerHTML = renderLogin();
-            lucide.createIcons();
+            try { lucide.createIcons(); } catch(e){}
             return;
         }
         document.body.classList.remove('login-active');
@@ -3394,24 +3397,24 @@
         if (procInboxPrNumber) {
             _lastRenderedTab = null;
             root.innerHTML = renderCombinedPrPrint(procInboxPrNumber, 'inbox');
-            lucide.createIcons();
+            try { lucide.createIcons(); } catch(e){}
             return;
         }
         if (printPrNumber) {
             _lastRenderedTab = null;
             root.innerHTML = renderCombinedPrPrint(printPrNumber);
-            lucide.createIcons();
+            try { lucide.createIcons(); } catch(e){}
             if (autoPrintAfterRender) {
                 autoPrintAfterRender = false;
                 setTimeout(() => window.print(), 350);
             }
             return;
         }
-        if (printMrData)  { _lastRenderedTab = null; root.innerHTML = renderPrint(printMrData); lucide.createIcons(); return; }
-        if (activeTab === 'new_mr') { _lastRenderedTab = null; root.innerHTML = renderNewMR(); lucide.createIcons(); return; }
+        if (printMrData)  { _lastRenderedTab = null; root.innerHTML = renderPrint(printMrData); try { lucide.createIcons(); } catch(e){} return; }
+        if (activeTab === 'new_mr') { _lastRenderedTab = null; root.innerHTML = renderNewMR(); try { lucide.createIcons(); } catch(e){} return; }
         if (activeTab === 'review_document') {
             root.innerHTML = renderFullScreenReview();
-            lucide.createIcons();
+            try { lucide.createIcons(); } catch(e){}
             return;
         }
 
@@ -3453,7 +3456,7 @@
             ${_reviewMrId ? renderReviewModal() : ''}
             ${historyModal ? renderHistoryModal() : ''}
         `;
-        lucide.createIcons();
+        try { lucide.createIcons(); } catch(e){}
         _lastRenderedTab = activeTab;
         _lastRenderedSection = activeTab === 'planner' ? plannerSection : null;
         if (savedScroll || savedSidebarScroll !== null) {
@@ -4566,7 +4569,7 @@ function renderMrRow(item, idx, xlInputCss) {
                               <div class="flex justify-center gap-1 flex-nowrap">
                                   ${(m.status === 'QUERY_RAISED' && userCanAccessMr(m) && (m.raisedBy === user.name || user.role === 'admin')) ? `
                                   <button onclick="window.resolveQuery('${m.id}')" title="Revise & Resubmit" class="p-1.5 text-amberx bg-white border border-rule rounded-md shadow-sm hover:bg-amberx hover:text-white transition-all"><i data-lucide="edit-3" class="w-3.5 h-3.5"></i></button>` : ''}
-                                  ${(m.status !== 'CANCELLED' && m.raisedBy === user.name && !(m.items||[]).some(it => POST_PO_STATUSES.includes(it.status))) ? `
+                                  ${(m.status !== 'CANCELLED' && m.raisedBy === user.name && !(m.items||[]).some(it => it && it.status && POST_PO_STATUSES.includes(it.status))) ? `
                                   <button onclick="window.cancelFullMR('${m.id}')" title="Cancel Request" class="p-1.5 text-red-600 bg-white border border-rule rounded-md shadow-sm hover:bg-red-600 hover:text-white transition-all"><i data-lucide="x-circle" class="w-3.5 h-3.5"></i></button>` : ''}
                                   ${m.prNumber ? `<button onclick="window.exportPRExcel('${m.id}')" title="Download PR Excel" class="p-1.5 text-sky-600 bg-white border border-rule rounded-md shadow-sm hover:bg-sky-600 hover:text-white transition-all"><i data-lucide="download" class="w-3.5 h-3.5"></i></button>` : ''}
                                   <button onclick="window.showAudit('${m.id}')" title="Audit Trail" class="p-1.5 text-blue-500 bg-white border border-rule rounded-md shadow-sm hover:bg-blue-500 hover:text-white transition-all"><i data-lucide="history" class="w-3.5 h-3.5"></i></button>
@@ -10207,7 +10210,7 @@ function renderMrRow(item, idx, xlInputCss) {
         const sidebar = document.getElementById('app-sidebar');
         if (sidebar) {
             sidebar.outerHTML = renderSidebar();
-            if (typeof lucide !== 'undefined') lucide.createIcons();
+            if (typeof lucide !== 'undefined') try { lucide.createIcons(); } catch(e){}
         }
     }
 
@@ -10215,7 +10218,7 @@ function renderMrRow(item, idx, xlInputCss) {
         const main = document.querySelector('main > div.fade-in');
         if (main) {
             main.innerHTML = renderContent();
-            if (typeof lucide !== 'undefined') lucide.createIcons();
+            if (typeof lucide !== 'undefined') try { lucide.createIcons(); } catch(e){}
         }
     }
 
@@ -10333,11 +10336,15 @@ function renderMrRow(item, idx, xlInputCss) {
     async function saveDB(dataToSave) {
         const payload = dataToSave !== undefined ? dataToSave : appData;
 
+        // OCC: Increment version before saving
+        const currentVsn = payload.vsn || 1;
+        payload.vsn = currentVsn + 1;
+
         // 1. Immediate local backup — instant, never fails, keeps UI snappy
         try {
             localStorage.setItem(DB_KEY, JSON.stringify(payload));
         } catch (e) {
-            console.warn('[saveDB] localStorage write failed (storage full?)', e);
+            console.warn('[saveDB] localStorage write failed', e);
         }
 
         // 2. Expose on window for any direct access from console
@@ -10346,20 +10353,62 @@ function renderMrRow(item, idx, xlInputCss) {
         // 3. Re-render immediately so the user sees updated state without waiting for cloud
         render();
 
-        // 4. Async cloud upsert — best-effort, non-blocking
+        // 4. Async cloud conditional update (OCC)
         _lastSaveTs = Date.now();
         try {
-            const { error } = await _supabaseClient
+            const { data, error } = await _supabaseClient
                 .from('app_state')
-                .upsert({ id: 1, data: payload, updated_at: new Date().toISOString() });
+                .update({ data: payload, updated_at: new Date().toISOString() })
+                .eq('id', 1)
+                .eq('data->>vsn', String(currentVsn))
+                .select();
 
             if (error) {
-                console.error('[saveDB] Supabase upsert failed:', error.message);
+                console.error('[saveDB] Supabase OCC update failed:', error.message);
+                // Fallback to absolute upsert if json query isn't supported
+                await _supabaseClient.from('app_state').upsert({ id: 1, data: payload, updated_at: new Date().toISOString() });
+            } else if (!data || data.length === 0) {
+                console.warn('[saveDB] OCC Collision! Another user saved first. Triggering Auto-Recovery...');
+                await handleDataCollision(payload);
             } else {
-                console.log('[saveDB] ✓ Saved to Supabase cloud');
+                console.log('[saveDB] ✓ Saved to Supabase cloud (vsn: ' + payload.vsn + ')');
             }
         } catch (err) {
             console.error('[saveDB] Supabase exception:', err);
+        }
+    }
+
+    async function handleDataCollision(localPayload) {
+        try {
+            // 1. Fetch fresh truth from cloud
+            const { data: cloudRow, error } = await _supabaseClient.from('app_state').select('data').eq('id', 1).single();
+            if (error || !cloudRow || !cloudRow.data) throw new Error("Could not fetch fresh data for recovery");
+            
+            let freshData = normalizeAppData(cloudRow.data);
+            
+            const localMrs = localPayload.mrs || [];
+            const freshMrs = freshData.mrs || [];
+            
+            // 2. Identify MRs created by this user that are missing from cloud
+            const newlyCreatedLocalMrs = localMrs.filter(lMr => !freshMrs.some(fMr => fMr.id === lMr.id));
+            
+            for (let newMr of newlyCreatedLocalMrs) {
+                // If sequence number was taken, regenerate it
+                if (freshMrs.some(m => m.mrNumber === newMr.mrNumber)) {
+                    const oldMr = newMr.mrNumber;
+                    appData = freshData; // temporarily mock global state for consumer
+                    newMr.mrNumber = consumeNextMrNumber();
+                    console.warn(`[OCC] Sequence collision detected. Reassigned MR number from ${oldMr} to ${newMr.mrNumber}`);
+                }
+                freshMrs.unshift(newMr); // Safely append our MR
+            }
+            
+            // Re-sync global state and try saving again
+            console.log('[saveDB] Auto-recovery successful. Re-saving with fresh data...');
+            appData = freshData;
+            await saveDB(appData);
+        } catch (e) {
+            console.error('[saveDB] Auto-Recovery failed. Data may be out of sync. Please refresh.', e);
         }
     }
 
