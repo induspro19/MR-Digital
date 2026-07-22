@@ -269,6 +269,13 @@
         CANCELLED:     { label: "Cancel",           color: "#B91C1C", bg: "#FEE2E2" }
     };
     const STATUS_ORDER = ["RAISED","DEPT_APPROVAL_PENDING","DEPT_APPROVED","QUERY_RAISED","RETURNED_TO_CREATOR","RETURNED_TO_L2","RETURNED_TO_FINAL_AUTH","RETURNED_TO_PLANNING","AUTHORIZED","PROCUREMENT_QUERY","PLANNED","PR_ACCEPTED","PROCUREMENT","PARTIAL","ONLY_RECEIVED","CLOSED","HOLD","CANCELLED"];
+    
+    // History filtering for UI displays (excluding auto-routing logs)
+    const IGNORE_AUDIT_PHRASES = ['Pending Department Approval', 'Sent for Final Authorization', 'Sent to Planning', 'Sent to Procurement', '(Auto', 'Auto Forwarded', 'Workflow Changed', 'Status Changed', 'Data Centre:', 'Bulk PO Update', 'Partial Receipt', 'Reassigned', 'PO Given (Auto)'];
+    const isAuditableAction = (action) => {
+        if (!action) return true;
+        return !IGNORE_AUDIT_PHRASES.some(p => action.includes(p));
+    };
     // Statuses reachable once a PO has actually been issued - status can only move forward from here.
     const POST_PO_STATUSES = ["PROCUREMENT","PARTIAL","ONLY_RECEIVED","CLOSED","HOLD","CANCELLED"];
     // Manual status choices available before a PO exists - PROCUREMENT ("PO Given") is deliberately
@@ -1602,12 +1609,10 @@
             const l2 = findDeptL2(user.dept);
             mr.status = 'DEPT_APPROVAL_PENDING';
             mr.l2User = l2.name;
-            actionLabel += ' — Pending Planning L2 Approval';
             pendingNote = ' — sent to Planning L2 for approval.';
             pushNotification({ dept: user.dept, level: 'L2' }, `Direct PR ${docNum} from ${user.name} (${user.dept}) is pending your Planning L2 approval.`, mr.id);
         } else {
             mr.status = 'RAISED';
-            actionLabel += ' — Pending Final Authorization';
             pushNotification({ level: 'FINAL_AUTH' }, `Direct PR ${docNum} from ${user.name} (${user.dept}) is pending Final Authorization.`, mr.id);
         }
 
@@ -2397,18 +2402,15 @@
                 if (l2 && (!isDirectSource || routeThroughPlanningL2)) {
                     mr.status = 'DEPT_APPROVAL_PENDING';
                     mr.l2User = l2.name;
-                    actionLabel += isDirectSource ? ' — Pending Planning L2 Approval' : ' — Pending Department Approval';
                     const notifStr = isRevision ? 'revised and resubmitted — pending your approval' : `from ${user.name} (${user.dept}) is pending your approval`;
                     pushNotification({ dept: user.dept, level: 'L2' }, `${isDirectSource ? 'Direct PR' : 'MR'} ${mr.prNumber || mr.mrNumber} ${notifStr}.`, mr.id);
                 } else {
                     mr.status = 'RAISED';
-                    actionLabel += ' — Pending Final Authorization';
                     const notifStr = isRevision ? 'revised and resubmitted — pending Final Authorization' : `from ${user.name} (${user.dept}) is pending Final Authorization`;
                     pushNotification({ level: 'FINAL_AUTH' }, `${isDirectSource ? 'Direct PR' : 'MR'} ${mr.prNumber || mr.mrNumber} ${notifStr}.`, mr.id);
                 }
             } else {
                 mr.status = 'RAISED';
-                actionLabel += ' — Pending Final Authorization';
                 const notifStr = isRevision ? 'revised and resubmitted — pending Final Authorization' : `from ${user.name} (${user.dept}) is pending Final Authorization`;
                 pushNotification({ level: 'FINAL_AUTH' }, `${isDirectSource ? 'Direct PR' : 'MR'} ${mr.prNumber || mr.mrNumber} ${notifStr}.`, mr.id);
             }
@@ -9097,7 +9099,7 @@ function renderMrRow(item, idx, xlInputCss) {
         const isDirectPr = historyList.some(h => (h.action||'').includes('Direct PR'));
         // Full audit trail — every action ever taken on this PR (raises, approvals, every
         // query raised and every resubmission) is shown, not a curated subset of milestones.
-        const cleanHistory = historyList.map(h => ({
+        const cleanHistory = historyList.filter(h => isAuditableAction(h.action)).map(h => ({
             level: levelForActor(h), action: h.action || '—', actor: h.actor, dept: h.dept,
             note: h.note || h.reason || h.remarks || '', ts: h.ts
         }));
@@ -9315,7 +9317,7 @@ function renderMrRow(item, idx, xlInputCss) {
         const isDirectPr = historyList.some(h => (h.action||'').includes('Direct PR'));
         // Full audit trail — every action ever taken on this MR/PR (raise, every query raised,
         // every resubmission, every approval) is shown, not a curated subset of milestones.
-        const cleanHistory = historyList.map(h => ({
+        const cleanHistory = historyList.filter(h => isAuditableAction(h.action)).map(h => ({
             level: levelForActor(h), action: h.action || '—', actor: h.actor, dept: h.dept,
             note: h.note || h.reason || h.remarks || '', ts: h.ts
         }));
@@ -9622,7 +9624,7 @@ function renderMrRow(item, idx, xlInputCss) {
 
         let events = [];
         if (tab === 'pr') {
-            events = (mr.history || []).map(h => ({
+            events = (mr.history || []).filter(h => isAuditableAction(h.action)).map(h => ({
                 ts: h.ts || 0,
                 user: h.actor || 'System',
                 dept: h.dept || '',
@@ -9633,7 +9635,7 @@ function renderMrRow(item, idx, xlInputCss) {
             }));
         } else {
             // Item specific history
-            events = (mr.history || []).filter(h => h.note && h.note.includes(itemName)).map(h => ({
+            events = (mr.history || []).filter(h => isAuditableAction(h.action) && h.note && h.note.includes(itemName)).map(h => ({
                 ts: h.ts || 0,
                 user: h.actor || 'System',
                 dept: h.dept || '',
