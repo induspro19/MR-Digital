@@ -2322,11 +2322,10 @@
             mr = { id: mrId, mrNumber: mrNum, prNumber: prNum, revNo: 0, createdAt: Date.now(), history: [] };
         }
 
-        // Handle Query Resubmission Routing
-        if (isRevision && mr.queryOriginStatus) {
-            mr.status = mr.queryOriginStatus;
-        } else {
-            mr.status = 'RAISED';
+        // Revisions no longer bypass L1/L2. Clear origin tracking so it restarts the flow.
+        if (isRevision) {
+            mr.queryOriginStatus = null;
+            mr.queryOriginApprover = null;
         }
         
         mr.dept       = user.dept;
@@ -2387,27 +2386,30 @@
             //     MR goes straight to Final Authorization Pending, same as today.
             const creatorLevel = user.approvalLevel || 'L1';
             let actionLabel = isRevision ? "Revised & Resubmitted" : "Raised";
-            if (isRevision) {
-                if (mr.queryOriginStatus) {
-                    mr.status = mr.queryOriginStatus;
-                    actionLabel += ` — Returned to ${STATUS_META[mr.queryOriginStatus]?.label || 'Approver'}`;
-                    pushNotification({ level: 'L2' }, `MR ${mr.mrNumber} revised and resubmitted — returned to you for review.`, mr.id);
-                } else {
-                    mr.status = 'RAISED';
-                    pushNotification({ level: 'FINAL_AUTH' }, `MR ${mr.mrNumber} revised and resubmitted — pending review.`, mr.id);
-                }
-            } else if (creatorLevel === 'L1') {
+            
+            // Check if this was originally a Direct PR (even if we are in the MR_BASED fallback block for revisions)
+            const isDirectSource = mr.source === 'DIRECT_PR';
+            const routeThroughPlanningL2 = creatorLevel === 'L1' && isDirectSource && directPrUsesPlanningL2Chain(user) && findDeptL2(user.dept);
+
+            if (creatorLevel === 'L1') {
                 const l2 = findDeptL2(user.dept);
-                if (l2) {
+                if (l2 && (!isDirectSource || routeThroughPlanningL2)) {
                     mr.status = 'DEPT_APPROVAL_PENDING';
                     mr.l2User = l2.name;
-                    actionLabel += " — Pending Department Approval";
-                    pushNotification({ dept: user.dept, level: 'L2' }, `New MR ${mr.mrNumber} from ${user.name} (${user.dept}) is pending your Department Approval.`, mr.id);
+                    actionLabel += isDirectSource ? ' — Pending Planning L2 Approval' : ' — Pending Department Approval';
+                    const notifStr = isRevision ? 'revised and resubmitted — pending your approval' : `from ${user.name} (${user.dept}) is pending your approval`;
+                    pushNotification({ dept: user.dept, level: 'L2' }, `${isDirectSource ? 'Direct PR' : 'MR'} ${mr.prNumber || mr.mrNumber} ${notifStr}.`, mr.id);
                 } else {
-                    pushNotification({ level: 'FINAL_AUTH' }, `MR ${mr.mrNumber} from ${user.name} (${user.dept}) is pending Final Authorization.`, mr.id);
+                    mr.status = 'RAISED';
+                    actionLabel += ' — Pending Final Authorization';
+                    const notifStr = isRevision ? 'revised and resubmitted — pending Final Authorization' : `from ${user.name} (${user.dept}) is pending Final Authorization`;
+                    pushNotification({ level: 'FINAL_AUTH' }, `${isDirectSource ? 'Direct PR' : 'MR'} ${mr.prNumber || mr.mrNumber} ${notifStr}.`, mr.id);
                 }
             } else {
-                pushNotification({ level: 'FINAL_AUTH' }, `MR ${mr.mrNumber} from ${user.name} (${user.dept}) is pending Final Authorization.`, mr.id);
+                mr.status = 'RAISED';
+                actionLabel += ' — Pending Final Authorization';
+                const notifStr = isRevision ? 'revised and resubmitted — pending Final Authorization' : `from ${user.name} (${user.dept}) is pending Final Authorization`;
+                pushNotification({ level: 'FINAL_AUTH' }, `${isDirectSource ? 'Direct PR' : 'MR'} ${mr.prNumber || mr.mrNumber} ${notifStr}.`, mr.id);
             }
 
             mr.history.push({ action: actionLabel, actor: user.name, role: user.role, dept: user.dept, ts: Date.now(), note: notes });
@@ -2484,7 +2486,7 @@
         if (!mr) return;
         
         // Prevent cancelling if any items have reached Procurement/PO Given.
-        const hasProcurementItems = mr.items && mr.items.some(it => POST_PO_STATUSES.includes(it.status));
+        const hasProcurementItems = mr.items && mr.items.some(it => POST_PO_STATUSES.includes(it.status) && it.status !== 'CANCELLED');
         if (hasProcurementItems) {
             alert('Cannot cancel this entire request because some items have already been processed by Procurement (PO Given). You must handle cancellations from the Data Centre.');
             return;
@@ -4829,7 +4831,7 @@ function renderMrRow(item, idx, xlInputCss) {
                         <tr>
                             <td class="px-2.5 py-2 font-mono font-bold text-brand">
                                 ${esc(m.mrNumber)}
-                                ${(m.history && m.history.length > 0 && m.history[m.history.length - 1].action && m.history[m.history.length - 1].action.startsWith('Revised & Resubmitted')) ? '<div class="mt-0.5"><span class="inline-block px-1.5 py-0.5 bg-amberx text-white text-[8px] uppercase font-black rounded border border-amberx-dark/30">Resubmitted</span></div>' : ''}
+                                ${(m.history && m.history.length > 0 && typeof m.history[m.history.length - 1].action === 'string' && m.history[m.history.length - 1].action.startsWith('Revised & Resubmitted')) ? '<div class="mt-0.5"><span class="inline-block px-1.5 py-0.5 bg-amberx text-white text-[8px] uppercase font-black rounded border border-amberx-dark/30">Resubmitted</span></div>' : ''}
                             </td>
                             <td class="px-2.5 py-2 truncate" title="${esc(itemNames)}">${esc(itemNames)}</td>
                             <td class="px-2.5 py-2">
@@ -4877,7 +4879,7 @@ function renderMrRow(item, idx, xlInputCss) {
                             <div>
                                 <p class="text-2xl font-display font-bold text-brand tracking-tight font-mono">
                                     ${esc(m.mrNumber)}
-                                    ${(m.history && m.history.length > 0 && m.history[m.history.length - 1].action && m.history[m.history.length - 1].action.startsWith('Revised & Resubmitted')) ? '<span class="ml-3 inline-block px-2.5 py-1 bg-amberx text-white text-[10px] uppercase font-black rounded-lg shadow-sm align-middle mb-1 border border-amberx-dark/30">Resubmitted</span>' : ''}
+                                    ${(m.history && m.history.length > 0 && typeof m.history[m.history.length - 1].action === 'string' && m.history[m.history.length - 1].action.startsWith('Revised & Resubmitted')) ? '<span class="ml-3 inline-block px-2.5 py-1 bg-amberx text-white text-[10px] uppercase font-black rounded-lg shadow-sm align-middle mb-1 border border-amberx-dark/30">Resubmitted</span>' : ''}
                                 </p>
                                 <p class="text-xs text-slate-400 mt-1">${esc(m.dept)} · ${fmtDate(m.createdAt)} · By ${esc(m.raisedBy)}${m.source === 'DIRECT_PR' ? ' · <span class="text-violet-600 font-black uppercase">Direct PR</span>' : ' (L1)'}</p>
                             </div>
@@ -5541,7 +5543,7 @@ function renderMrRow(item, idx, xlInputCss) {
                             <div>
                                 <p class="text-2xl font-display font-bold text-brand tracking-tight font-mono">
                                     ${esc(m.prNumber || m.mrNumber)}
-                                    ${(m.history && m.history.length > 0 && m.history[m.history.length - 1].action && m.history[m.history.length - 1].action.startsWith('Revised & Resubmitted')) ? '<span class="ml-3 inline-block px-2.5 py-1 bg-amberx text-white text-[10px] uppercase font-black rounded-lg shadow-sm align-middle mb-1 border border-amberx-dark/30">Resubmitted</span>' : ''}
+                                    ${(m.history && m.history.length > 0 && typeof m.history[m.history.length - 1].action === 'string' && m.history[m.history.length - 1].action.startsWith('Revised & Resubmitted')) ? '<span class="ml-3 inline-block px-2.5 py-1 bg-amberx text-white text-[10px] uppercase font-black rounded-lg shadow-sm align-middle mb-1 border border-amberx-dark/30">Resubmitted</span>' : ''}
                                 </p>
                                 <p class="text-xs text-slate-400 mt-1">${esc(m.dept)} · ${fmtDate(m.createdAt)} · By ${esc(m.raisedBy)}${m.source==='DIRECT_PR' ? ' · <span class="text-violet-600 font-black">Direct PR</span>' : ''}</p>
                             </div>
