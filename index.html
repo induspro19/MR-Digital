@@ -3638,7 +3638,7 @@
                 ${navBtn('reports','Reports','bar-chart-3')}
                 ${returnedQueriesCount > 0 ? navBtn('returned_queries','Returned Queries','alert-circle', returnedQueriesCount) : ''}
                 ${(user.role==='admin'||user.role==='creator') ? navBtn('new_mr','Raise MR','plus-circle') : ''}
-                ${(user.approvalLevel==='L2') ? navBtn('dept_approval','Dept Approval','users-2', mrs.filter(m=>(m.status==='DEPT_APPROVAL_PENDING'||m.status==='RETURNED_TO_L2') && m.dept===user.dept).length) : ''}
+                ${(user.approvalLevel==='L2') ? navBtn('dept_approval','Dept Approval','users-2', mrs.filter(m=>(m.status==='DEPT_APPROVAL_PENDING'||m.status==='RETURNED_TO_L2') && (m.dept||'').trim().toLowerCase()===(user.dept||'').trim().toLowerCase()).length) : ''}
                 ${(user.role==='admin'||user.role==='authorizer') ? navBtn('authorize','Authorize','shield-check', mrs.filter(m=>m.status==='RAISED'||m.status==='RETURNED_TO_FINAL_AUTH').length) : ''}
                 ${(user.role==='admin'||user.role==='planner') ? navBtn('planner','Planning','file-search', mrs.filter(m=>m.status==='AUTHORIZED'||m.status==='PROCUREMENT_QUERY').length) : ''}
                 ${(user.role==='admin'||user.role==='planner') ? navBtn('direct_pr','+ Create Direct PR','zap') : ''}
@@ -4855,7 +4855,7 @@ function renderMrRow(item, idx, xlInputCss) {
     // department — "L2 users must never see requests from other departments" — and its Approve
     // button drives the two-step Department Approved → Final Authorization Pending chain.
     function renderDeptApproval() {
-        let queue = appData.mrs.filter(m => (m.status === 'DEPT_APPROVAL_PENDING' || m.status === 'RETURNED_TO_L2') && m.dept === user.dept);
+        let queue = appData.mrs.filter(m => (m.status === 'DEPT_APPROVAL_PENDING' || m.status === 'RETURNED_TO_L2') && (m.dept || '').trim().toLowerCase() === (user.dept || '').trim().toLowerCase());
         const q = queueFilters.dept_approval || '';
         if (q) queue = queue.filter(m => matchesKeyword(m, q));
         return `
