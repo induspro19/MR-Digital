@@ -105,6 +105,35 @@
   .glass-input:focus { border-color: #B3122E; box-shadow: 0 0 0 3px rgba(179,18,46,0.08); }
   .login-auth-status { display: none; }
 
+  /* ERP Data Center Table Row Styling */
+  .dc-row {
+    transition: background-color 0.2s ease, border-left-color 0.2s ease;
+    cursor: pointer;
+    border-left: 4px solid transparent;
+  }
+  .dc-row-odd {
+    background-color: #ffffff;
+  }
+  .dc-row-even {
+    background-color: #f8fafc;
+  }
+  .dc-row:hover:not(.dc-row-selected) {
+    background-color: #EAF4FF !important;
+    border-left: 4px solid #2563EB !important;
+  }
+  .dc-row:hover:not(.dc-row-selected) td.dc-sticky-cell {
+    background-color: #EAF4FF !important;
+  }
+  .dc-row-selected,
+  .dc-row-selected:hover {
+    background-color: #DCEEFF !important;
+    border-left: 4px solid #0D6EFD !important;
+  }
+  .dc-row-selected td.dc-sticky-cell,
+  .dc-row-selected:hover td.dc-sticky-cell {
+    background-color: #DCEEFF !important;
+  }
+
   .login-scene {
     display: flex; min-height: 100vh; width: 100%; position: relative; overflow: hidden;
     background: linear-gradient(145deg, #060b12 0%, #0B1420 35%, #111C2C 65%, #0a1628 100%);
@@ -832,6 +861,10 @@
         if (dcUndoStack.length > DC_UNDO_LIMIT) dcUndoStack.shift();
         dcRedoStack = [];
     }
+    function dcPushUndo() {
+        if (typeof dcSnapshotForUndo === 'function') dcSnapshotForUndo();
+    }
+    window.dcPushUndo = dcPushUndo;
     // Right-click context menu state for Data Centre rows: { x, y, mrId, itemIdx }
     let dcContextMenu = null;
     // Hold/Cancel requires mandatory Reason + Justification before the status can save.
@@ -3409,6 +3442,7 @@
         try {
         const mainBefore = document.querySelector('main.flex-1.overflow-y-auto');
         const sidebarNavBefore = document.getElementById('app-sidebar-nav');
+        const dcWrapBefore = document.getElementById('dc-table-wrap');
         const preserveScroll = !!(mainBefore && user && _lastRenderedTab === activeTab
             && (activeTab !== 'planner' || _lastRenderedSection === plannerSection)
             && !printPrNumber && !printMrData && activeTab !== 'new_mr');
@@ -3416,6 +3450,7 @@
             ? { top: mainBefore.scrollTop, left: mainBefore.scrollLeft }
             : null;
         const savedSidebarScroll = sidebarNavBefore ? sidebarNavBefore.scrollTop : null;
+        const savedDcScroll = dcWrapBefore ? { top: dcWrapBefore.scrollTop, left: dcWrapBefore.scrollLeft } : null;
 
         if (!user) {
             _lastRenderedTab = null;
@@ -3495,7 +3530,7 @@
         }
         _lastRenderedTab = activeTab;
         _lastRenderedSection = activeTab === 'planner' ? plannerSection : null;
-        if (savedScroll || savedSidebarScroll !== null) {
+        if (savedScroll || savedSidebarScroll !== null || savedDcScroll !== null) {
             requestAnimationFrame(() => {
                 requestAnimationFrame(() => {
                     if (savedScroll) {
@@ -3505,6 +3540,13 @@
                     if (savedSidebarScroll !== null) {
                         const nav = document.getElementById('app-sidebar-nav');
                         if (nav) nav.scrollTop = savedSidebarScroll;
+                    }
+                    if (savedDcScroll) {
+                        const dcWrap = document.getElementById('dc-table-wrap');
+                        if (dcWrap) {
+                            dcWrap.scrollTop = savedDcScroll.top;
+                            dcWrap.scrollLeft = savedDcScroll.left;
+                        }
                     }
                 });
             });
@@ -7414,13 +7456,21 @@ function renderMrRow(item, idx, xlInputCss) {
         };
 
         tbody.innerHTML = pageRows.map((r, ri) => {
+            const key = r.mrId + '|' + r.itemIdx;
+            const isSelected = window.dcBulkSelected && window.dcBulkSelected.has(key);
             const worstDelay = Math.max(r.reqDelayDays||0, r.deliveryDelayDays||0);
-            const rowBg = worstDelay>15?'#FEE2E2':(worstDelay>0?'#FEF3E2':(ri%2?'#fafbfc':'#fff'));
+            let baseBg = (ri % 2 === 0) ? '#ffffff' : '#f8fafc';
+            if (worstDelay > 15) baseBg = '#FEE2E2';
+            else if (worstDelay > 0) baseBg = '#FEF3E2';
+
+            const effectiveBg = isSelected ? '#DCEEFF' : baseBg;
+            const borderLeft = isSelected ? '4px solid #0D6EFD' : '4px solid transparent';
+            const rowClass = `dc-row ${isSelected ? 'dc-row-selected' : (ri % 2 === 0 ? 'dc-row-odd' : 'dc-row-even')}`;
             let acc = 0;
             return `
-        <tr style="background:${rowBg};" oncontextmenu="window.dcOpenContextMenu(event,'${r.mrId}',${r.itemIdx})">
-            <td style="border:1px solid #eef0f3;padding:3px 6px;width:36px;min-width:36px;text-align:center;position:sticky;left:0;background:${rowBg};z-index:1;">
-                <input type="checkbox" ${window.dcBulkSelected && window.dcBulkSelected.has(r.mrId+'|'+r.itemIdx)?'checked':''} onchange="window.dcToggleBulkRow('${r.mrId}|${r.itemIdx}',this.checked)" style="cursor:pointer;accent-color:#ef4444;width:14px;height:14px;" />
+        <tr data-row-key="${key}" data-row-idx="${ri}" data-base-bg="${baseBg}" class="${rowClass}" style="background:${effectiveBg}; border-left:${borderLeft};" oncontextmenu="window.dcOpenContextMenu(event,'${r.mrId}',${r.itemIdx})">
+            <td class="dc-sticky-cell" style="border:1px solid #eef0f3;padding:3px 6px;width:36px;min-width:36px;text-align:center;position:sticky;left:0;background:${effectiveBg};z-index:1;">
+                <input type="checkbox" ${isSelected ? 'checked' : ''} onchange="window.dcToggleBulkRow('${key}',this.checked)" style="cursor:pointer;accent-color:#ef4444;width:14px;height:14px;" />
             </td>
             ${cols.map((c, ci) => {
                 const w = dcColWidth(c);
@@ -7428,8 +7478,8 @@ function renderMrRow(item, idx, xlInputCss) {
                 if (c.sticky) acc += w;
                 const isDelayCol = (c.key === 'reqDelayDays' || c.key === 'deliveryDelayDays');
                 return `
-            <td data-col-key="${c.key}" ondblclick="window.dcCopyCell('${esc(String(r[c.key]??''))}')" title="Double-click to copy"
-                style="border:1px solid #eef0f3; padding:3px 6px; min-width:${w}px; max-width:${w}px; width:${w}px; overflow:hidden; text-overflow:ellipsis; ${c.sticky?`position:sticky; left:${left}px; background:${rowBg}; z-index:1; font-weight:700;`:''} ${isDelayCol && r[c.key]>0 ?'color:#DC2626; font-weight:700;':''}">
+            <td data-col-key="${c.key}" ${c.sticky ? 'class="dc-sticky-cell"' : ''} ondblclick="window.dcCopyCell('${esc(String(r[c.key]??''))}')" title="Double-click to copy"
+                style="border:1px solid #eef0f3; padding:3px 6px; min-width:${w}px; max-width:${w}px; width:${w}px; overflow:hidden; text-overflow:ellipsis; ${c.sticky?`position:sticky; left:${left}px; background:${effectiveBg}; z-index:1; font-weight:700;`:''} ${isDelayCol && r[c.key]>0 ?'color:#DC2626; font-weight:700;':''}">
                 ${(canEdit && c.editable) ? cellEditable(r, c, ri, ci) : cellReadonly(r, c)}
             </td>`; }).join('')}
             <td title="View History" style="border:1px solid #eef0f3;padding:1px 2px;text-align:center;width:22px;min-width:22px;max-width:22px;">
@@ -7730,13 +7780,21 @@ function renderMrRow(item, idx, xlInputCss) {
                     </thead>
                     <tbody id="dc-tbody">
                         ${pageRows.map((r, ri) => {
+                            const key = r.mrId + '|' + r.itemIdx;
+                            const isSelected = window.dcBulkSelected && window.dcBulkSelected.has(key);
                             const worstDelay = Math.max(r.reqDelayDays||0, r.deliveryDelayDays||0);
-                            const rowBg = worstDelay>15?'#FEE2E2':(worstDelay>0?'#FEF3E2':(ri%2?'#fafbfc':'#fff'));
+                            let baseBg = (ri % 2 === 0) ? '#ffffff' : '#f8fafc';
+                            if (worstDelay > 15) baseBg = '#FEE2E2';
+                            else if (worstDelay > 0) baseBg = '#FEF3E2';
+
+                            const effectiveBg = isSelected ? '#DCEEFF' : baseBg;
+                            const borderLeft = isSelected ? '4px solid #0D6EFD' : '4px solid transparent';
+                            const rowClass = `dc-row ${isSelected ? 'dc-row-selected' : (ri % 2 === 0 ? 'dc-row-odd' : 'dc-row-even')}`;
                             let acc = 0;
                             return `
-                        <tr style="background:${rowBg};" oncontextmenu="window.dcOpenContextMenu(event,'${r.mrId}',${r.itemIdx})">
-                            <td style="border:1px solid #eef0f3;padding:3px 6px;width:36px;min-width:36px;text-align:center;position:sticky;left:0;background:${rowBg};z-index:1;">
-                                <input type="checkbox" ${window.dcBulkSelected && window.dcBulkSelected.has(r.mrId+'|'+r.itemIdx)?'checked':''} onchange="window.dcToggleBulkRow('${r.mrId}|${r.itemIdx}',this.checked)" style="cursor:pointer;accent-color:#ef4444;width:14px;height:14px;" />
+                        <tr data-row-key="${key}" data-row-idx="${ri}" data-base-bg="${baseBg}" class="${rowClass}" style="background:${effectiveBg}; border-left:${borderLeft};" oncontextmenu="window.dcOpenContextMenu(event,'${r.mrId}',${r.itemIdx})">
+                            <td class="dc-sticky-cell" style="border:1px solid #eef0f3;padding:3px 6px;width:36px;min-width:36px;text-align:center;position:sticky;left:0;background:${effectiveBg};z-index:1;">
+                                <input type="checkbox" ${isSelected ? 'checked' : ''} onchange="window.dcToggleBulkRow('${key}',this.checked)" style="cursor:pointer;accent-color:#ef4444;width:14px;height:14px;" />
                             </td>
                             ${cols.map((c, ci) => {
                                 const w = dcColWidth(c);
@@ -7744,8 +7802,8 @@ function renderMrRow(item, idx, xlInputCss) {
                                 if (c.sticky) acc += w;
                                 const isDelayCol = (c.key === 'reqDelayDays' || c.key === 'deliveryDelayDays');
                                 return `
-                            <td data-col-key="${c.key}" ondblclick="window.dcCopyCell('${esc(String(r[c.key]??''))}')" title="Double-click to copy"
-                                style="border:1px solid #eef0f3; padding:3px 6px; min-width:${w}px; max-width:${w}px; width:${w}px; overflow:hidden; text-overflow:ellipsis; ${c.sticky?`position:sticky; left:${left}px; background:${rowBg}; z-index:1; font-weight:700;`:''} ${isDelayCol && r[c.key]>0 ?'color:#DC2626; font-weight:700;':''}">
+                            <td data-col-key="${c.key}" ${c.sticky ? 'class="dc-sticky-cell"' : ''} ondblclick="window.dcCopyCell('${esc(String(r[c.key]??''))}')" title="Double-click to copy"
+                                style="border:1px solid #eef0f3; padding:3px 6px; min-width:${w}px; max-width:${w}px; width:${w}px; overflow:hidden; text-overflow:ellipsis; ${c.sticky?`position:sticky; left:${left}px; background:${effectiveBg}; z-index:1; font-weight:700;`:''} ${isDelayCol && r[c.key]>0 ?'color:#DC2626; font-weight:700;':''}">
                                 ${(canEdit && c.editable) ? cellEditable(r, c, ri, ci) : cellReadonly(r, c)}
                             </td>`; }).join('')}
                             <td title="View History" style="border:1px solid #eef0f3;padding:1px 2px;text-align:center;width:22px;min-width:22px;max-width:22px;">
@@ -7818,12 +7876,95 @@ function renderMrRow(item, idx, xlInputCss) {
     }
 
     // Bulk PO Update Logic
+    function updateBulkSelectionUI() {
+        if (!window.dcBulkSelected) window.dcBulkSelected = new Set();
+        const count = window.dcBulkSelected.size;
+        
+        let bar = document.getElementById('dc-floating-bulk-bar');
+        if (count > 0) {
+            if (!bar) {
+                const barWrap = document.createElement('div');
+                barWrap.id = 'dc-floating-bulk-bar';
+                barWrap.className = 'no-print';
+                barWrap.style.cssText = 'position:fixed; bottom:24px; left:50%; transform:translateX(-50%); z-index:99999; background:#1e2530; color:#fff; padding:10px 20px; border-radius:16px; box-shadow:0 10px 30px rgba(0,0,0,0.35); display:flex; align-items:center; gap:16px; border:1px solid rgba(255,255,255,0.15); max-width:90vw;';
+                barWrap.innerHTML = `
+                    <div style="display:flex; align-items:center; gap:8px;">
+                        <span style="display:inline-block; width:8px; height:8px; border-radius:50%; background:#10b981; box-shadow:0 0 8px #10b981;"></span>
+                        <p id="dc-bulk-count-text" style="font-size:11px; font-weight:900; text-transform:uppercase; letter-spacing:0.08em; white-space:nowrap; margin:0;">
+                            ${count} ${count === 1 ? 'row' : 'rows'} selected
+                        </p>
+                    </div>
+                    <button onclick="window.dcOpenBulkPoModal()" style="background:#1DB79C; color:#fff; border:none; padding:8px 16px; border-radius:8px; font-size:10px; font-weight:900; text-transform:uppercase; letter-spacing:0.08em; cursor:pointer; transition:all 0.15s ease; white-space:nowrap; display:inline-flex; align-items:center; gap:6px; box-shadow:0 2px 8px rgba(29,183,156,0.4);">
+                        <svg xmlns="http://www.w3.org/2000/svg" width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><path d="M11 4H4a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h14a2 2 0 0 0 2-2v-7"/><path d="M18.5 2.5a2.121 2.121 0 0 1 3 3L12 15l-4 1 1-4 9.5-9.5z"/></svg>
+                        Bulk Update PO <span style="font-size:9px; opacity:0.85; font-weight:700;">(Enter ↵)</span>
+                    </button>
+                    <button onclick="window.dcClearBulkSelection();" style="background:none; border:none; color:#94a3b8; font-size:10px; font-weight:900; text-transform:uppercase; letter-spacing:0.08em; cursor:pointer; transition:color 0.15s ease;" onmouseover="this.style.color='#fff'" onmouseout="this.style.color='#94a3b8'">
+                        Clear
+                    </button>
+                `;
+                document.body.appendChild(barWrap);
+            } else {
+                const textEl = document.getElementById('dc-bulk-count-text');
+                if (textEl) {
+                    textEl.textContent = `${count} ${count === 1 ? 'row' : 'rows'} selected`;
+                }
+            }
+        } else {
+            if (bar) {
+                bar.remove();
+            }
+        }
+
+        const selectAllEl = document.getElementById('dc-select-all');
+        if (selectAllEl) {
+            const pageRows = dcFilteredRows().slice((dcPage-1)*dcPageSize, dcPage*dcPageSize);
+            const allPageSelected = pageRows.length > 0 && pageRows.every(r => window.dcBulkSelected.has(r.mrId + '|' + r.itemIdx));
+            selectAllEl.checked = allPageSelected;
+        }
+    }
+
+    window.dcClearBulkSelection = () => {
+        if (window.dcBulkSelected) window.dcBulkSelected.clear();
+        const tbody = document.getElementById('dc-tbody');
+        if (tbody) {
+            tbody.querySelectorAll('tr[data-row-key]').forEach(tr => {
+                const cb = tr.querySelector('input[type="checkbox"]');
+                if (cb) cb.checked = false;
+                tr.classList.remove('dc-row-selected');
+                const ri = parseInt(tr.getAttribute('data-row-idx') || '0', 10);
+                const baseBg = tr.getAttribute('data-base-bg') || (ri % 2 === 0 ? '#ffffff' : '#f8fafc');
+                tr.style.backgroundColor = baseBg;
+                tr.style.borderLeft = '4px solid transparent';
+                tr.querySelectorAll('.dc-sticky-cell').forEach(td => td.style.backgroundColor = baseBg);
+            });
+        }
+        updateBulkSelectionUI();
+    };
+
     window.dcToggleBulkRow = (key, checked) => {
         if (!window.dcBulkSelected) window.dcBulkSelected = new Set();
         if (checked) window.dcBulkSelected.add(key);
         else window.dcBulkSelected.delete(key);
-        render();
+        
+        const tr = document.querySelector(`tr[data-row-key="${key}"]`);
+        if (tr) {
+            if (checked) {
+                tr.classList.add('dc-row-selected');
+                tr.style.backgroundColor = '#DCEEFF';
+                tr.style.borderLeft = '4px solid #0D6EFD';
+                tr.querySelectorAll('.dc-sticky-cell').forEach(td => td.style.backgroundColor = '#DCEEFF');
+            } else {
+                tr.classList.remove('dc-row-selected');
+                const ri = parseInt(tr.getAttribute('data-row-idx') || '0', 10);
+                const baseBg = tr.getAttribute('data-base-bg') || (ri % 2 === 0 ? '#ffffff' : '#f8fafc');
+                tr.style.backgroundColor = baseBg;
+                tr.style.borderLeft = '4px solid transparent';
+                tr.querySelectorAll('.dc-sticky-cell').forEach(td => td.style.backgroundColor = baseBg);
+            }
+        }
+        updateBulkSelectionUI();
     };
+
     window.dcToggleBulkAll = (checked) => {
         if (!window.dcBulkSelected) window.dcBulkSelected = new Set();
         const rows = dcFilteredRows().slice((dcPage-1)*dcPageSize, dcPage*dcPageSize);
@@ -7832,7 +7973,27 @@ function renderMrRow(item, idx, xlInputCss) {
             if (checked) window.dcBulkSelected.add(key);
             else window.dcBulkSelected.delete(key);
         });
-        render();
+        const tbody = document.getElementById('dc-tbody');
+        if (tbody) {
+            tbody.querySelectorAll('tr[data-row-key]').forEach(tr => {
+                const cb = tr.querySelector('input[type="checkbox"]');
+                if (cb) cb.checked = checked;
+                if (checked) {
+                    tr.classList.add('dc-row-selected');
+                    tr.style.backgroundColor = '#DCEEFF';
+                    tr.style.borderLeft = '4px solid #0D6EFD';
+                    tr.querySelectorAll('.dc-sticky-cell').forEach(td => td.style.backgroundColor = '#DCEEFF');
+                } else {
+                    tr.classList.remove('dc-row-selected');
+                    const ri = parseInt(tr.getAttribute('data-row-idx') || '0', 10);
+                    const baseBg = tr.getAttribute('data-base-bg') || (ri % 2 === 0 ? '#ffffff' : '#f8fafc');
+                    tr.style.backgroundColor = baseBg;
+                    tr.style.borderLeft = '4px solid transparent';
+                    tr.querySelectorAll('.dc-sticky-cell').forEach(td => td.style.backgroundColor = baseBg);
+                }
+            });
+        }
+        updateBulkSelectionUI();
     };
     window.dcOpenBulkPoModal = () => {
         if (!window.dcBulkSelected || window.dcBulkSelected.size === 0) { showToast('Select at least one row first.'); return; }
@@ -7872,7 +8033,12 @@ function renderMrRow(item, idx, xlInputCss) {
 
         let updatedCount = 0;
         try {
-            dcPushUndo();
+            try {
+                if (typeof dcSnapshotForUndo === 'function') dcSnapshotForUndo();
+                else if (typeof dcPushUndo === 'function') dcPushUndo();
+            } catch (undoErr) {
+                console.warn("Undo history unavailable", undoErr);
+            }
             const modifiedMrs = new Set();
 
             selectedKeys.forEach(function(key) {
