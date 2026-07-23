@@ -1313,8 +1313,8 @@
     let _lastRenderedSection = null; // planner sub-section (overview / queue / merge_pr)
 
     function captureFocusForRestore() {
-        if (_pendingFocus && _pendingFocus.explicit) return; const el = document.activeElement;
-        if (!el || !/^(INPUT|TEXTAREA|SELECT)$/.test(el.tagName)) { _pendingFocus = null; return; }
+        const el = document.activeElement;
+        if (!el || !/^(INPUT|TEXTAREA|SELECT)$/.test(el.tagName)) return;
         _pendingFocus = {
             id: el.id || '',
             fk: el.getAttribute('data-focus-key') || '',
@@ -1330,10 +1330,15 @@
         let el = pf.id ? document.getElementById(pf.id) : null;
         if (!el && pf.fk) el = document.querySelector('[data-focus-key="' + pf.fk.replace(/"/g, '\\"') + '"]');
         if (!el) return;
-        el.focus({ preventScroll: true });
-        if (pf.start !== null && el.setSelectionRange) {
-            try { el.setSelectionRange(pf.start, pf.end); } catch (e) {}
-        }
+        try {
+            el.focus({ preventScroll: true });
+            if (pf.start !== null && el.setSelectionRange) {
+                const maxLen = el.value ? el.value.length : 0;
+                const start = Math.min(pf.start, maxLen);
+                const end = Math.min(pf.end, maxLen);
+                el.setSelectionRange(start, end);
+            }
+        } catch (e) {}
     }
 
     function softRender() {
@@ -1342,9 +1347,14 @@
             _softRenderTimer = null;
             captureFocusForRestore();
             _isSoftRender = true;
-            try { render(); } finally { _isSoftRender = false; }
+            try {
+                render();
+                restoreFocusAfterRender();
+            } finally {
+                _isSoftRender = false;
+            }
             requestAnimationFrame(restoreFocusAfterRender);
-        }, 180);
+        }, 250);
     }
 
     function tokenize(q) { return String(q||'').trim().toLowerCase().split(/\s+/).filter(Boolean); }
@@ -3478,6 +3488,9 @@
             ${historyModal ? renderHistoryModal() : ''}
         `;
         try { lucide.createIcons(); } catch(e){}
+        if (_pendingFocus) {
+            restoreFocusAfterRender();
+        }
         _lastRenderedTab = activeTab;
         _lastRenderedSection = activeTab === 'planner' ? plannerSection : null;
         if (savedScroll || savedSidebarScroll !== null) {
@@ -6364,8 +6377,35 @@ function renderMrRow(item, idx, xlInputCss) {
         return rows;
     }
 
-    window.dcSetGlobalQ = (val) => { dcGlobalQ = val; dcPage = 1; softRender(); };
-    window.dcSetColFilter = (key, val) => { dcColFilter[key] = val; dcPage = 1; softRender(); };
+    let _dcFilterDebounceTimer = null;
+
+    window.dcSetGlobalQ = (val) => {
+        dcGlobalQ = val;
+        dcPage = 1;
+        if (_dcFilterDebounceTimer) clearTimeout(_dcFilterDebounceTimer);
+        _dcFilterDebounceTimer = setTimeout(() => {
+            _dcFilterDebounceTimer = null;
+            if (document.getElementById('dc-tbody')) {
+                window.dcUpdateGridRowsOnly();
+            } else {
+                softRender();
+            }
+        }, 150);
+    };
+
+    window.dcSetColFilter = (key, val) => {
+        dcColFilter[key] = val;
+        dcPage = 1;
+        if (_dcFilterDebounceTimer) clearTimeout(_dcFilterDebounceTimer);
+        _dcFilterDebounceTimer = setTimeout(() => {
+            _dcFilterDebounceTimer = null;
+            if (document.getElementById('dc-tbody')) {
+                window.dcUpdateGridRowsOnly();
+            } else {
+                softRender();
+            }
+        }, 150);
+    };
     window.dcSort = (key) => {
         dcSort = { key, dir: (dcSort.key === key && dcSort.dir === 'asc') ? 'desc' : 'asc' };
         render();
@@ -7144,6 +7184,150 @@ function renderMrRow(item, idx, xlInputCss) {
         alert('✅ PR Accepted! It has been moved to the Data Centre.');
     };
 
+    window.dcUpdateGridRowsOnly = () => {
+        const tbody = document.getElementById('dc-tbody');
+        if (!tbody || activeTab !== 'data_centre') {
+            softRender();
+            return;
+        }
+
+        const canEdit = (user.role === 'admin' || user.role === 'procurement');
+        const allRows = dcFilteredRows();
+        const summary = dcSummary(allRows);
+        const totalPages = Math.max(1, Math.ceil(allRows.length / dcPageSize));
+        if (dcPage > totalPages) dcPage = totalPages;
+        const pageRows = allRows.slice((dcPage-1)*dcPageSize, dcPage*dcPageSize);
+        const cols = dcOrderedColumns(DC_COLUMNS.filter(c => !dcHidden.has(c.key) && (!c.procOnly || user.role === 'procurement')));
+        const handlerNames = activeProcHandlers().map(h => h.name);
+
+        const holdCancelTooltip = (r) => {
+            if (r.status !== 'HOLD' && r.status !== 'CANCELLED') return '';
+            const lines = [
+                `Reason: ${r.holdCancelReason || '—'}`,
+                `Justification: ${r.holdCancelJustification || '—'}`,
+                `Updated By: ${r.holdCancelUpdatedBy || '—'}`,
+                `Date & Time: ${r.holdCancelTs ? fmtDateTime(r.holdCancelTs) : '—'}`
+            ];
+            return esc(lines.join('\n'));
+        };
+        const cellReadonly = (r, c) => {
+            const v = r[c.key];
+            if (c.key === 'status') return `<span title="${holdCancelTooltip(r)}">${renderStatusBadge(v)}</span>`;
+            if (c.key === 'source') return v === 'DIRECT_PR'
+                ? `<span class="status-chip" style="background:#F2ECFC;color:#6D28D9;border-color:#6D28D922"><span class="dot" style="background:#6D28D9"></span>Direct PR</span>`
+                : `<span class="status-chip" style="background:#EEF0FE;color:#4F46E5;border-color:#4F46E522"><span class="dot" style="background:#4F46E5"></span>MR Based</span>`;
+            if (c.key === 'itemCompletionPct') {
+                const pct = Number(v)||0;
+                const clr = pct>=100 ? '#047857' : (pct>0 ? '#B45309' : '#94a3b8');
+                return `<span style="font-weight:800;color:${clr}">${pct.toFixed(1)}%</span>`;
+            }
+            if (c.key === 'date') return fmtDate(v);
+            if (c.key === 'reqDate' || c.key === 'poDate' || c.key === 'tentDelivery') return v ? fmtDate(v) : '—';
+            if (c.currency) return formatCurrencyValue(v);
+            if (c.num) return (typeof v === 'number') ? (c.key==='rate'||c.key==='amount' ? v.toFixed(2) : v) : (v||'—');
+            return esc(String(v ?? '')) || '—';
+        };
+        const cellEditable = (r, c, ri, ci) => {
+            const navAttrs = `data-r="${ri}" data-c="${ci}" onkeydown="window.dcNavKey(event,${ri},${ci})"`;
+            if (c.editable === 'status') {
+                const opts = dcStatusOptions(r.status);
+                return `<span title="${holdCancelTooltip(r)}"><select id="dc-in-${ri}-${ci}" ${navAttrs} onchange="window.dcRequestStatusChange('${r.mrId}',${r.itemIdx},this.value)" style="width:100%;font-size:10px;padding:2px;border:1px solid #cbd5e1;border-radius:4px;">
+                    ${opts.map(s => `<option value="${s}" ${r.status===s?'selected':''}>${STATUS_META[s].label}</option>`).join('')}
+                </select></span>`;
+            }
+            if (c.editable === 'handler') {
+                if (!r.prHandleBy) {
+                    return `<select id="dc-in-${ri}-${ci}" ${navAttrs} onchange="window.dcAssignHandler('${r.mrId}',${r.itemIdx},this.value)" style="width:100%;font-size:10px;padding:2px;border:1px solid #cbd5e1;border-radius:4px;">
+                        <option value="">— Unassigned —</option>
+                        ${handlerNames.map(n => `<option value="${esc(n)}">${esc(n)}</option>`).join('')}
+                    </select>`;
+                }
+                const stillActive = handlerNames.includes(r.prHandleBy);
+                return `<div style="display:flex;align-items:center;gap:5px;">
+                    <span style="font-size:10px;font-weight:700;color:${stillActive?'#1f2937':'#94a3b8'};" title="${stillActive?'':'This handler is now Inactive'}">${esc(r.prHandleBy)}</span>
+                    ${canReassign() ? `<button type="button" onclick="window.openReassignModal('${r.mrId}',${r.itemIdx})" title="Reassign" style="color:#B3122E;flex-shrink:0;"><i data-lucide="repeat" style="width:12px;height:12px;"></i></button>` : ''}
+                </div>`;
+            }
+            if (c.editable === 'date') {
+                const incomplete = (c.key === 'poDate') && r.poNo && !r.poDate;
+                return `<input type="date" id="dc-in-${ri}-${ci}" ${navAttrs} value="${esc(r[c.key])}" onchange="window.dcUpdateItemField('${r.mrId}',${r.itemIdx},'${c.key}',this.value)" style="width:100%;font-size:10px;padding:2px;border:1px solid ${incomplete?'#f59e0b':'#cbd5e1'};border-radius:4px;" title="${incomplete?'Enter PO Date to auto-issue this PO':''}" />`;
+            }
+            if (c.editable === 'number') {
+                return `<input type="number" step="0.01" id="dc-in-${ri}-${ci}" ${navAttrs} value="${esc(r[c.key])}" onchange="window.dcUpdateItemField('${r.mrId}',${r.itemIdx},'${c.key}',this.value)" style="width:100%;font-size:10px;padding:2px;border:1px solid #cbd5e1;border-radius:4px;" />`;
+            }
+            if (c.key === 'poNo') {
+                const incomplete = r.poDate && !r.poNo;
+                return `<input type="text" id="dc-in-${ri}-${ci}" ${navAttrs} value="${esc(r.poNo)}" onchange="window.dcUpdateItemField('${r.mrId}',${r.itemIdx},'poNo',this.value)" style="width:100%;font-size:10px;padding:2px;border:1px solid ${incomplete?'#f59e0b':'#cbd5e1'};border-radius:4px;" placeholder="PO Number..." title="${incomplete?'Enter PO Number to auto-issue this PO':''}" />`;
+            }
+            if (c.editable === 'receivedQty') {
+                const disabled = !r.poNo;
+                return `<input type="number" min="0" max="${r.qty}" id="dc-in-${ri}-${ci}" ${navAttrs} value="${r.receivedQty}" ${disabled?'disabled':''}
+                    onchange="window.dcUpdateItemField('${r.mrId}',${r.itemIdx},'receivedQty',this.value)"
+                    style="width:100%;font-size:10px;padding:2px;border:1px solid #cbd5e1;border-radius:4px;${disabled?'background:#f1f5f9;color:#94a3b8;':''}"
+                    title="${disabled?'Issue a PO before recording receipt':'Qty received against this item'}" />`;
+            }
+            return `<input type="text" id="dc-in-${ri}-${ci}" ${navAttrs} value="${esc(r[c.key])}" onchange="window.dcUpdateItemField('${r.mrId}',${r.itemIdx},'${c.key}',this.value)" style="width:100%;font-size:10px;padding:2px;border:1px solid #cbd5e1;border-radius:4px;" placeholder="${c.key==='vendor'?'Vendor...':''}" />`;
+        };
+
+        tbody.innerHTML = pageRows.map((r, ri) => {
+            const worstDelay = Math.max(r.reqDelayDays||0, r.deliveryDelayDays||0);
+            const rowBg = worstDelay>15?'#FEE2E2':(worstDelay>0?'#FEF3E2':(ri%2?'#fafbfc':'#fff'));
+            let acc = 0;
+            return `
+        <tr style="background:${rowBg};" oncontextmenu="window.dcOpenContextMenu(event,'${r.mrId}',${r.itemIdx})">
+            <td style="border:1px solid #eef0f3;padding:3px 6px;width:36px;min-width:36px;text-align:center;position:sticky;left:0;background:${rowBg};z-index:1;">
+                <input type="checkbox" ${window.dcBulkSelected && window.dcBulkSelected.has(r.mrId+'|'+r.itemIdx)?'checked':''} onchange="window.dcToggleBulkRow('${r.mrId}|${r.itemIdx}',this.checked)" style="cursor:pointer;accent-color:#ef4444;width:14px;height:14px;" />
+            </td>
+            ${cols.map((c, ci) => {
+                const w = dcColWidth(c);
+                const left = c.sticky ? acc : null;
+                if (c.sticky) acc += w;
+                const isDelayCol = (c.key === 'reqDelayDays' || c.key === 'deliveryDelayDays');
+                return `
+            <td data-col-key="${c.key}" ondblclick="window.dcCopyCell('${esc(String(r[c.key]??''))}')" title="Double-click to copy"
+                style="border:1px solid #eef0f3; padding:3px 6px; min-width:${w}px; max-width:${w}px; width:${w}px; overflow:hidden; text-overflow:ellipsis; ${c.sticky?`position:sticky; left:${left}px; background:${rowBg}; z-index:1; font-weight:700;`:''} ${isDelayCol && r[c.key]>0 ?'color:#DC2626; font-weight:700;':''}">
+                ${(canEdit && c.editable) ? cellEditable(r, c, ri, ci) : cellReadonly(r, c)}
+            </td>`; }).join('')}
+            <td title="View History" style="border:1px solid #eef0f3;padding:1px 2px;text-align:center;width:22px;min-width:22px;max-width:22px;">
+                <button onclick="window.openHistoryModal('item','${r.mrId}',${r.itemIdx})" title="View full history" style="background:none;border:none;cursor:pointer;color:#6366f1;padding:2px 3px;border-radius:3px;display:inline-flex;align-items:center;justify-content:center;" onmouseover="this.style.background='#eef2ff'" onmouseout="this.style.background='none'"><svg xmlns='http://www.w3.org/2000/svg' width='12' height='12' viewBox='0 0 24 24' fill='none' stroke='currentColor' stroke-width='2.2' stroke-linecap='round' stroke-linejoin='round'><circle cx='12' cy='12' r='10'/><polyline points='12 6 12 12 16 14'/></svg></button>
+            </td>
+        </tr>`; }).join('') || `<tr><td colspan="${cols.length + 1}" style="padding:24px; text-align:center; color:#94a3b8;">No purchase requests match these filters.</td></tr>`;
+
+        const cardWrap = document.getElementById('dc-summary-cards-wrap');
+        if (cardWrap) {
+            cardWrap.innerHTML = `
+                ${dcCard(summary.totalMR,'Total MR','#1f2937')}
+                ${dcCard(summary.totalPR,'Total PR','#1f2937')}
+                ${dcCard(summary.poGiven,'PO Given','#0E7490')}
+                ${dcCard(summary.partial,'Partial Received','#BE185D')}
+                ${dcCard(summary.received,'Received','#047857')}
+                ${dcCard(summary.hold,'Hold','#78716C')}
+                ${dcCard(summary.cancel,'Cancel','#B91C1C')}
+                ${dcCard(summary.poPending,'Pending Procurement','#B45309')}
+                ${dcCard(summary.reqDelayDays,'Requirement Delay (Days)','#DC2626')}
+                ${dcCard(summary.deliveryDelayDays,'Delivery Delay (Days)','#DC2626')}
+                ${dcCard(summary.overdueDeliveries,'Overdue Deliveries','#7F1D1D')}
+                ${dcCard('₹'+summary.value.toLocaleString('en-IN'),'Total PR Value','#334155')}
+                ${dcCard(summary.todayDel,"Today's Deliveries",'#6D28D9')}`;
+        }
+
+        const pagWrap = document.getElementById('dc-pagination-wrap');
+        if (pagWrap) {
+            pagWrap.innerHTML = `
+                <p class="text-[10px] text-slate-500 font-bold uppercase tracking-widest">Page ${dcPage} of ${totalPages} · ${allRows.length} rows</p>
+                <div class="flex items-center gap-1">
+                    ${canEdit ? `
+                    <button id="dc-save-btn" onmousedown="window.dcSaveChanges()" title="${dcDirty ? 'Save Changes' : 'No unsaved changes'}"
+                        class="px-2.5 py-1.5 rounded-lg border transition-all flex items-center justify-center ${dcDirty ? 'bg-emerald-600 border-emerald-600 text-white shadow-lg' : 'bg-white border-rule text-slate-400 opacity-70'}">
+                        <span style="font-size:13px;line-height:1;">💾</span>
+                    </button>` : ''}
+                    <button onclick="window.dcSetPage(${Math.max(1,dcPage-1)})" class="px-3 py-1.5 text-[10px] font-black uppercase bg-white border border-rule rounded-lg">Prev</button>
+                    <div class="px-3 py-1.5 text-[10px] font-black bg-white border border-rule rounded-lg text-slate-500">${dcPage} / ${totalPages}</div>
+                    <button onclick="window.dcSetPage(${Math.min(totalPages,dcPage+1)})" class="px-3 py-1.5 text-[10px] font-black uppercase bg-white border border-rule rounded-lg">Next</button>
+                </div>`;
+        }
+    };
+
     window.closeProcInboxView = () => {
         procInboxPrNumber = null;
         procInboxMrId = null;
@@ -7184,313 +7368,6 @@ function renderMrRow(item, idx, xlInputCss) {
         procInboxMrId = null;
         render();
         alert('↩️ PR Returned to Planner. They will correct and resubmit for Final Authorization.');
-    };
-
-    function dcSummary(rows) {
-        const totalMR    = new Set(rows.map(r => r.mrNo)).size;
-        const totalPR    = new Set(rows.map(r => r.prNo)).size;
-        const poGiven    = new Set(rows.filter(r => r.status === 'PROCUREMENT').map(r => r.prNo)).size;
-        const partial    = new Set(rows.filter(r => r.status === 'PARTIAL').map(r => r.prNo)).size;
-        const received   = new Set(rows.filter(r => r.status === 'CLOSED').map(r => r.prNo)).size;
-        const hold       = new Set(rows.filter(r => r.status === 'HOLD').map(r => r.prNo)).size;
-        const cancel     = new Set(rows.filter(r => r.status === 'CANCELLED').map(r => r.prNo)).size;
-        const poPending  = new Set(rows.filter(r => r.status === 'PLANNED' && !r.poNo).map(r => r.prNo)).size;
-        const reqDelayDays      = rows.reduce((s,r) => s + Math.max(0, r.reqDelayDays||0), 0);
-        const deliveryDelayDays = rows.reduce((s,r) => s + Math.max(0, r.deliveryDelayDays||0), 0);
-        const overdueDeliveries = new Set(rows.filter(r => r.deliveryDelayDays > 0).map(r => r.prNo)).size;
-        const critical   = rows.filter(r => Math.max(r.reqDelayDays||0, r.deliveryDelayDays||0) > 15).length;
-        const value      = rows.reduce((s,r) => s + (Number(r.amount)||0), 0);
-        const todayStr   = fmtDateInput(Date.now());
-        const tomorrow   = fmtDateInput(Date.now() + 86400000);
-        const todayDel   = new Set(rows.filter(r => r.tentDelivery === todayStr).map(r => r.prNo)).size;
-        const tmrwDel    = new Set(rows.filter(r => r.tentDelivery === tomorrow).map(r => r.prNo)).size;
-        return { totalMR, totalPR, poGiven, partial, received, hold, cancel, poPending,
-                 reqDelayDays, deliveryDelayDays, overdueDeliveries, critical, value, todayDel, tmrwDel };
-    }
-
-    function dcCard(val, label, color, onclick) {
-        return `<div ${onclick?`onclick="${onclick}"`:''} class="bg-white rounded-xl border border-rule px-4 py-3 min-w-[130px] ${onclick?'cursor-pointer hover:border-brand/40 hover:shadow-md transition-all':''}">
-            <p class="text-xl font-display font-bold" style="color:${color}">${val}</p>
-            <p class="text-[9px] font-black text-slate-500 uppercase tracking-widest mt-0.5">${label}</p>
-        </div>`;
-    }
-
-    function renderDataCentre() {
-        const canEdit = (user.role === 'admin' || user.role === 'procurement');
-        const allRows = dcFilteredRows();
-        const summary = dcSummary(allRows);
-        const totalPages = Math.max(1, Math.ceil(allRows.length / dcPageSize));
-        if (dcPage > totalPages) dcPage = totalPages;
-        const pageRows = allRows.slice((dcPage-1)*dcPageSize, dcPage*dcPageSize);
-        const cols = dcOrderedColumns(DC_COLUMNS.filter(c => !dcHidden.has(c.key)));
-        const handlerNames = activeProcHandlers().map(h => h.name);
-
-        const holdCancelTooltip = (r) => {
-            if (r.status !== 'HOLD' && r.status !== 'CANCELLED') return '';
-            const lines = [
-                `Reason: ${r.holdCancelReason || '—'}`,
-                `Justification: ${r.holdCancelJustification || '—'}`,
-                `Updated By: ${r.holdCancelUpdatedBy || '—'}`,
-                `Date & Time: ${r.holdCancelTs ? fmtDateTime(r.holdCancelTs) : '—'}`
-            ];
-            return esc(lines.join('\n'));
-        };
-        const cellReadonly = (r, c) => {
-            const v = r[c.key];
-            if (c.key === 'mrNo') return r.source === 'DIRECT_PR' ? '—' : esc(v || '—');
-            if (c.key === 'status') return `<span title="${holdCancelTooltip(r)}">${renderStatusBadge(v)}</span>`;
-            if (c.key === 'source') return v === 'DIRECT_PR'
-                ? `<span class="status-chip" style="background:#F2ECFC;color:#6D28D9;border-color:#6D28D922"><span class="dot" style="background:#6D28D9"></span>Direct PR</span>`
-                : `<span class="status-chip" style="background:#EEF0FE;color:#4F46E5;border-color:#4F46E522"><span class="dot" style="background:#4F46E5"></span>MR Based</span>`;
-            if (c.key === 'itemCompletionPct') {
-                const pct = Number(v)||0;
-                const clr = pct>=100 ? '#047857' : (pct>0 ? '#B45309' : '#94a3b8');
-                return `<span style="font-weight:800;color:${clr}">${pct.toFixed(1)}%</span>`;
-            }
-            if (c.key === 'date') return fmtDate(v);
-            if (c.key === 'reqDate' || c.key === 'poDate' || c.key === 'tentDelivery') return v ? fmtDate(v) : '—';
-            if (c.num) return (typeof v === 'number') ? (c.key==='rate'||c.key==='amount' ? v.toFixed(2) : v) : (v||'—');
-            return esc(String(v ?? '')) || '—';
-        };
-        const cellEditable = (r, c, ri, ci) => {
-            const navAttrs = `data-r="${ri}" data-c="${ci}" onkeydown="window.dcNavKey(event,${ri},${ci})"`;
-            if (c.editable === 'status') {
-                const opts = dcStatusOptions(r.status);
-                return `<span title="${holdCancelTooltip(r)}"><select id="dc-in-${ri}-${ci}" ${navAttrs} onchange="window.dcRequestStatusChange('${r.mrId}',${r.itemIdx},this.value)" style="width:100%;font-size:10px;padding:2px;border:1px solid #cbd5e1;border-radius:4px;">
-                    ${opts.map(s => `<option value="${s}" ${r.status===s?'selected':''}>${STATUS_META[s].label}</option>`).join('')}
-                </select></span>`;
-            }
-            if (c.editable === 'handler') {
-                if (!r.prHandleBy) {
-                    return `<select id="dc-in-${ri}-${ci}" ${navAttrs} onchange="window.dcAssignHandler('${r.mrId}',${r.itemIdx},this.value)" style="width:100%;font-size:10px;padding:2px;border:1px solid #cbd5e1;border-radius:4px;">
-                        <option value="">— Unassigned —</option>
-                        ${handlerNames.map(n => `<option value="${esc(n)}">${esc(n)}</option>`).join('')}
-                    </select>`;
-                }
-                const stillActive = handlerNames.includes(r.prHandleBy);
-                return `<div style="display:flex;align-items:center;gap:5px;">
-                    <span style="font-size:10px;font-weight:700;color:${stillActive?'#1f2937':'#94a3b8'};" title="${stillActive?'':'This handler is now Inactive'}">${esc(r.prHandleBy)}</span>
-                    ${canReassign() ? `<button type="button" onclick="window.openReassignModal('${r.mrId}',${r.itemIdx})" title="Reassign" style="color:#B3122E;flex-shrink:0;"><i data-lucide="repeat" style="width:12px;height:12px;"></i></button>` : ''}
-                </div>`;
-            }
-            if (c.editable === 'date') {
-                const incomplete = (c.key === 'poDate') && r.poNo && !r.poDate;
-                return `<input type="date" id="dc-in-${ri}-${ci}" ${navAttrs} value="${esc(r[c.key])}" onchange="window.dcUpdateItemField('${r.mrId}',${r.itemIdx},'${c.key}',this.value)" style="width:100%;font-size:10px;padding:2px;border:1px solid ${incomplete?'#f59e0b':'#cbd5e1'};border-radius:4px;" title="${incomplete?'Enter PO Date to auto-issue this PO':''}" />`;
-            }
-            if (c.key === 'poNo') {
-                const incomplete = r.poDate && !r.poNo;
-                return `<input type="text" id="dc-in-${ri}-${ci}" ${navAttrs} value="${esc(r.poNo)}" onchange="window.dcUpdateItemField('${r.mrId}',${r.itemIdx},'poNo',this.value)" style="width:100%;font-size:10px;padding:2px;border:1px solid ${incomplete?'#f59e0b':'#cbd5e1'};border-radius:4px;" placeholder="PO Number..." title="${incomplete?'Enter PO Number to auto-issue this PO':''}" />`;
-            }
-            if (c.editable === 'receivedQty') {
-                const disabled = !r.poNo;
-                return `<input type="number" min="0" max="${r.qty}" id="dc-in-${ri}-${ci}" ${navAttrs} value="${r.receivedQty}" ${disabled?'disabled':''}
-                    onchange="window.dcUpdateItemField('${r.mrId}',${r.itemIdx},'receivedQty',this.value)"
-                    style="width:100%;font-size:10px;padding:2px;border:1px solid #cbd5e1;border-radius:4px;${disabled?'background:#f1f5f9;color:#94a3b8;':''}"
-                    title="${disabled?'Issue a PO before recording receipt':'Qty received against this item'}" />`;
-            }
-            return `<input type="text" id="dc-in-${ri}-${ci}" ${navAttrs} value="${esc(r[c.key])}" onchange="window.dcUpdateItemField('${r.mrId}',${r.itemIdx},'${c.key}',this.value)" style="width:100%;font-size:10px;padding:2px;border:1px solid #cbd5e1;border-radius:4px;" placeholder="${c.key==='vendor'?'Vendor...':''}" />`;
-        };
-
-        return `
-        <div class="flex flex-col gap-4">
-            <div class="flex items-center justify-between flex-wrap gap-3">
-                <div>
-                    <h1 class="text-2xl font-display font-bold tracking-tight">Data Centre</h1>
-                    <p class="text-xs text-slate-500">Master Purchase Request database · ${allRows.length} line items across ${summary.totalPR} PRs</p>
-                </div>
-                <div class="flex items-center gap-2 no-print">
-                    <select onchange="if(this.value) window.dcApplySavedFilter(this.value); this.value='';" class="text-[10px] font-black uppercase tracking-widest bg-white border border-rule px-2 py-2 rounded-lg">
-                        <option value="">Saved Views (${dcSavedFilters.length})</option>
-                        ${dcSavedFilters.map(f => `<option value="${esc(f.name)}">${esc(f.name)}</option>`).join('')}
-                    </select>
-                    ${dcSavedFilters.length ? `<button onclick="window.dcPromptDeleteSavedFilter()" title="Delete a saved view" class="text-[10px] font-black uppercase tracking-widest bg-white border border-rule px-2 py-2 rounded-lg hover:bg-slate-50"><i data-lucide="trash-2" class="w-3.5 h-3.5"></i></button>` : ''}
-                    <button onclick="window.dcSaveCurrentFilterAsPreset()" title="Save current filters as a named view" class="text-[10px] font-black uppercase tracking-widest bg-white border border-rule px-3 py-2 rounded-lg hover:bg-slate-50 flex items-center gap-1.5"><i data-lucide="bookmark-plus" class="w-3.5 h-3.5"></i> Save View</button>
-                    <button onclick="window.dcUndo()" title="Undo (Ctrl+Z)" class="text-[10px] font-black uppercase tracking-widest bg-white border border-rule px-2.5 py-2 rounded-lg hover:bg-slate-50 ${dcUndoStack.length?'':'opacity-40'}"><i data-lucide="undo-2" class="w-3.5 h-3.5"></i></button>
-                    <button onclick="window.dcRedo()" title="Redo (Ctrl+Y)" class="text-[10px] font-black uppercase tracking-widest bg-white border border-rule px-2.5 py-2 rounded-lg hover:bg-slate-50 ${dcRedoStack.length?'':'opacity-40'}"><i data-lucide="redo-2" class="w-3.5 h-3.5"></i></button>
-                    <button onclick="window.dcExportExcel()" class="text-[10px] font-black uppercase tracking-widest bg-white border border-rule px-3 py-2 rounded-lg hover:bg-slate-50 flex items-center gap-1.5"><i data-lucide="file-spreadsheet" class="w-3.5 h-3.5"></i> Excel</button>
-                    <button onclick="window.dcPrintFilteredPr()" class="text-[10px] font-black uppercase tracking-widest bg-violet-700 text-white px-3 py-2 rounded-lg hover:bg-violet-800 flex items-center gap-1.5"><i data-lucide="printer" class="w-3.5 h-3.5"></i> Print PR Sheet</button>
-                    <button onclick="window.dcExportPdf()" class="text-[10px] font-black uppercase tracking-widest bg-white border border-rule px-3 py-2 rounded-lg hover:bg-slate-50 flex items-center gap-1.5"><i data-lucide="file-text" class="w-3.5 h-3.5"></i> PDF</button>
-                    <button onclick="window.print()" class="text-[10px] font-black uppercase tracking-widest bg-white border border-rule px-3 py-2 rounded-lg hover:bg-slate-50 flex items-center gap-1.5"><i data-lucide="printer" class="w-3.5 h-3.5"></i> Print</button>
-                    <button onclick="window.dcToggleColsPanel()" class="text-[10px] font-black uppercase tracking-widest bg-white border border-rule px-3 py-2 rounded-lg hover:bg-slate-50 flex items-center gap-1.5"><i data-lucide="columns-3" class="w-3.5 h-3.5"></i> Columns</button>
-                    <button onclick="window.dcClearFilters()" class="text-[10px] font-black uppercase tracking-widest text-brand px-3 py-2 rounded-lg hover:bg-brand-50 flex items-center gap-1.5"><i data-lucide="x-circle" class="w-3.5 h-3.5"></i> Clear Filters</button>
-                </div>
-            </div>
-            ${dcDirty ? `<div class="no-print flex items-center gap-2 bg-amberx-light border border-amberx/30 text-amberx px-4 py-2 rounded-xl text-[11px] font-black uppercase tracking-widest">
-                <i data-lucide="alert-triangle" class="w-3.5 h-3.5"></i> You have unsaved changes — click 💾 Save to write them, or they will be lost if you leave.
-            </div>` : ''}
-
-            <div class="flex gap-3 flex-wrap no-print">
-                ${dcCard(summary.totalMR,'Total MR','#1f2937')}
-                ${dcCard(summary.totalPR,'Total PR','#1f2937')}
-                ${dcCard(summary.poGiven,'PO Given','#0E7490')}
-                ${dcCard(summary.partial,'Partial Received','#BE185D')}
-                ${dcCard(summary.received,'Received','#047857')}
-                ${dcCard(summary.hold,'Hold','#78716C')}
-                ${dcCard(summary.cancel,'Cancel','#B91C1C')}
-                ${dcCard(summary.poPending,'Pending Procurement','#B45309')}
-                ${dcCard(summary.reqDelayDays,'Requirement Delay (Days)','#DC2626')}
-                ${dcCard(summary.deliveryDelayDays,'Delivery Delay (Days)','#DC2626')}
-                ${dcCard(summary.overdueDeliveries,'Overdue Deliveries','#7F1D1D')}
-                ${dcCard('₹'+summary.value.toLocaleString('en-IN'),'Total PR Value','#334155')}
-                ${dcCard(summary.todayDel,"Today's Deliveries",'#6D28D9')}
-            </div>
-
-            ${dcShowCols ? `
-            <div class="bg-white border border-rule rounded-xl p-4 no-print">
-                <div class="flex items-center justify-between mb-2">
-                    <p class="text-[10px] font-black uppercase tracking-widest text-slate-500">Show / Hide Columns · Drag header to reorder · First two columns are frozen</p>
-                    <button onclick="window.dcResetLayout()" class="text-[9px] font-black uppercase tracking-widest text-brand hover:underline">Reset Layout</button>
-                </div>
-                <div class="flex flex-wrap gap-x-4 gap-y-1.5">
-                    ${DC_COLUMNS.map(c => `<label class="flex items-center gap-1.5 text-[11px] font-bold ${DC_FROZEN_KEYS.includes(c.key) ? 'text-slate-400' : 'text-slate-700'}">
-                        <input type="checkbox" ${dcHidden.has(c.key)?'':'checked'} ${DC_FROZEN_KEYS.includes(c.key)?'disabled':''} onchange="window.dcToggleCol('${c.key}')" /> ${c.label}${DC_FROZEN_KEYS.includes(c.key)?' 🔒':''}
-                    </label>`).join('')}
-                </div>
-            </div>` : ''}
-
-            <div class="no-print">
-                <input id="dc-global-search" value="${esc(dcGlobalQ)}" oninput="window.dcSetGlobalQ(this.value)"
-                    class="glass-input max-w-md" placeholder="Search everything — PR No, item, vendor, PO, remarks..." />
-            </div>
-
-            <div class="dc-scroll bg-white border border-rule rounded-xl" style="overflow:auto; max-height:70vh;" id="dc-table-wrap">
-                <table style="border-collapse:collapse; font-size:11px; white-space:nowrap;">
-                    <thead>
-                        <tr>
-                        ${(() => { let acc = 0; return cols.map(c => {
-                            const w = dcColWidth(c);
-                            const left = c.sticky ? acc : null;
-                            if (c.sticky) acc += w;
-                            return `
-                            <th data-col-key="${c.key}" title="Click to sort" style="position:sticky; top:0; ${c.sticky?`left:${left}px; z-index:3;`:'z-index:2;'} background:#1e2530; color:#fff; border:1px solid #33404f; padding:6px 8px; text-align:left; min-width:${w}px; max-width:${w}px; width:${w}px;">
-                                <span onclick="window.dcSort('${c.key}')" style="cursor:pointer;">${esc(c.label)} ${dcSort.key===c.key ? (dcSort.dir==='asc'?'▲':'▼') : ''}</span>
-                                <span onmousedown="window.dcStartResize(event,'${c.key}')" title="Drag to resize" style="position:absolute; top:0; right:0; width:6px; height:100%; cursor:col-resize;"></span>
-                            </th>`; }).join(''); })()}
-                        </tr>
-                        <tr>
-                        ${(() => { let acc = 0; return cols.map(c => {
-                            const w = dcColWidth(c);
-                            const left = c.sticky ? acc : null;
-                            if (c.sticky) acc += w;
-                            return `
-                            <th data-col-key="${c.key}" style="position:sticky; top:29px; ${c.sticky?`left:${left}px; z-index:3;`:'z-index:1;'} background:#f1f5f9; border:1px solid #dde3ea; padding:2px 4px;">
-                                <input id="dc-col-${c.key}" data-focus-key="dc-col-${c.key}" value="${esc(dcColFilter[c.key]||'')}" oninput="window.dcSetColFilter('${c.key}', this.value)"
-                                    style="width:100%; font-size:10px; padding:3px 4px; border:1px solid #cbd5e1; border-radius:4px; background:#fff;" placeholder="Filter..." />
-                            </th>`; }).join(''); })()}
-                        </tr>
-                    </thead>
-                    <tbody>
-                        ${pageRows.map((r, ri) => {
-                            const worstDelay = Math.max(r.reqDelayDays||0, r.deliveryDelayDays||0);
-                            const rowBg = worstDelay>15?'#FEE2E2':(worstDelay>0?'#FEF3E2':(ri%2?'#fafbfc':'#fff'));
-                            let acc = 0;
-                            return `
-                        <tr style="background:${rowBg};" oncontextmenu="window.dcOpenContextMenu(event,'${r.mrId}',${r.itemIdx})">
-                            ${cols.map((c, ci) => {
-                                const w = dcColWidth(c);
-                                const left = c.sticky ? acc : null;
-                                if (c.sticky) acc += w;
-                                const isDelayCol = (c.key === 'reqDelayDays' || c.key === 'deliveryDelayDays');
-                                return `
-                            <td data-col-key="${c.key}" ondblclick="window.dcCopyCell('${esc(String(r[c.key]??''))}')" title="Double-click to copy"
-                                style="border:1px solid #eef0f3; padding:3px 6px; min-width:${w}px; max-width:${w}px; width:${w}px; overflow:hidden; text-overflow:ellipsis; ${c.sticky?`position:sticky; left:${left}px; background:${rowBg}; z-index:1; font-weight:700;`:''} ${isDelayCol && r[c.key]>0 ?'color:#DC2626; font-weight:700;':''}">
-                                ${(canEdit && c.editable) ? cellEditable(r, c, ri, ci) : cellReadonly(r, c)}
-                            </td>`; }).join('')}
-                        </tr>`; }).join('') || `<tr><td colspan="${cols.length}" style="padding:24px; text-align:center; color:#94a3b8;">No purchase requests match these filters.</td></tr>`}
-                    </tbody>
-                </table>
-            </div>
-
-            <div class="flex items-center justify-between no-print">
-                <p class="text-[10px] text-slate-500 font-bold uppercase tracking-widest">Page ${dcPage} of ${totalPages} · ${allRows.length} rows</p>
-                <div class="flex items-center gap-1">
-                    ${canEdit ? `
-                    <button id="dc-save-btn" onclick="window.dcSaveChanges()" title="${dcDirty ? 'Save Changes' : 'No unsaved changes'}"
-                        class="px-2.5 py-1.5 rounded-lg border transition-all flex items-center justify-center ${dcDirty ? 'bg-emerald-600 border-emerald-600 text-white shadow-lg' : 'bg-white border-rule text-slate-400 opacity-70'}">
-                        <span style="font-size:13px;line-height:1;">💾</span>
-                    </button>` : ''}
-                    <button onclick="window.dcSetPage(${Math.max(1,dcPage-1)})" class="px-3 py-1.5 text-[10px] font-black uppercase bg-white border border-rule rounded-lg">Prev</button>
-                    <div class="px-3 py-1.5 text-[10px] font-black bg-white border border-rule rounded-lg text-slate-500">${dcPage} / ${totalPages}</div>
-                    <button onclick="window.dcSetPage(${Math.min(totalPages,dcPage+1)})" class="px-3 py-1.5 text-[10px] font-black uppercase bg-white border border-rule rounded-lg">Next</button>
-                </div>
-            </div>
-        </div>`;
-    }
-
-    window.dcCloseContextMenu = () => { dcContextMenu = null; render(); };
-    function renderDcContextMenu() {
-        const m = dcContextMenu;
-        if (!m) return '';
-        const mr = appData.mrs.find(x => x.id === m.mrId);
-        const it = mr && mr.items && mr.items[m.itemIdx];
-        if (!mr || !it) return '';
-        const item = (label, icon, onclick, disabled) => `
-            <button ${disabled ? 'disabled' : `onclick="${onclick}"`} class="w-full text-left px-4 py-2 text-[11px] font-bold flex items-center gap-2 ${disabled ? 'text-slate-300 cursor-not-allowed' : 'text-slate-700 hover:bg-paper'}">
-                <i data-lucide="${icon}" class="w-3.5 h-3.5"></i> ${label}
-            </button>`;
-        const copyStr = `${it.name || ''} | PR ${mr.prNumber || '—'} | ${it.qty || ''} ${it.unit || ''}`;
-        return `
-        <div class="no-print" onclick="window.dcCloseContextMenu()" style="position:fixed; inset:0; z-index:1998;"></div>
-        <div class="no-print bg-white border border-rule rounded-xl shadow-2xl py-1.5" style="position:fixed; left:${m.x}px; top:${m.y}px; z-index:1999; min-width:200px;">
-            ${item('View Audit Trail', 'history', `window.dcCloseContextMenu(); window.showAudit('${mr.id}')`)}
-            ${item('Copy Row (Item + PR No.)', 'copy', `window.dcCloseContextMenu(); window.dcCopyCell('${esc(copyStr)}')`)}
-            ${item('Print Combined PR', 'printer', `window.dcCloseContextMenu(); window.printMR('${mr.id}')`, !mr.prNumber)}
-            ${canReassign() ? item('Reassign Handler', 'repeat', `window.dcCloseContextMenu(); window.openReassignModal('${mr.id}',${m.itemIdx})`) : ''}
-        </div>`;
-    }
-
-    function renderDcHoldCancelModal() {
-        const m = dcHoldCancelModal;
-        if (!m) return '';
-        const label = m.status === 'HOLD' ? 'Hold' : 'Cancel';
-        return `
-        <div class="fixed inset-0 bg-ink/70 backdrop-blur-sm z-[1000] flex items-center justify-center p-4" style="position:fixed;inset:0;background:rgba(11,20,32,0.7);display:flex;align-items:center;justify-content:center;z-index:1000;">
-            <div class="bg-white rounded-2xl shadow-2xl w-full max-w-md overflow-hidden">
-                <div class="px-8 py-6 border-b border-rule flex justify-between items-center bg-paper/60">
-                    <div>
-                        <h2 class="text-lg font-display font-bold uppercase tracking-widest">${label} Item</h2>
-                        <p class="text-[10px] text-slate-500 mt-1">Reason and justification are mandatory before this status can be saved.</p>
-                    </div>
-                    <button onclick="window.dcCloseHoldCancelModal()" class="text-slate-400 bg-white p-1 border border-rule rounded-lg hover:text-brand"><i data-lucide="x" class="w-5 h-5"></i></button>
-                </div>
-                <div class="p-8 space-y-4">
-                    <div><label class="field-label">Reason *</label><input id="hc-reason" class="glass-input bg-paper" placeholder="Brief reason for ${label.toLowerCase()}..." /></div>
-                    <div><label class="field-label">Justification *</label><textarea id="hc-justification" class="glass-input bg-paper min-h-[90px]" placeholder="Detailed justification..."></textarea></div>
-                    <button onclick="window.dcCommitHoldCancel()" class="w-full bg-brand text-white font-black py-4 rounded-xl uppercase tracking-widest shadow-xl active:scale-95 transition-all mt-2">Confirm ${label}</button>
-                </div>
-            </div>
-        </div>`;
-    }
-
-    function renderDcLeaveModal() {
-        return `
-        <div class="fixed inset-0 bg-ink/60 backdrop-blur-sm z-[100] flex items-center justify-center p-4 fade-in">
-            <div class="bg-white rounded-2xl w-full max-w-sm overflow-hidden shadow-[0_20px_50px_-12px_rgba(0,0,0,0.5)] border border-rule">
-                <div class="p-6 text-center">
-                    <div class="w-16 h-16 bg-amberx-light rounded-full flex items-center justify-center mx-auto mb-4 border border-amberx/20 text-amberx">
-                        <i data-lucide="alert-triangle" class="w-8 h-8"></i>
-                    </div>
-                    <h2 class="text-xl font-display font-bold text-ink mb-2">Unsaved Changes Detected</h2>
-                    <p class="text-xs text-slate-500 font-medium">You have unsaved changes in the Data Centre.<br>Do you want to save before leaving?</p>
-                </div>
-                <div class="bg-slate-50 p-4 border-t border-rule flex flex-col gap-2">
-                    <button onclick="window.dcSaveChanges()" class="w-full bg-emerald-600 text-white rounded-xl py-3 font-black text-[10px] uppercase tracking-widest hover:bg-emerald-700 shadow-md">Save & Continue</button>
-                    <button onclick="window.dcDiscardChanges()" class="w-full bg-white border border-rule text-slate-600 rounded-xl py-3 font-black text-[10px] uppercase tracking-widest hover:bg-slate-100">Leave Without Saving</button>
-                    <button onclick="window.dcCancelLeave()" class="w-full text-slate-400 py-3 font-black text-[10px] uppercase tracking-widest hover:text-slate-600">Cancel</button>
-                </div>
-            </div>
-        </div>`;
-    }
-
-    // Executes the navigation/logout action that was paused when unsaved changes were detected.
-    window.dcResolveLeave = (intent) => {
-        if (!intent) return;
-        if (intent.type === 'navigate') { activeTab = intent.tab; render(); }
-        else if (intent.type === 'logout') {
-            user = null;
-            sessionStorage.removeItem(SESSION_KEY); localStorage.removeItem(SESSION_KEY);
-            render();
-        }
     };
 
     function dcSummary(rows) {
@@ -7629,7 +7506,21 @@ function renderMrRow(item, idx, xlInputCss) {
                 <i data-lucide="alert-triangle" class="w-3.5 h-3.5"></i> You have unsaved changes — click 💾 Save to write them, or they will be lost if you leave.
             </div>` : ''}
 
-
+            <div id="dc-summary-cards-wrap" class="flex gap-3 flex-wrap no-print">
+                ${dcCard(summary.totalMR,'Total MR','#1f2937')}
+                ${dcCard(summary.totalPR,'Total PR','#1f2937')}
+                ${dcCard(summary.poGiven,'PO Given','#0E7490')}
+                ${dcCard(summary.partial,'Partial Received','#BE185D')}
+                ${dcCard(summary.received,'Received','#047857')}
+                ${dcCard(summary.hold,'Hold','#78716C')}
+                ${dcCard(summary.cancel,'Cancel','#B91C1C')}
+                ${dcCard(summary.poPending,'Pending Procurement','#B45309')}
+                ${dcCard(summary.reqDelayDays,'Requirement Delay (Days)','#DC2626')}
+                ${dcCard(summary.deliveryDelayDays,'Delivery Delay (Days)','#DC2626')}
+                ${dcCard(summary.overdueDeliveries,'Overdue Deliveries','#7F1D1D')}
+                ${dcCard('₹'+summary.value.toLocaleString('en-IN'),'Total PR Value','#334155')}
+                ${dcCard(summary.todayDel,"Today's Deliveries",'#6D28D9')}
+            </div>
 
             ${dcShowCols ? `
             <div class="bg-white border border-rule rounded-xl p-4 no-print">
@@ -7645,7 +7536,7 @@ function renderMrRow(item, idx, xlInputCss) {
             </div>` : ''}
 
             <div class="no-print">
-                <input id="dc-global-search" value="${esc(dcGlobalQ)}" oninput="window.dcSetGlobalQ(this.value)"
+                <input id="dc-global-search" data-focus-key="dc-global-search" value="${esc(dcGlobalQ)}" oninput="window.dcSetGlobalQ(this.value)" onkeydown="if(event.key==='Enter'){event.stopPropagation();}"
                     class="glass-input max-w-md" placeholder="Search everything — PR No, item, vendor, PO, remarks..." />
             </div>
 
@@ -7675,13 +7566,13 @@ function renderMrRow(item, idx, xlInputCss) {
                             if (c.sticky) acc += w;
                             return `
                             <th data-col-key="${c.key}" style="position:sticky; top:29px; ${c.sticky?`left:${left}px; z-index:3;`:'z-index:1;'} background:#f1f5f9; border:1px solid #dde3ea; padding:2px 4px;">
-                                <input id="dc-col-${c.key}" data-focus-key="dc-col-${c.key}" value="${esc(dcColFilter[c.key]||'')}" oninput="window.dcSetColFilter('${c.key}', this.value)"
+                                <input id="dc-col-${c.key}" data-focus-key="dc-col-${c.key}" value="${esc(dcColFilter[c.key]||'')}" oninput="window.dcSetColFilter('${c.key}', this.value)" onkeydown="if(event.key==='Enter'){event.stopPropagation();}"
                                     style="width:100%; font-size:10px; padding:3px 4px; border:1px solid #cbd5e1; border-radius:4px; background:#fff;" placeholder="Filter..." />
                             </th>`; }).join(''); })()}
-                        <th style="position:sticky;top:29px;right:0;z-index:3;background:#f1f5f9;border:1px solid #dde3ea;padding:2px 3px;width:22px;min-width:22px;max-width:22px;"></th>
+                        <th style="position:sticky;top:29px;right:0;z-index:3;background:#f1f5f9;border:1px solid #dde3ea;padding:2px 4px;width:22px;min-width:22px;max-width:22px;"></th>
                         </tr>
                     </thead>
-                    <tbody>
+                    <tbody id="dc-tbody">
                         ${pageRows.map((r, ri) => {
                             const worstDelay = Math.max(r.reqDelayDays||0, r.deliveryDelayDays||0);
                             const rowBg = worstDelay>15?'#FEE2E2':(worstDelay>0?'#FEF3E2':(ri%2?'#fafbfc':'#fff'));
@@ -7794,49 +7685,93 @@ function renderMrRow(item, idx, xlInputCss) {
         setTimeout(() => { const el = document.getElementById('bulk-po-number'); if (el) el.focus(); }, 80);
     };
     window.dcCloseBulkPoModal = () => { window.dcBulkPoModal = false; render(); };
-    window.dcApplyBulkPo = () => {
-        const poNumber = (document.getElementById('bulk-po-number') ? document.getElementById('bulk-po-number').value : '').trim();
-        const poDate   = (document.getElementById('bulk-po-date')   ? document.getElementById('bulk-po-date').value   : '').trim();
-        if (!poNumber && !poDate) { showToast('Please enter a PO Number or PO Date.'); return; }
-        if (!window.dcBulkSelected || window.dcBulkSelected.size === 0) { showToast('Select at least one row first.'); return; }
-        const count = window.dcBulkSelected.size;
-        dcPushUndo();
-        const modifiedMrs = new Set();
-        window.dcBulkSelected.forEach(function(key) {
-            var parts   = key.split('|');
-            var mrId    = parts[0];
-            var itemIdx = parseInt(parts[1], 10);
-            var mr = (appData.mrs || []).find(function(m) { return m.id === mrId; });
-            if (!mr || !mr.items || !mr.items[itemIdx]) return;
-            var item = mr.items[itemIdx];
-            var oldPoNo   = item.poNumber || '';
-            var oldPoDate = item.poDate || '';
+    window.dcApplyBulkPo = async () => {
+        console.log('[Bulk PO] Apply button clicked');
+        
+        if (!window.dcBulkSelected || window.dcBulkSelected.size === 0) {
+            console.warn('[Bulk PO] No rows selected in window.dcBulkSelected');
+            showToast('Select at least one row first.');
+            return;
+        }
 
-            if (poNumber) item.poNumber = poNumber;
-            if (poDate)   item.poDate   = poDate;
-            
-            // Check if both PO Number and Date are now filled and status should advance to PROCUREMENT (PO Given)
-            if (typeof window.checkAutoPoGiven === 'function') {
-                window.checkAutoPoGiven(mr, item);
-            } else if (typeof checkAutoPoGiven === 'function') {
-                checkAutoPoGiven(mr, item);
-            }
-            
-            mr.history = mr.history || [];
-            mr.history.push({
-                action: 'Bulk PO Update', actor: user.name, role: user.role, dept: user.dept, ts: Date.now(),
-                field: 'poNumber/poDate', oldValue: `${oldPoNo || '—'} / ${oldPoDate || '—'}`, newValue: `${item.poNumber || '—'} / ${item.poDate || '—'}`,
-                note: `${esc(item.name || 'Item')} — Bulk updated.`
+        const selectedKeys = Array.from(window.dcBulkSelected);
+        console.log('[Bulk PO] Selected row IDs:', selectedKeys);
+
+        const poNumEl = document.getElementById('bulk-po-number');
+        const poDateEl = document.getElementById('bulk-po-date');
+        const poNumber = (poNumEl ? poNumEl.value : '').trim();
+        const poDate   = (poDateEl ? poDateEl.value : '').trim();
+
+        console.log('[Bulk PO] PO Number:', poNumber);
+        console.log('[Bulk PO] PO Date:', poDate);
+
+        if (!poNumber && !poDate) {
+            console.warn('[Bulk PO] Neither PO Number nor PO Date provided');
+            showToast('Please enter a PO Number or PO Date.');
+            return;
+        }
+
+        const count = selectedKeys.length;
+        console.log('[Bulk PO] Bulk update started for', count, 'records');
+
+        let updatedCount = 0;
+        try {
+            dcPushUndo();
+            const modifiedMrs = new Set();
+
+            selectedKeys.forEach(function(key) {
+                var parts   = key.split('|');
+                var mrId    = parts[0];
+                var itemIdx = parseInt(parts[1], 10);
+                var mr = (appData.mrs || []).find(function(m) { return m.id === mrId; });
+                if (!mr || !mr.items || !mr.items[itemIdx]) {
+                    console.warn('[Bulk PO] Could not find item for key:', key, 'mrId:', mrId, 'itemIdx:', itemIdx);
+                    return;
+                }
+                var item = mr.items[itemIdx];
+                var oldPoNo   = item.poNumber || '';
+                var oldPoDate = item.poDate || '';
+
+                if (poNumber) item.poNumber = poNumber;
+                if (poDate)   item.poDate   = poDate;
+                
+                // Auto-advance status if both PO Number and PO Date exist
+                if (typeof window.checkAutoPoGiven === 'function') {
+                    window.checkAutoPoGiven(mr, item);
+                } else if (typeof checkAutoPoGiven === 'function') {
+                    checkAutoPoGiven(mr, item);
+                }
+                
+                mr.history = mr.history || [];
+                mr.history.push({
+                    action: 'Bulk PO Update', actor: user.name, role: user.role, dept: user.dept, ts: Date.now(),
+                    field: 'poNumber/poDate', oldValue: `${oldPoNo || '—'} / ${oldPoDate || '—'}`, newValue: `${item.poNumber || '—'} / ${item.poDate || '—'}`,
+                    note: `${esc(item.name || 'Item')} — Bulk updated.`
+                });
+                modifiedMrs.add(mr);
+                updatedCount++;
             });
-            modifiedMrs.add(mr);
-        });
 
-        dcMarkDirty();
-        window.dcBulkPoModal = false;
-        window.dcBulkSelected.clear();
-        saveDB();
-        showToast('PO Number and PO Date applied to ' + count + ' selected item' + (count === 1 ? '' : 's') + '.');
-        render(); // Immediately update table and clear selection
+            console.log('[Bulk PO] Rows updated in memory:', updatedCount);
+
+            dcMarkDirty();
+            window.dcBulkPoModal = false;
+            window.dcBulkSelected.clear();
+
+            console.log('[Bulk PO] Executing database update (Supabase / localStorage)...');
+            const dbResponse = await saveDB();
+            console.log('[Bulk PO] Database response:', dbResponse);
+
+            const msg = `Bulk PO applied successfully to ${updatedCount} records.`;
+            console.log('[Bulk PO] Displaying success message:', msg);
+            showToast(msg);
+
+            render();
+            console.log('[Bulk PO] Refresh completed');
+        } catch (err) {
+            console.error('[Bulk PO] Any errors:', err);
+            alert('❌ Bulk PO Update Error: ' + (err.message || err));
+        }
     };
 
     window.dcExportExcel = () => {
@@ -10438,15 +10373,19 @@ function renderMrRow(item, idx, xlInputCss) {
             if (error) {
                 console.error('[saveDB] Supabase OCC update failed:', error.message);
                 // Fallback to absolute upsert if json query isn't supported
-                await _supabaseClient.from('app_state').upsert({ id: 1, data: payload, updated_at: new Date().toISOString() });
+                const upsertRes = await _supabaseClient.from('app_state').upsert({ id: 1, data: payload, updated_at: new Date().toISOString() }).select();
+                return { success: !upsertRes.error, error: upsertRes.error, vsn: payload.vsn, data: upsertRes.data };
             } else if (!data || data.length === 0) {
                 console.warn('[saveDB] OCC Collision! Another user saved first. Triggering Auto-Recovery...');
                 await handleDataCollision(payload);
+                return { success: true, collision: true, vsn: payload.vsn };
             } else {
                 console.log('[saveDB] ✓ Saved to Supabase cloud (vsn: ' + payload.vsn + ')');
+                return { success: true, vsn: payload.vsn, data };
             }
         } catch (err) {
             console.error('[saveDB] Supabase exception:', err);
+            return { success: false, error: err, vsn: payload.vsn };
         }
     }
 
