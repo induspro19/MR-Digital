@@ -837,6 +837,7 @@
     // Hold/Cancel requires mandatory Reason + Justification before the status can save.
     let dcHoldCancelModal = null; // { mrId, itemIdx, status, prevStatus }
     let partialReceiptModal = null;
+    let onlyReceivedModal = null; // { mrId, itemIdx, prevStatus, selectedDate }
     let toastTimer = null;
 
     // ── DATA CENTRE: MANUAL SAVE ONLY ────────────────────────────────────
@@ -3482,6 +3483,7 @@
             ${showReassignModal ? renderReassignModal() : ''}
             ${showAssignHistoryModal ? renderAssignHistoryModal() : ''}
             ${dcHoldCancelModal ? renderDcHoldCancelModal() : ''}
+            ${typeof onlyReceivedModal !== 'undefined' && onlyReceivedModal ? renderOnlyReceivedModal() : ''}
             ${dcContextMenu ? renderDcContextMenu() : ''}
             ${showMrDraftsPanel ? renderMrDraftsPanel() : ''}
             ${_reviewMrId ? renderReviewModal() : ''}
@@ -6281,11 +6283,49 @@ function renderMrRow(item, idx, xlInputCss) {
         return `₹${num.toLocaleString('en-IN', { maximumFractionDigits: 0 })}`;
     }
 
+    function calculateDelayDays(targetDateStr, actualDateStr) {
+        if (!targetDateStr || !String(targetDateStr).trim()) {
+            return { diffDays: 0, delayDays: 0, statusText: '—' };
+        }
+        
+        const target = new Date(targetDateStr);
+        target.setHours(0, 0, 0, 0);
+        if (isNaN(target.getTime())) {
+            return { diffDays: 0, delayDays: 0, statusText: '—' };
+        }
+
+        let actual;
+        if (actualDateStr && String(actualDateStr).trim() !== '') {
+            actual = new Date(actualDateStr);
+        } else {
+            actual = new Date();
+        }
+        actual.setHours(0, 0, 0, 0);
+        if (isNaN(actual.getTime())) {
+            actual = new Date();
+            actual.setHours(0, 0, 0, 0);
+        }
+
+        const diffMs = actual.getTime() - target.getTime();
+        const diffDays = Math.round(diffMs / 86400000);
+        const delayDays = Math.max(0, diffDays);
+
+        let statusText = '';
+        if (diffDays > 0) {
+            statusText = `${diffDays} Day${diffDays === 1 ? '' : 's'}`;
+        } else if (diffDays === 0) {
+            statusText = 'On Time';
+        } else {
+            statusText = `Early by ${Math.abs(diffDays)} Day${Math.abs(diffDays) === 1 ? '' : 's'}`;
+        }
+
+        return { diffDays, delayDays, statusText };
+    }
+
     function buildPrRows() {
         const rows = [];
-        const today = new Date(); today.setHours(0,0,0,0);
         const projectCcMap = {};
-        appData.projects.forEach(p => { if (p && p.name) projectCcMap[p.name] = p.ccNo || ''; });
+        (appData.projects || []).forEach(p => { if (p && p.name) projectCcMap[p.name] = p.ccNo || ''; });
         
         const DC_ACTIVE_STATUSES = ['PR_ACCEPTED', 'PROCUREMENT', 'PARTIAL', 'ONLY_RECEIVED', 'CLOSED', 'HOLD'];
         
@@ -6296,21 +6336,13 @@ function renderMrRow(item, idx, xlInputCss) {
             if (!DC_ACTIVE_STATUSES.includes(mr.status) && !wasAcceptedBeforeCancel) return;
             (mr.items || []).forEach((it, idx) => {
                 const itStatus = it.status || 'PLANNED';
-                const receivedLike = (itStatus === 'CLOSED');
-                // Requirement Delay: Tentative Required Date vs Today.
-                let reqDelay = 0;
-                if (it.requiredDate && !receivedLike) {
-                    const rd = new Date(it.requiredDate); rd.setHours(0,0,0,0);
-                    const diff = Math.round((today - rd) / 86400000);
-                    if (diff > 0) reqDelay = diff;
-                }
-                // Delivery Delay: Tentative Delivery Date vs Today (only while still outstanding) — now per item.
-                let deliveryDelay = 0;
-                if (it.tentativeDeliveryDate && !it.materialReceivedDate && !receivedLike) {
-                    const dd = new Date(it.tentativeDeliveryDate); dd.setHours(0,0,0,0);
-                    const diff = Math.round((today - dd) / 86400000);
-                    if (diff > 0) deliveryDelay = diff;
-                }
+                
+                // Effective completion date: Material Received Date or Actual Delivery Date if present
+                const completionDate = it.materialReceivedDate || it.actualDeliveryDate || (itStatus === 'CLOSED' ? (mr.updatedAt ? fmtDateInput(mr.updatedAt) : fmtDateInput(mr.createdAt)) : '');
+                
+                const reqInfo = calculateDelayDays(it.requiredDate, completionDate);
+                const delInfo = calculateDelayDays(it.tentativeDeliveryDate, completionDate);
+
                 const amount = it.amount != null ? it.amount : (Number(it.qty||0) * Number(it.rate||0));
                 const qtyNum = Number(it.qty) || 0;
                 // Cancelled/on-hold lines don't count toward outstanding pending qty.
@@ -6334,7 +6366,12 @@ function renderMrRow(item, idx, xlInputCss) {
                     firstQuoteBudget, poValue, saving,
                     tentDelivery: it.tentativeDeliveryDate || '', actualDelivery: it.actualDeliveryDate || '',
                     materialReceived: it.materialReceivedDate || '',
-                    reqDelayDays: reqDelay, deliveryDelayDays: deliveryDelay,
+                    reqDelayDays: reqInfo.delayDays,
+                    reqDiffDays: reqInfo.diffDays,
+                    reqDelayText: reqInfo.statusText,
+                    deliveryDelayDays: delInfo.delayDays,
+                    deliveryDiffDays: delInfo.diffDays,
+                    deliveryDelayText: delInfo.statusText,
                     remarks: it.procRemarks || '',
                     holdCancelReason: it.holdCancelReason || '', holdCancelJustification: it.holdCancelJustification || '',
                     holdCancelUpdatedBy: it.holdCancelUpdatedBy || '', holdCancelTs: it.holdCancelTs || null
@@ -6586,13 +6623,8 @@ function renderMrRow(item, idx, xlInputCss) {
             return;
         }
         if (newStatus === 'ONLY_RECEIVED') {
-            const qty = Number(it.qty) || 0;
-            const recv = Number(it.receivedQty) || 0;
-            if (recv < qty) {
-                alert('Cannot mark "Only Received". Balance quantity must be 0 (all items received).');
-                softRender();
-                return;
-            }
+            window.openOnlyReceivedModal(mrId, itemIdx, it.status);
+            return;
         }
         if (newStatus === 'CLOSED' && it.status !== 'ONLY_RECEIVED') {
             alert('Must go through "Only Received" before marking as "Received" (Closed).');
@@ -6601,6 +6633,106 @@ function renderMrRow(item, idx, xlInputCss) {
         }
         window.dcUpdateItemField(mrId, itemIdx, 'status', newStatus);
     };
+
+    window.openOnlyReceivedModal = (mrId, itemIdx, prevStatus) => {
+        const mr = appData.mrs.find(m => m.id === mrId);
+        const it = mr && mr.items && mr.items[itemIdx];
+        if (!mr || !it) return;
+        // Do NOT automatically default to today's date — force user selection or start blank unless already set
+        const initialDate = it.materialReceivedDate || '';
+        onlyReceivedModal = { mrId, itemIdx, prevStatus: prevStatus || it.status, selectedDate: initialDate };
+        render();
+    };
+
+    window.closeOnlyReceivedModal = () => {
+        onlyReceivedModal = null;
+        render();
+    };
+
+    window.submitOnlyReceivedModal = () => {
+        if (!onlyReceivedModal) return;
+        const dateInput = document.getElementById('or-received-date');
+        const selectedDate = dateInput ? dateInput.value.trim() : (onlyReceivedModal.selectedDate || '');
+        
+        if (!selectedDate) {
+            alert('Please select the Material Received Date.');
+            return;
+        }
+
+        const { mrId, itemIdx, prevStatus } = onlyReceivedModal;
+        const mr = appData.mrs.find(m => m.id === mrId);
+        const it = mr && mr.items && mr.items[itemIdx];
+        if (!mr || !it) {
+            window.closeOnlyReceivedModal();
+            return;
+        }
+
+        dcSnapshotForUndo();
+
+        // 1. Save Material Received Date
+        it.materialReceivedDate = selectedDate;
+        
+        // 2. Save Status = "ONLY_RECEIVED"
+        it.status = 'ONLY_RECEIVED';
+
+        // 3. Mark receivedQty = qty if not fully set
+        const totalQty = Number(it.qty) || 0;
+        if ((Number(it.receivedQty) || 0) < totalQty) {
+            it.receivedQty = totalQty;
+        }
+
+        mr.history = mr.history || [];
+        mr.history.push({
+            action: 'Data Centre: Status Changed to Only Received',
+            actor: user.name, role: user.role, dept: user.dept, ts: Date.now(),
+            field: 'status', oldValue: STATUS_META[prevStatus]?.label || prevStatus, newValue: STATUS_META['ONLY_RECEIVED'].label,
+            note: `${esc(it.name || 'Item')} — Material Received Date: ${selectedDate}`
+        });
+
+        dcMarkDirty();
+        window.closeOnlyReceivedModal();
+        showToast('Status updated to Only Received. Material Received Date saved.');
+    };
+
+    function renderOnlyReceivedModal() {
+        if (!onlyReceivedModal) return '';
+        const { mrId, itemIdx, selectedDate } = onlyReceivedModal;
+        const mr = appData.mrs.find(m => m.id === mrId);
+        const it = mr && mr.items && mr.items[itemIdx];
+        if (!mr || !it) return '';
+
+        return `
+        <div id="or-modal-overlay" class="fixed inset-0 bg-slate-900/60 z-[99999] flex items-center justify-center backdrop-blur-sm" onclick="if(event.target.id==='or-modal-overlay')window.closeOnlyReceivedModal()">
+            <div class="bg-white rounded-2xl shadow-2xl w-[90vw] max-w-md overflow-hidden flex flex-col border border-rule">
+                <div class="bg-brand p-5 flex justify-between items-center shrink-0">
+                    <div>
+                        <h2 class="text-lg font-black text-white uppercase tracking-wider">Confirm Material Receipt</h2>
+                        <p class="text-xs text-brand-100 mt-1">${esc(it.name || 'Item')} (${esc(mr.prNumber || mr.mrNumber)})</p>
+                    </div>
+                    <button onclick="window.closeOnlyReceivedModal()" class="text-white hover:bg-white/20 p-2 rounded-xl transition-all">
+                        <i data-lucide="x" class="w-5 h-5"></i>
+                    </button>
+                </div>
+                
+                <div class="p-6 space-y-4">
+                    <p class="text-xs text-slate-600 font-medium leading-relaxed">
+                        Setting status to <strong class="text-purple-700">Only Received</strong> confirms all ordered material has physically arrived. Please select the actual <strong>Material Received Date</strong> to freeze procurement delay metrics.
+                    </p>
+
+                    <div>
+                        <label class="block text-xs font-bold text-slate-700 mb-1.5">Material Received Date <span class="text-red-500">*</span></label>
+                        <input type="date" id="or-received-date" value="${esc(selectedDate || '')}" class="w-full border border-slate-300 rounded-xl p-3 text-sm font-semibold text-slate-800 focus:ring-2 focus:ring-brand focus:border-brand" required />
+                        <p class="text-[10px] text-slate-400 mt-1">Do not leave blank. Must be the actual physical delivery date.</p>
+                    </div>
+                </div>
+
+                <div class="p-5 border-t border-rule bg-slate-50 flex justify-end gap-3 shrink-0">
+                    <button onclick="window.closeOnlyReceivedModal()" class="px-5 py-2.5 text-xs font-bold text-slate-600 hover:bg-slate-200 rounded-xl transition-all">Cancel</button>
+                    <button onclick="window.submitOnlyReceivedModal()" class="px-6 py-2.5 text-xs font-black text-white bg-brand hover:bg-brand-600 rounded-xl transition-all shadow-md active:scale-95">Save & Confirm</button>
+                </div>
+            </div>
+        </div>`;
+    }
 
     
     window.openPartialReceiptModal = (mrId, itemIdx) => {
@@ -7221,8 +7353,20 @@ function renderMrRow(item, idx, xlInputCss) {
                 const clr = pct>=100 ? '#047857' : (pct>0 ? '#B45309' : '#94a3b8');
                 return `<span style="font-weight:800;color:${clr}">${pct.toFixed(1)}%</span>`;
             }
+            if (c.key === 'reqDelayDays') {
+                const text = r.reqDelayText || (r.reqDelayDays > 0 ? `${r.reqDelayDays} Days` : 'On Time');
+                const clr = r.reqDiffDays > 0 ? '#DC2626' : (r.reqDiffDays < 0 ? '#047857' : '#334155');
+                const wt = r.reqDiffDays !== 0 ? '700' : '500';
+                return `<span style="color:${clr};font-weight:${wt};">${esc(text)}</span>`;
+            }
+            if (c.key === 'deliveryDelayDays') {
+                const text = r.deliveryDelayText || (r.deliveryDelayDays > 0 ? `${r.deliveryDelayDays} Days` : 'On Time');
+                const clr = r.deliveryDiffDays > 0 ? '#DC2626' : (r.deliveryDiffDays < 0 ? '#047857' : '#334155');
+                const wt = r.deliveryDiffDays !== 0 ? '700' : '500';
+                return `<span style="color:${clr};font-weight:${wt};">${esc(text)}</span>`;
+            }
             if (c.key === 'date') return fmtDate(v);
-            if (c.key === 'reqDate' || c.key === 'poDate' || c.key === 'tentDelivery') return v ? fmtDate(v) : '—';
+            if (c.key === 'reqDate' || c.key === 'poDate' || c.key === 'tentDelivery' || c.key === 'materialReceived') return v ? fmtDate(v) : '—';
             if (c.currency) return formatCurrencyValue(v);
             if (c.num) return (typeof v === 'number') ? (c.key==='rate'||c.key==='amount' ? v.toFixed(2) : v) : (v||'—');
             return esc(String(v ?? '')) || '—';
@@ -7430,8 +7574,20 @@ function renderMrRow(item, idx, xlInputCss) {
                 const clr = pct>=100 ? '#047857' : (pct>0 ? '#B45309' : '#94a3b8');
                 return `<span style="font-weight:800;color:${clr}">${pct.toFixed(1)}%</span>`;
             }
+            if (c.key === 'reqDelayDays') {
+                const text = r.reqDelayText || (r.reqDelayDays > 0 ? `${r.reqDelayDays} Days` : 'On Time');
+                const clr = r.reqDiffDays > 0 ? '#DC2626' : (r.reqDiffDays < 0 ? '#047857' : '#334155');
+                const wt = r.reqDiffDays !== 0 ? '700' : '500';
+                return `<span style="color:${clr};font-weight:${wt};">${esc(text)}</span>`;
+            }
+            if (c.key === 'deliveryDelayDays') {
+                const text = r.deliveryDelayText || (r.deliveryDelayDays > 0 ? `${r.deliveryDelayDays} Days` : 'On Time');
+                const clr = r.deliveryDiffDays > 0 ? '#DC2626' : (r.deliveryDiffDays < 0 ? '#047857' : '#334155');
+                const wt = r.deliveryDiffDays !== 0 ? '700' : '500';
+                return `<span style="color:${clr};font-weight:${wt};">${esc(text)}</span>`;
+            }
             if (c.key === 'date') return fmtDate(v);
-            if (c.key === 'reqDate' || c.key === 'poDate' || c.key === 'tentDelivery') return v ? fmtDate(v) : '—';
+            if (c.key === 'reqDate' || c.key === 'poDate' || c.key === 'tentDelivery' || c.key === 'materialReceived') return v ? fmtDate(v) : '—';
             if (c.currency) return formatCurrencyValue(v);
             if (c.num) return (typeof v === 'number') ? (c.key==='rate'||c.key==='amount' ? v.toFixed(2) : v) : (v||'—');
             return esc(String(v ?? '')) || '—';
