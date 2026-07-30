@@ -1183,12 +1183,12 @@
 
         (data.mrs || []).forEach(mr => {
             (mr.items || []).forEach(it => {
-                // Self-heal: an item that already belongs to a generated PR should never sit at a
-                // pre-planning status (this happened for items migrated while an MR was still in
-                // the Department Approval chain, before the PLANNED-transition guard recognised
-                // those in-between statuses). Runs on every load, independent of _procMigrated.
-                if (mr.prNumber && ['RAISED', 'DEPT_APPROVAL_PENDING', 'DEPT_APPROVED', 'QUERY_RAISED', 'AUTHORIZED'].includes(it.status)) {
-                    it.status = 'PLANNED';
+                // Self-heal: an item that belongs to an approved/generated PR should reflect proper status,
+                // but pre-approval items (RAISED, DEPT_APPROVAL_PENDING, DEPT_APPROVED, QUERY_RAISED, RETURNED_TO_*, AUTHORIZED)
+                // must NEVER be forced to PLANNED simply because a Direct PR number exists.
+                const PRE_APPROVAL_STATUSES = ['RAISED', 'DEPT_APPROVAL_PENDING', 'DEPT_APPROVED', 'QUERY_RAISED', 'RETURNED_TO_CREATOR', 'RETURNED_TO_L2', 'RETURNED_TO_FINAL_AUTH', 'RETURNED_TO_PLANNING', 'AUTHORIZED'];
+                if (mr.prNumber && !PRE_APPROVAL_STATUSES.includes(mr.status) && PRE_APPROVAL_STATUSES.includes(it.status)) {
+                    it.status = mr.status || 'PLANNED';
                 }
                 if (it._procMigrated) return;
                 if (it.poNumber === undefined)         it.poNumber = mr.poNumber || '';
@@ -2388,12 +2388,9 @@
             mr = { id: mrId, mrNumber: mrNum, prNumber: prNum, revNo: 0, createdAt: Date.now(), history: [] };
         }
 
-        // Revisions no longer bypass L1/L2. Clear origin tracking so it restarts the flow.
-        if (isRevision) {
-            mr.queryOriginStatus = null;
-            mr.queryOriginApprover = null;
-        }
-        
+        // Revisions must return to the stage that raised the query (queryOriginStatus)
+        const targetQueryReturnStatus = (isRevision && mr.queryOriginStatus) ? mr.queryOriginStatus : null;
+
         mr.dept       = user.dept;
         mr.raisedBy   = user.name;
         mr.deliveryLocation = mrDeliveryLocation;
@@ -2442,22 +2439,26 @@
             mr.l1User = user.name;
             mr.l2User = mr.l2User || '';
 
-            // ── Department Approval Level routing (mandatory) ───────────────────────────
-            // Approval logic is always based on both Department and Approval Level.
-            // • Creator is L1  → look for an active L2 approver in the SAME department.
-            //     - Found     → route to Department Approval Pending, auto-assigned to that L2 user.
-            //     - Not found → skip Department Approval entirely, go straight to Final
-            //                   Authorization Pending (unchanged legacy behaviour).
-            // • Creator is L2 or above → they already sit at/above department approval, so the
-            //     MR goes straight to Final Authorization Pending, same as today.
             const creatorLevel = user.approvalLevel || 'L1';
             let actionLabel = isRevision ? "Revised & Resubmitted" : "Raised";
             
-            // Check if this was originally a Direct PR (even if we are in the MR_BASED fallback block for revisions)
             const isDirectSource = mr.source === 'DIRECT_PR';
             const routeThroughPlanningL2 = creatorLevel === 'L1' && isDirectSource && directPrUsesPlanningL2Chain(user) && findDeptL2(user.dept);
 
-            if (creatorLevel === 'L1') {
+            if (targetQueryReturnStatus) {
+                // Exact stage return on Query Resubmit: returns to the stage that raised the Query
+                mr.status = targetQueryReturnStatus;
+                const notifStr = 'revised and resubmitted — returned to query stage';
+                if (targetQueryReturnStatus === 'DEPT_APPROVAL_PENDING') {
+                    pushNotification({ dept: user.dept, level: 'L2' }, `${isDirectSource ? 'Direct PR' : 'MR'} ${mr.prNumber || mr.mrNumber} ${notifStr}.`, mr.id);
+                } else if (targetQueryReturnStatus === 'RAISED') {
+                    pushNotification({ level: 'FINAL_AUTH' }, `${isDirectSource ? 'Direct PR' : 'MR'} ${mr.prNumber || mr.mrNumber} ${notifStr}.`, mr.id);
+                } else if (targetQueryReturnStatus === 'AUTHORIZED') {
+                    pushNotification({ level: 'PLANNING' }, `${isDirectSource ? 'Direct PR' : 'MR'} ${mr.prNumber || mr.mrNumber} ${notifStr}.`, mr.id);
+                } else if (targetQueryReturnStatus === 'PLANNED') {
+                    pushNotification({ level: 'PROCUREMENT' }, `${isDirectSource ? 'Direct PR' : 'MR'} ${mr.prNumber || mr.mrNumber} ${notifStr}.`, mr.id);
+                }
+            } else if (creatorLevel === 'L1') {
                 const l2 = findDeptL2(user.dept);
                 if (l2 && (!isDirectSource || routeThroughPlanningL2)) {
                     mr.status = 'DEPT_APPROVAL_PENDING';
@@ -2474,6 +2475,9 @@
                 const notifStr = isRevision ? 'revised and resubmitted — pending Final Authorization' : `from ${user.name} (${user.dept}) is pending Final Authorization`;
                 pushNotification({ level: 'FINAL_AUTH' }, `${isDirectSource ? 'Direct PR' : 'MR'} ${mr.prNumber || mr.mrNumber} ${notifStr}.`, mr.id);
             }
+
+            // Sync item status to document status so item status doesn't sit at old state
+            (mr.items || []).forEach(it => { it.status = mr.status; });
 
             mr.history.push({ action: actionLabel, actor: user.name, role: user.role, dept: user.dept, ts: Date.now(), note: notes });
         }
@@ -6377,7 +6381,8 @@ function renderMrRow(item, idx, xlInputCss) {
             const wasAcceptedBeforeCancel = mr.status === 'CANCELLED' && (mr.history || []).some(h => h.newValue === 'PR_ACCEPTED' || h.newValue === 'PR Accepted' || (h.oldValue === 'PLANNED' && (h.action || '').includes('Accepted')));
             if (!DC_ACTIVE_STATUSES.includes(mr.status) && !wasAcceptedBeforeCancel) return;
             (mr.items || []).forEach((it, idx) => {
-                const itStatus = it.status || 'PLANNED';
+                const itStatus = it.status || mr.status || 'PLANNED';
+                if (!DC_ACTIVE_STATUSES.includes(itStatus) && !wasAcceptedBeforeCancel) return;
                 
                 // Effective completion date: Material Received Date or Actual Delivery Date if present
                 const completionDate = it.materialReceivedDate || it.actualDeliveryDate || (itStatus === 'CLOSED' ? (mr.updatedAt ? fmtDateInput(mr.updatedAt) : fmtDateInput(mr.createdAt)) : '');
