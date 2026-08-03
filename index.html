@@ -947,27 +947,6 @@
         migrateDepartments(data);
         migrateSequences(data);
         
-        // Self-Healing: Fix corrupted statuses
-        if (data.mrs) {
-            data.mrs.forEach(mr => {
-                // 1. Fix MRs that bypassed Procurement Inbox due to Planning Appoval bug
-                if (mr.status === 'PR_ACCEPTED') {
-                    const hasPlannedItems = (mr.items || []).some(it => it.status === 'PLANNED');
-                    if (hasPlannedItems) mr.status = 'PLANNED'; 
-                    // 3. Fix Direct PR items that never got their status upgraded to PR_ACCEPTED because they were undefined
-                    (mr.items || []).forEach(it => {
-                        if (!it.status) it.status = 'PR_ACCEPTED';
-                    });
-                }
-                // 2. Fix Direct PRs that got stuck in AUTHORIZED and leaked into Data Center
-                if (mr.status === 'AUTHORIZED' && mr.source === 'DIRECT_PR') {
-                    mr.status = 'PLANNED';
-                    (mr.items || []).forEach(it => {
-                        if (!it.status || !['PROCUREMENT','PARTIAL','CLOSED','HOLD','CANCELLED'].includes(it.status)) it.status = 'PLANNED';
-                    });
-                }
-            });
-        }
         
         // OCC Versioning
         data.vsn = data.vsn || 1;
@@ -1220,6 +1199,14 @@
     // MR's own workflow status, unchanged.
     function mrOverallStatus(mr) {
         if (!mr || !mr.prNumber) return mr?.status;
+        
+        // STRICT WORKFLOW ENFORCEMENT: Never calculate item-level statuses if the document 
+        // is still in a pre-approval workflow stage. The MR status is immutable until PLANNED.
+        const PRE_APPROVAL_STATUSES = ['RAISED', 'DEPT_APPROVAL_PENDING', 'DEPT_APPROVED', 'QUERY_RAISED', 'RETURNED_TO_CREATOR', 'RETURNED_TO_L2', 'RETURNED_TO_FINAL_AUTH', 'RETURNED_TO_PLANNING', 'AUTHORIZED', 'PROCUREMENT_QUERY'];
+        if (PRE_APPROVAL_STATUSES.includes(mr.status)) {
+            return mr.status;
+        }
+
         const items = (mr.items || []).filter(Boolean);
         if (!items.length) return mr.status;
         const statuses = items.map(it => it.status || 'PLANNED');
@@ -1240,9 +1227,9 @@
         return mr && mr.prNumber ? mrOverallStatus(mr) : (mr ? mr.status : '');
     }
     function syncAllMrStatuses() {
-        (appData.mrs || []).filter(Boolean).forEach(mr => {
-            if (mr.prNumber) mr.status = mrOverallStatus(mr);
-        });
+        // STRICT WORKFLOW ENFORCEMENT: syncAllMrStatuses is no longer permitted to mutate mr.status.
+        // It is strictly a read-only state machine. mr.status can only change via explicit user actions.
+        // This function is kept empty to satisfy existing callers without breaking the app.
     }
     // Distinct, non-empty PO numbers across every item on a PR — a PR can now legitimately have several.
     function mrOverallPoNumbers(mr) {
