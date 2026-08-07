@@ -3498,10 +3498,36 @@
 
             const itemRows = [];
             data.forEach(m => (m.items||[]).forEach(it => {
+                const amount = (Number(it.qty) || 0) * (Number(it.rate) || 0);
+                const rawCc = it.project || '';
+                const pObj = (appData.projects || []).find(p => 
+                    p.name === rawCc || 
+                    p.ccNo === rawCc || 
+                    p.id === rawCc ||
+                    (p.name && rawCc && p.name.trim().toLowerCase() === rawCc.trim().toLowerCase()) ||
+                    (p.ccNo && rawCc && p.ccNo.trim().toLowerCase() === rawCc.trim().toLowerCase())
+                );
+                const costCenterDisplay = pObj ? (pObj.name + (pObj.ccNo ? ` (CC: ${pObj.ccNo})` : '')) : rawCc;
+                const reqDateDisplay = it.requiredDate ? (fmtDate(it.requiredDate) || it.requiredDate) : '';
+                const remarksDisplay = it.remarks || it.procRemarks || m.notes || '';
+
                 itemRows.push({
-                    'MR Number': m.mrNumber, 'Item': it.name, 'Spec': it.spec || '', 'Make': it.make || '',
-                    'Qty': it.qty, 'Unit': it.unit, 'Project': it.project || '',
-                    'Required Date': fmtDate(it.requiredDate), 'Status': (STATUS_META[getMrDisplayStatus(m)]||{}).label || getMrDisplayStatus(m)
+                    'MR Number': m.mrNumber || '',
+                    'PR Number': m.prNumber || '—',
+                    'Department': m.dept || '',
+                    'Requested By': m.raisedBy || '',
+                    'Created Date': fmtDate(m.createdAt),
+                    'Item Name': it.name || it.assetName || '',
+                    'Description': it.spec || '',
+                    'Make': it.make || '',
+                    'Unit': it.unit || it.uom || 'NOS',
+                    'Quantity': Number(it.qty) || 0,
+                    'Unit Price': Number(it.rate) || 0,
+                    'Total Price': amount,
+                    'Required Date': reqDateDisplay,
+                    'Cost Center': costCenterDisplay,
+                    'Remarks': remarksDisplay,
+                    'Status': (STATUS_META[getMrDisplayStatus(m)]||{}).label || getMrDisplayStatus(m)
                 });
             }));
             XLSX.utils.book_append_sheet(wb, XLSX.utils.json_to_sheet(itemRows), 'Item Detail');
@@ -3564,23 +3590,35 @@
             const items = mr.items || [];
             let totalAmount = 0;
             items.forEach((it, idx) => {
-                const amount = (it.qty || 0) * (it.rate || 0);
+                const amount = (Number(it.qty) || 0) * (Number(it.rate) || 0);
                 totalAmount += amount;
+
+                const rawCc = it.project || '';
+                const pObj = (appData.projects || []).find(p => 
+                    p.name === rawCc || 
+                    p.ccNo === rawCc || 
+                    p.id === rawCc ||
+                    (p.name && rawCc && p.name.trim().toLowerCase() === rawCc.trim().toLowerCase()) ||
+                    (p.ccNo && rawCc && p.ccNo.trim().toLowerCase() === rawCc.trim().toLowerCase())
+                );
+                const costCenterDisplay = pObj ? (pObj.name + (pObj.ccNo ? ` (CC: ${pObj.ccNo})` : '')) : rawCc;
+                const reqDateDisplay = it.requiredDate ? (fmtDate(it.requiredDate) || it.requiredDate) : '';
+                const remarksDisplay = it.remarks || it.procRemarks || mr.notes || '';
+
                 const itemData = [
                     [
                         idx + 1,
-                        it.name || '',
+                        it.name || it.assetName || '',
                         it.spec || '',
                         it.make || '',
-                        '—',
-                        it.qty || 0,
-                        it.unit || '',
-                        it.rate || 0,
+                        it.sampleProvided || '—',
+                        Number(it.qty) || 0,
+                        it.unit || it.uom || 'NOS',
+                        Number(it.rate) || 0,
                         amount,
-                        it.requiredDate ? fmtDate(it.requiredDate) : '',
-                        (mr.dept && (appData.projects || []).find(p => p.id === it.project)) ? 
-                            ((appData.projects.find(p => p.id === it.project) || {}).ccNo || '') : '',
-                        it.procRemarks || ''
+                        reqDateDisplay,
+                        costCenterDisplay,
+                        remarksDisplay
                     ]
                 ];
                 XLSX.utils.sheet_add_aoa(ws, itemData, { origin: row });
