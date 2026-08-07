@@ -6603,6 +6603,134 @@ function renderMrRow(item, idx, xlInputCss) {
         return `₹${num.toLocaleString('en-IN', { maximumFractionDigits: 0 })}`;
     }
 
+    // ── CENTRALIZED ERP DATE & REQUIREMENT DELAY ENGINE (READ-ONLY) ─────────
+    /*
+      Requirement Delay is a visual performance indicator only.
+      Requirement Delay is NOT a workflow status.
+      Requirement Delay is NOT a procurement status.
+      Workflow status is owned exclusively by the Workflow Engine.
+      Procurement status is owned exclusively by the Procurement Engine.
+      Requirement Delay is calculated exclusively by calculateRequirementProgress().
+      No other module may independently calculate or override Requirement Delay.
+    */
+    function parseErpDate(val) {
+        if (!val) return null;
+        if (val instanceof Date) {
+            if (isNaN(val.getTime())) return null;
+            const d = new Date(val.getTime());
+            d.setHours(0, 0, 0, 0);
+            return d;
+        }
+        if (typeof val === 'number') {
+            const d = new Date(Math.round((val - 25569) * 86400 * 1000));
+            if (isNaN(d.getTime())) return null;
+            d.setHours(0, 0, 0, 0);
+            return d;
+        }
+        const str = String(val).trim();
+        if (!str) return null;
+
+        // YYYY-MM-DD
+        const isoMatch = str.match(/^(\d{4})[\/\-](\d{1,2})[\/\-](\d{1,2})$/);
+        if (isoMatch) {
+            const year = parseInt(isoMatch[1], 10);
+            const month = parseInt(isoMatch[2], 10);
+            const day = parseInt(isoMatch[3], 10);
+            if (month >= 1 && month <= 12 && day >= 1 && day <= 31) {
+                const d = new Date(year, month - 1, day);
+                if (d.getFullYear() === year && d.getMonth() === month - 1 && d.getDate() === day) {
+                    d.setHours(0, 0, 0, 0);
+                    return d;
+                }
+            }
+        }
+
+        // DD/MM/YYYY or DD-MM-YYYY
+        const dmyMatch = str.match(/^(\d{1,2})[\/\-](\d{1,2})[\/\-](\d{4})$/);
+        if (dmyMatch) {
+            const day = parseInt(dmyMatch[1], 10);
+            const month = parseInt(dmyMatch[2], 10);
+            const year = parseInt(dmyMatch[3], 10);
+            if (month >= 1 && month <= 12 && day >= 1 && day <= 31) {
+                const d = new Date(year, month - 1, day);
+                if (d.getFullYear() === year && d.getMonth() === month - 1 && d.getDate() === day) {
+                    d.setHours(0, 0, 0, 0);
+                    return d;
+                }
+            }
+        }
+
+        const t = Date.parse(str);
+        if (!isNaN(t)) {
+            const d = new Date(t);
+            d.setHours(0, 0, 0, 0);
+            return d;
+        }
+        return null;
+    }
+
+    function getBusinessDate() {
+        const custom = (typeof appData !== 'undefined' && appData && (appData.businessDate || appData.systemDate));
+        if (custom) {
+            const d = parseErpDate(custom);
+            if (d) return d;
+        }
+        const today = new Date();
+        today.setHours(0, 0, 0, 0);
+        return today;
+    }
+
+    function calculateRequirementProgress(requiredDateStr, completionDateStr) {
+        const target = parseErpDate(requiredDateStr);
+        if (!target) {
+            return { diffDays: 0, delayDays: 0, statusText: '—', isPending: true };
+        }
+
+        const isReceived = Boolean(completionDateStr && String(completionDateStr).trim() !== '');
+
+        if (!isReceived) {
+            // Rule 1: Before Material Receipt (Pending)
+            const today = getBusinessDate();
+
+            const diffMs = today.getTime() - target.getTime();
+            const diffDays = Math.round(diffMs / 86400000);
+            const delayDays = Math.max(0, diffDays);
+
+            let statusText = '';
+            if (diffDays > 0) {
+                statusText = `Overdue by ${diffDays} Day${diffDays === 1 ? '' : 's'}`;
+            } else if (diffDays === 0) {
+                statusText = 'Due Today';
+            } else {
+                const dueInDays = Math.abs(diffDays);
+                statusText = `Due in ${dueInDays} Day${dueInDays === 1 ? '' : 's'}`;
+            }
+
+            return { diffDays, delayDays, statusText, isPending: true };
+        } else {
+            // Rule 2: After Material Receipt (Completed)
+            const actual = parseErpDate(completionDateStr);
+            if (!actual) {
+                return { diffDays: 0, delayDays: 0, statusText: 'Invalid Receipt Date', isPending: false };
+            }
+
+            const diffMs = actual.getTime() - target.getTime();
+            const diffDays = Math.round(diffMs / 86400000);
+            const delayDays = Math.max(0, diffDays);
+
+            let statusText = '';
+            if (diffDays > 0) {
+                statusText = `Late by ${diffDays} Day${diffDays === 1 ? '' : 's'}`;
+            } else if (diffDays === 0) {
+                statusText = 'On Time';
+            } else {
+                statusText = `Early by ${Math.abs(diffDays)} Day${Math.abs(diffDays) === 1 ? '' : 's'}`;
+            }
+
+            return { diffDays, delayDays, statusText, isPending: false };
+        }
+    }
+
     function calculateDelayDays(targetDateStr, actualDateStr) {
         if (!targetDateStr || !String(targetDateStr).trim()) {
             return { diffDays: 0, delayDays: 0, statusText: '—' };
@@ -6661,7 +6789,7 @@ function renderMrRow(item, idx, xlInputCss) {
                 // Effective completion date: Material Received Date or Actual Delivery Date if present
                 const completionDate = it.materialReceivedDate || it.actualDeliveryDate || (itStatus === 'CLOSED' ? (mr.updatedAt ? fmtDateInput(mr.updatedAt) : fmtDateInput(mr.createdAt)) : '');
                 
-                const reqInfo = calculateDelayDays(it.requiredDate, completionDate);
+                const reqInfo = calculateRequirementProgress(it.requiredDate, completionDate);
                 const delInfo = calculateDelayDays(it.tentativeDeliveryDate, completionDate);
 
                 const amount = it.amount != null ? it.amount : (Number(it.qty||0) * Number(it.rate||0));
@@ -6690,6 +6818,7 @@ function renderMrRow(item, idx, xlInputCss) {
                     reqDelayDays: reqInfo.delayDays,
                     reqDiffDays: reqInfo.diffDays,
                     reqDelayText: reqInfo.statusText,
+                    isPending: reqInfo.isPending,
                     deliveryDelayDays: delInfo.delayDays,
                     deliveryDiffDays: delInfo.diffDays,
                     deliveryDelayText: delInfo.statusText,
@@ -7675,8 +7804,8 @@ function renderMrRow(item, idx, xlInputCss) {
                 return `<span style="font-weight:800;color:${clr}">${pct.toFixed(1)}%</span>`;
             }
             if (c.key === 'reqDelayDays') {
-                const text = r.reqDelayText || (r.reqDelayDays > 0 ? `${r.reqDelayDays} Days` : 'On Time');
-                const clr = r.reqDiffDays > 0 ? '#DC2626' : (r.reqDiffDays < 0 ? '#047857' : '#334155');
+                const text = r.reqDelayText || '—';
+                const clr = r.reqDiffDays > 0 ? '#DC2626' : (r.reqDiffDays < 0 ? (r.isPending ? '#2563EB' : '#047857') : '#334155');
                 const wt = r.reqDiffDays !== 0 ? '700' : '500';
                 return `<span style="color:${clr};font-weight:${wt};">${esc(text)}</span>`;
             }
@@ -7904,8 +8033,8 @@ function renderMrRow(item, idx, xlInputCss) {
                 return `<span style="font-weight:800;color:${clr}">${pct.toFixed(1)}%</span>`;
             }
             if (c.key === 'reqDelayDays') {
-                const text = r.reqDelayText || (r.reqDelayDays > 0 ? `${r.reqDelayDays} Days` : 'On Time');
-                const clr = r.reqDiffDays > 0 ? '#DC2626' : (r.reqDiffDays < 0 ? '#047857' : '#334155');
+                const text = r.reqDelayText || '—';
+                const clr = r.reqDiffDays > 0 ? '#DC2626' : (r.reqDiffDays < 0 ? (r.isPending ? '#2563EB' : '#047857') : '#334155');
                 const wt = r.reqDiffDays !== 0 ? '700' : '500';
                 return `<span style="color:${clr};font-weight:${wt};">${esc(text)}</span>`;
             }
