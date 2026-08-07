@@ -7407,6 +7407,40 @@ function renderMrRow(item, idx, xlInputCss) {
         return rows;
     }
 
+    function dcMatchesSingleStatus(rStat, fVal) {
+        if (!fVal) return true;
+        if (fVal === 'OPEN') {
+            return !['CLOSED', 'ONLY_RECEIVED', 'CANCELLED'].includes(rStat);
+        }
+        if (fVal === 'PO_PENDING' || fVal === 'PO PENDING' || fVal === 'PR_ACCEPTED') {
+            return rStat === 'PR_ACCEPTED' || rStat === 'PLANNED';
+        }
+        if (fVal === 'PO_GIVEN' || fVal === 'PO GIVEN' || fVal === 'PROCUREMENT') {
+            return rStat === 'PROCUREMENT' || rStat === 'PO_GIVEN';
+        }
+        if (fVal === 'PARTIAL' || fVal === 'PARTIAL RECEIVED') {
+            return rStat === 'PARTIAL';
+        }
+        if (fVal === 'CLOSED' || fVal === 'RECEIVED' || fVal === 'CLOSED / RECEIVED') {
+            return rStat === 'CLOSED' || rStat === 'ONLY_RECEIVED';
+        }
+        if (fVal === 'HOLD') return rStat === 'HOLD';
+        if (fVal === 'CANCELLED') return rStat === 'CANCELLED';
+
+        return rStat.includes(fVal);
+    }
+
+    function dcMatchesStatusFilter(rowStatus, filterVal) {
+        if (!filterVal || (Array.isArray(filterVal) && filterVal.length === 0)) return true;
+        const rStat = String(rowStatus || '').toUpperCase();
+        
+        if (Array.isArray(filterVal)) {
+            return filterVal.some(v => dcMatchesSingleStatus(rStat, String(v).toUpperCase()));
+        } else {
+            return dcMatchesSingleStatus(rStat, String(filterVal).toUpperCase());
+        }
+    }
+
     function dcFilteredRows() {
         let rows = buildPrRows();
         if (!canSeeAllDepartmentMrs()) {
@@ -7417,9 +7451,19 @@ function renderMrRow(item, idx, xlInputCss) {
             rows = rows.filter(r => Object.values(r).some(v => String(v ?? '').toLowerCase().includes(gq)));
         }
         Object.keys(dcColFilter).forEach(k => {
-            const f = (dcColFilter[k] || '').trim().toLowerCase();
-            if (!f) return;
-            rows = rows.filter(r => String(r[k] ?? '').toLowerCase().includes(f));
+            const f = dcColFilter[k];
+            if (!f || (Array.isArray(f) && f.length === 0)) return;
+            if (typeof f === 'string' && !f.trim()) return;
+
+            if (k === 'status') {
+                rows = rows.filter(r => dcMatchesStatusFilter(r.status, f));
+            } else if (Array.isArray(f)) {
+                rows = rows.filter(r => f.some(val => String(r[k] ?? '').toLowerCase().includes(String(val).toLowerCase())));
+            } else {
+                const str = String(f).trim().toLowerCase();
+                if (!str) return;
+                rows = rows.filter(r => String(r[k] ?? '').toLowerCase().includes(str));
+            }
         });
         const todayStr = fmtDateInput(Date.now());
         if (dcPreset === 'req_delay')       rows = rows.filter(r => r.reqDelayDays > 0);
@@ -7439,6 +7483,47 @@ function renderMrRow(item, idx, xlInputCss) {
         });
         return rows;
     }
+
+    window.dcStatusFilterDropdownOpen = false;
+
+    window.dcToggleStatusFilterDropdown = (e) => {
+        if (e) e.stopPropagation();
+        window.dcStatusFilterDropdownOpen = !window.dcStatusFilterDropdownOpen;
+        softRender();
+    };
+
+    window.dcSetStatusCheckboxFilter = (statusVal, isChecked) => {
+        let current = dcColFilter.status;
+        if (!Array.isArray(current)) {
+            current = (current && current !== 'OPEN') ? [current] : (current === 'OPEN' ? ['OPEN'] : []);
+        }
+        if (isChecked) {
+            if (!current.includes(statusVal)) current.push(statusVal);
+        } else {
+            current = current.filter(v => v !== statusVal);
+        }
+        dcColFilter.status = current.length > 0 ? current : '';
+        dcPage = 1;
+        if (document.getElementById('dc-tbody')) {
+            window.dcUpdateGridRowsOnly();
+        } else {
+            softRender();
+        }
+    };
+
+    window.dcSetStatusPresetFilter = (preset) => {
+        if (preset === 'OPEN') {
+            dcColFilter.status = 'OPEN';
+        } else {
+            dcColFilter.status = '';
+        }
+        dcPage = 1;
+        if (document.getElementById('dc-tbody')) {
+            window.dcUpdateGridRowsOnly();
+        } else {
+            softRender();
+        }
+    };
 
     let _dcFilterDebounceTimer = null;
 
@@ -8756,6 +8841,74 @@ function renderMrRow(item, idx, xlInputCss) {
                             const w = dcColWidth(c);
                             const left = c.sticky ? acc : null;
                             if (c.sticky) acc += w;
+
+                            if (c.key === 'status') {
+                                const isFiltered = Boolean(dcColFilter.status && (Array.isArray(dcColFilter.status) ? dcColFilter.status.length > 0 : String(dcColFilter.status).trim() !== ''));
+                                const displayVal = Array.isArray(dcColFilter.status) ? (dcColFilter.status.length === 1 ? dcColFilter.status[0] : `${dcColFilter.status.length} selected`) : (dcColFilter.status || '');
+                                const currentArr = Array.isArray(dcColFilter.status) ? dcColFilter.status : (dcColFilter.status ? [dcColFilter.status] : []);
+                                const isOpenSelected = currentArr.includes('OPEN') || dcColFilter.status === 'OPEN';
+
+                                return `
+                                <th data-col-key="${c.key}" style="position:sticky; top:29px; ${c.sticky?`left:${left}px; z-index:3;`:'z-index:1;'} background:#f1f5f9; border:1px solid #dde3ea; padding:2px 4px;">
+                                    <div style="display:flex; align-items:center; gap:2px; width:100%;">
+                                        <input id="dc-col-status" data-focus-key="dc-col-status" value="${esc(displayVal)}" oninput="window.dcSetColFilter('status', this.value)" onkeydown="if(event.key==='Enter'){event.stopPropagation();}"
+                                            style="width:100%; font-size:10px; padding:3px 4px; border:1.5px solid ${isFiltered ? '#10b981' : '#cbd5e1'}; border-radius:4px; background:${isFiltered ? '#ecfdf5' : '#fff'}; font-weight:${isFiltered ? '800' : 'normal'};" placeholder="Filter status or OPEN..." />
+                                        <button onclick="window.dcToggleStatusFilterDropdown(event)" title="Click for Status Checkboxes & OPEN Filter"
+                                            style="background:${isFiltered ? '#10b981' : '#e2e8f0'}; color:${isFiltered ? '#fff' : '#475569'}; border:1px solid #cbd5e1; border-radius:4px; padding:2px 5px; font-size:10px; font-weight:800; cursor:pointer; shrink:0; display:flex; align-items:center; gap:2px;">
+                                            <i data-lucide="filter" style="width:10px;height:10px;"></i>
+                                        </button>
+                                    </div>
+
+                                    ${window.dcStatusFilterDropdownOpen ? `
+                                    <div onclick="event.stopPropagation()" style="position:absolute; top:100%; left:0; margin-top:4px; z-index:99999; background:#fff; border:1.5px solid #cbd5e1; border-radius:10px; box-shadow:0 12px 30px rgba(0,0,0,0.25); width:210px; padding:10px; font-size:11px; text-align:left;">
+                                        <div style="display:flex; align-items:center; justify-content:space-between; margin-bottom:8px; border-b:1px solid #f1f5f9; padding-bottom:6px;">
+                                            <span style="font-weight:900; text-transform:uppercase; font-size:10px; color:#475569; letter-spacing:0.05em;">Status Filter</span>
+                                            <button onclick="window.dcToggleStatusFilterDropdown(event)" style="background:none; border:none; color:#94a3b8; font-weight:900; cursor:pointer; font-size:12px;">✕</button>
+                                        </div>
+
+                                        <div style="display:flex; align-items:center; gap:4px; margin-bottom:8px;">
+                                            <button onclick="window.dcSetStatusPresetFilter('OPEN')" style="flex:1; background:${isOpenSelected ? '#10b981' : '#ecfdf5'}; color:${isOpenSelected ? '#fff' : '#047857'}; border:1px solid #a7f3d0; padding:4px 6px; border-radius:6px; font-size:10px; font-weight:900; cursor:pointer;">
+                                                🟢 OPEN (Active)
+                                            </button>
+                                            <button onclick="window.dcSetStatusPresetFilter('CLEAR')" style="background:#f1f5f9; color:#64748b; border:1px solid #cbd5e1; padding:4px 8px; border-radius:6px; font-size:10px; font-weight:800; cursor:pointer;">
+                                                Clear
+                                            </button>
+                                        </div>
+
+                                        <div style="display:flex; flex-direction:column; gap:6px; max-height:180px; overflow-y:auto;">
+                                            <label style="display:flex; align-items:center; gap:6px; cursor:pointer; font-weight:700; color:#1e293b;">
+                                                <input type="checkbox" ${isOpenSelected ? 'checked' : ''} onchange="window.dcSetStatusCheckboxFilter('OPEN', this.checked)" style="accent-color:#10b981;" />
+                                                <span>🟢 OPEN (Active Items)</span>
+                                            </label>
+                                            <label style="display:flex; align-items:center; gap:6px; cursor:pointer; font-weight:700; color:#1e293b;">
+                                                <input type="checkbox" ${currentArr.includes('PR_ACCEPTED') ? 'checked' : ''} onchange="window.dcSetStatusCheckboxFilter('PR_ACCEPTED', this.checked)" style="accent-color:#3b82f6;" />
+                                                <span>📄 PO Pending (PR Accepted)</span>
+                                            </label>
+                                            <label style="display:flex; align-items:center; gap:6px; cursor:pointer; font-weight:700; color:#1e293b;">
+                                                <input type="checkbox" ${currentArr.includes('PROCUREMENT') ? 'checked' : ''} onchange="window.dcSetStatusCheckboxFilter('PROCUREMENT', this.checked)" style="accent-color:#0ea5e9;" />
+                                                <span>🔷 PO Given</span>
+                                            </label>
+                                            <label style="display:flex; align-items:center; gap:6px; cursor:pointer; font-weight:700; color:#1e293b;">
+                                                <input type="checkbox" ${currentArr.includes('PARTIAL') ? 'checked' : ''} onchange="window.dcSetStatusCheckboxFilter('PARTIAL', this.checked)" style="accent-color:#f59e0b;" />
+                                                <span>📦 Partial Received</span>
+                                            </label>
+                                            <label style="display:flex; align-items:center; gap:6px; cursor:pointer; font-weight:700; color:#1e293b;">
+                                                <input type="checkbox" ${currentArr.includes('CLOSED') ? 'checked' : ''} onchange="window.dcSetStatusCheckboxFilter('CLOSED', this.checked)" style="accent-color:#8b5cf6;" />
+                                                <span>✔️ Received / Closed</span>
+                                            </label>
+                                            <label style="display:flex; align-items:center; gap:6px; cursor:pointer; font-weight:700; color:#1e293b;">
+                                                <input type="checkbox" ${currentArr.includes('HOLD') ? 'checked' : ''} onchange="window.dcSetStatusCheckboxFilter('HOLD', this.checked)" style="accent-color:#64748b;" />
+                                                <span>⏸️ Hold</span>
+                                            </label>
+                                            <label style="display:flex; align-items:center; gap:6px; cursor:pointer; font-weight:700; color:#1e293b;">
+                                                <input type="checkbox" ${currentArr.includes('CANCELLED') ? 'checked' : ''} onchange="window.dcSetStatusCheckboxFilter('CANCELLED', this.checked)" style="accent-color:#ef4444;" />
+                                                <span>🚫 Cancelled</span>
+                                            </label>
+                                        </div>
+                                    </div>` : ''}
+                                </th>`;
+                            }
+
                             return `
                             <th data-col-key="${c.key}" style="position:sticky; top:29px; ${c.sticky?`left:${left}px; z-index:3;`:'z-index:1;'} background:#f1f5f9; border:1px solid #dde3ea; padding:2px 4px;">
                                 <input id="dc-col-${c.key}" data-focus-key="dc-col-${c.key}" value="${esc(dcColFilter[c.key]||'')}" oninput="window.dcSetColFilter('${c.key}', this.value)" onkeydown="if(event.key==='Enter'){event.stopPropagation();}"
