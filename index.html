@@ -4407,10 +4407,13 @@
                 monthlyTrendMap[recKey].received++;
             }
         });
+        const monthlyTrendKeys = Object.keys(monthlyTrendMap);
+        const maxTrendVal = Math.max(1, ...monthlyTrendKeys.flatMap(k => [monthlyTrendMap[k].accepted, monthlyTrendMap[k].po, monthlyTrendMap[k].received]));
+
         const svgW = 500, svgH = 85, marginX = 35, marginY = 15;
         const netW = svgW - (marginX * 2);
         const netH = svgH - (marginY * 2);
-        const stepX = netW / 5;
+        const stepX = monthlyTrendKeys.length > 1 ? netW / (monthlyTrendKeys.length - 1) : netW;
 
         const pointsAcc = monthlyTrendKeys.map((k, i) => {
             const val = monthlyTrendMap[k].accepted;
@@ -4434,7 +4437,7 @@
         });
 
         const buildSmoothPath = (pts) => {
-            if (!pts || pts.length === 0) return '';
+            if (!pts || pts.length < 2) return '';
             return pts.reduce((acc, p, i, a) => {
                 if (i === 0) return `M ${p.x},${p.y}`;
                 const prev = a[i - 1];
@@ -4449,10 +4452,11 @@
         const pathAcc = buildSmoothPath(pointsAcc);
         const pathPo = buildSmoothPath(pointsPo);
         const pathRec = buildSmoothPath(pointsRec);
+        const lastIdx = monthlyTrendKeys.length - 1;
 
-        const areaAcc = `${pathAcc} L ${pointsAcc[5].x},${svgH - marginY} L ${pointsAcc[0].x},${svgH - marginY} Z`;
-        const areaPo = `${pathPo} L ${pointsPo[5].x},${svgH - marginY} L ${pointsPo[0].x},${svgH - marginY} Z`;
-        const areaRec = `${pathRec} L ${pointsRec[5].x},${svgH - marginY} L ${pointsRec[0].x},${svgH - marginY} Z`;
+        const areaAcc = pathAcc ? `${pathAcc} L ${pointsAcc[lastIdx].x},${svgH - marginY} L ${pointsAcc[0].x},${svgH - marginY} Z` : '';
+        const areaPo = pathPo ? `${pathPo} L ${pointsPo[lastIdx].x},${svgH - marginY} L ${pointsPo[0].x},${svgH - marginY} Z` : '';
+        const areaRec = pathRec ? `${pathRec} L ${pointsRec[lastIdx].x},${svgH - marginY} L ${pointsRec[0].x},${svgH - marginY} Z` : '';
 
         return `
         <div class="space-y-4 fade-in">
