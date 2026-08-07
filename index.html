@@ -4407,8 +4407,52 @@
                 monthlyTrendMap[recKey].received++;
             }
         });
-        const monthlyTrendKeys = Object.keys(monthlyTrendMap);
-        const maxTrendVal = Math.max(1, ...monthlyTrendKeys.flatMap(k => [monthlyTrendMap[k].accepted, monthlyTrendMap[k].po, monthlyTrendMap[k].received]));
+        const svgW = 500, svgH = 85, marginX = 35, marginY = 15;
+        const netW = svgW - (marginX * 2);
+        const netH = svgH - (marginY * 2);
+        const stepX = netW / 5;
+
+        const pointsAcc = monthlyTrendKeys.map((k, i) => {
+            const val = monthlyTrendMap[k].accepted;
+            const x = marginX + (i * stepX);
+            const y = (svgH - marginY) - ((val / maxTrendVal) * netH);
+            return { x, y, val, month: monthlyTrendMap[k].label };
+        });
+
+        const pointsPo = monthlyTrendKeys.map((k, i) => {
+            const val = monthlyTrendMap[k].po;
+            const x = marginX + (i * stepX);
+            const y = (svgH - marginY) - ((val / maxTrendVal) * netH);
+            return { x, y, val, month: monthlyTrendMap[k].label };
+        });
+
+        const pointsRec = monthlyTrendKeys.map((k, i) => {
+            const val = monthlyTrendMap[k].received;
+            const x = marginX + (i * stepX);
+            const y = (svgH - marginY) - ((val / maxTrendVal) * netH);
+            return { x, y, val, month: monthlyTrendMap[k].label };
+        });
+
+        const buildSmoothPath = (pts) => {
+            if (!pts || pts.length === 0) return '';
+            return pts.reduce((acc, p, i, a) => {
+                if (i === 0) return `M ${p.x},${p.y}`;
+                const prev = a[i - 1];
+                const cx1 = prev.x + (p.x - prev.x) / 2;
+                const cy1 = prev.y;
+                const cx2 = prev.x + (p.x - prev.x) / 2;
+                const cy2 = p.y;
+                return `${acc} C ${cx1},${cy1} ${cx2},${cy2} ${p.x},${p.y}`;
+            }, '');
+        };
+
+        const pathAcc = buildSmoothPath(pointsAcc);
+        const pathPo = buildSmoothPath(pointsPo);
+        const pathRec = buildSmoothPath(pointsRec);
+
+        const areaAcc = `${pathAcc} L ${pointsAcc[5].x},${svgH - marginY} L ${pointsAcc[0].x},${svgH - marginY} Z`;
+        const areaPo = `${pathPo} L ${pointsPo[5].x},${svgH - marginY} L ${pointsPo[0].x},${svgH - marginY} Z`;
+        const areaRec = `${pathRec} L ${pointsRec[5].x},${svgH - marginY} L ${pointsRec[0].x},${svgH - marginY} Z`;
 
         return `
         <div class="space-y-4 fade-in">
@@ -4696,6 +4740,95 @@
                                 <span class="text-[10px] font-bold text-slate-500 uppercase mt-1">${d.label}</span>
                             </div>`;
                         }).join('')}
+                    </div>
+
+                    <!-- Lower Section: ERP Line Graph & Summary Grid -->
+                    <div class="mt-4 pt-3 border-t border-rule">
+                        <div class="flex items-center justify-between mb-2">
+                            <h4 class="text-[10px] font-black uppercase tracking-wider text-slate-500 flex items-center gap-1.5">
+                                <i data-lucide="line-chart" class="w-3.5 h-3.5 text-brand"></i> ERP 6-Month Trend Curve Line Graph
+                            </h4>
+                            <span class="text-[9px] font-bold text-slate-400 uppercase">Multi-Series Trajectory</span>
+                        </div>
+
+                        <!-- SVG Line Chart with Gradient Fills & Data Vertices -->
+                        <div class="relative w-full overflow-hidden bg-slate-50/60 rounded-xl p-2 border border-slate-100 mb-3">
+                            <svg viewBox="0 0 500 85" class="w-full h-auto overflow-visible">
+                                <defs>
+                                    <linearGradient id="gradAcc" x1="0%" y1="0%" x2="0%" y2="100%">
+                                        <stop offset="0%" stop-color="#3b82f6" stop-opacity="0.25"/>
+                                        <stop offset="100%" stop-color="#3b82f6" stop-opacity="0.0"/>
+                                    </linearGradient>
+                                    <linearGradient id="gradPo" x1="0%" y1="0%" x2="0%" y2="100%">
+                                        <stop offset="0%" stop-color="#0ea5e9" stop-opacity="0.2"/>
+                                        <stop offset="100%" stop-color="#0ea5e9" stop-opacity="0.0"/>
+                                    </linearGradient>
+                                    <linearGradient id="gradRec" x1="0%" y1="0%" x2="0%" y2="100%">
+                                        <stop offset="0%" stop-color="#10b981" stop-opacity="0.2"/>
+                                        <stop offset="100%" stop-color="#10b981" stop-opacity="0.0"/>
+                                    </linearGradient>
+                                </defs>
+
+                                <!-- Horizontal Guide Grid Lines -->
+                                <line x1="35" y1="15" x2="465" y2="15" stroke="#e2e8f0" stroke-dasharray="3,3" stroke-width="1"/>
+                                <line x1="35" y1="42" x2="465" y2="42" stroke="#e2e8f0" stroke-dasharray="3,3" stroke-width="1"/>
+                                <line x1="35" y1="70" x2="465" y2="70" stroke="#cbd5e1" stroke-width="1"/>
+
+                                <!-- Gradient Area Fills -->
+                                <path d="${areaAcc}" fill="url(#gradAcc)"/>
+                                <path d="${areaPo}" fill="url(#gradPo)"/>
+                                <path d="${areaRec}" fill="url(#gradRec)"/>
+
+                                <!-- Smooth Curve Lines -->
+                                <path d="${pathAcc}" fill="none" stroke="#3b82f6" stroke-width="2.5" stroke-linecap="round"/>
+                                <path d="${pathPo}" fill="none" stroke="#0ea5e9" stroke-width="2.5" stroke-linecap="round"/>
+                                <path d="${pathRec}" fill="none" stroke="#10b981" stroke-width="2.5" stroke-linecap="round"/>
+
+                                <!-- Points Circles for Accepted -->
+                                ${pointsAcc.map(p => `
+                                    <circle cx="${p.x}" cy="${p.y}" r="3.5" fill="#fff" stroke="#3b82f6" stroke-width="2">
+                                        <title>Accepted (${p.month}): ${p.val}</title>
+                                    </circle>`).join('')}
+
+                                <!-- Points Circles for PO -->
+                                ${pointsPo.map(p => `
+                                    <circle cx="${p.x}" cy="${p.y}" r="3.5" fill="#fff" stroke="#0ea5e9" stroke-width="2">
+                                        <title>PO Issued (${p.month}): ${p.val}</title>
+                                    </circle>`).join('')}
+
+                                <!-- Points Circles for Rec'd -->
+                                ${pointsRec.map(p => `
+                                    <circle cx="${p.x}" cy="${p.y}" r="3.5" fill="#fff" stroke="#10b981" stroke-width="2">
+                                        <title>Received (${p.month}): ${p.val}</title>
+                                    </circle>`).join('')}
+                            </svg>
+                        </div>
+
+                        <!-- 6-Month Compact ERP Summary Matrix Table -->
+                        <div class="overflow-x-auto">
+                            <table class="w-full text-center border-collapse">
+                                <thead>
+                                    <tr class="border-b border-slate-100 text-[9px] font-black text-slate-400 uppercase">
+                                        <th class="text-left py-1 px-1 font-extrabold text-slate-500">Metric</th>
+                                        ${monthlyTrendKeys.map(k => `<th class="py-1 px-1">${monthlyTrendMap[k].label}</th>`).join('')}
+                                    </tr>
+                                </thead>
+                                <tbody class="text-[10px] font-extrabold">
+                                    <tr class="border-b border-slate-50 text-blue-700">
+                                        <td class="text-left py-1 px-1 flex items-center gap-1"><span class="w-1.5 h-1.5 rounded-full bg-blue-500"></span> Accepted</td>
+                                        ${monthlyTrendKeys.map(k => `<td class="py-1 px-1">${monthlyTrendMap[k].accepted}</td>`).join('')}
+                                    </tr>
+                                    <tr class="border-b border-slate-50 text-cyan-700">
+                                        <td class="text-left py-1 px-1 flex items-center gap-1"><span class="w-1.5 h-1.5 rounded-full bg-cyan-500"></span> PO Given</td>
+                                        ${monthlyTrendKeys.map(k => `<td class="py-1 px-1">${monthlyTrendMap[k].po}</td>`).join('')}
+                                    </tr>
+                                    <tr class="text-emerald-700">
+                                        <td class="text-left py-1 px-1 flex items-center gap-1"><span class="w-1.5 h-1.5 rounded-full bg-emerald-500"></span> Received</td>
+                                        ${monthlyTrendKeys.map(k => `<td class="py-1 px-1">${monthlyTrendMap[k].received}</td>`).join('')}
+                                    </tr>
+                                </tbody>
+                            </table>
+                        </div>
                     </div>
                 </div>
 
