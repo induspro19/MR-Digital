@@ -4309,8 +4309,10 @@
     function renderDashboard() {
         const mrs = appData.mrs || [];
         if (user.role === 'procurement') {
+            const prRows = buildPrRows();
             const newPrs = mrs.filter(m => m.status === 'PLANNED').length;
-            const acceptedPrs = buildPrRows().filter(r => r.status !== 'PLANNED' && r.status !== 'RAISED').length;
+            const acceptedPrCount = new Set(prRows.map(r => r.prNo)).size;
+            const acceptedItemCount = prRows.length;
             return `
             <div class="space-y-8 fade-in">
                 <div>
@@ -4332,8 +4334,11 @@
                             <i data-lucide="database" class="w-8 h-8 text-emerald-600"></i>
                         </div>
                         <div>
-                            <p class="text-4xl font-display font-black text-ink">${acceptedPrs}</p>
-                            <p class="text-xs font-black uppercase tracking-widest text-slate-500 mt-1">Accepted PR (Data Center)</p>
+                            <div class="flex items-baseline gap-2">
+                                <p class="text-4xl font-display font-black text-ink">${acceptedPrCount}</p>
+                                <span class="text-xs font-bold text-slate-500">(${acceptedItemCount} Line Items)</span>
+                            </div>
+                            <p class="text-xs font-black uppercase tracking-widest text-slate-500 mt-1">Accepted PRs (Data Center)</p>
                         </div>
                     </div>
                 </div>
