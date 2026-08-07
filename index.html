@@ -9409,8 +9409,8 @@ function renderMrRow(item, idx, xlInputCss) {
         const signatureBoxes = [
             { label: 'Department L2 Approval', designation: 'L2 Approver', dept: d.depts.join(', '), h: deptL2Entry },
             { label: 'Final Authorization', designation: 'Authorizer', dept: '', h: finalAuthEntry },
-            { label: 'Combined PR — Planning', designation: 'Planner', dept: '', h: planningEntry, fallbackName: d.plannedBy },
-            { label: 'Reference MRs', designation: d.mrNumbers.join(', '), dept: d.depts.join(', '), h: null },
+            { label: 'Combined PR — Planning', designation: 'Planner', dept: '', h: planningEntry, isCreator: true, fallbackName: d.plannedBy },
+            { label: 'Reference MRs', designation: d.mrNumbers.join(', '), dept: d.depts.join(', '), h: null, isRef: true },
             { label: 'Procurement', designation: 'Procurement Officer', dept: '', h: procurementEntry }
         ];
 
@@ -9559,17 +9559,26 @@ function renderMrRow(item, idx, xlInputCss) {
                     <td colspan="${COLS}" style="border:none; padding:0;">
                         <div class="mrp-sig-grid">
                         ${signatureBoxes.map(s => {
-                            const name = (s.h && s.h.actor) || s.fallbackName || '';
-                            const dept = (s.h && s.h.dept) || s.dept || '';
-                            const dateTime = s.h ? fmtDateTime(s.h.ts) : '';
+                            if (s.isRef) {
+                                return `
+                                <div class="mrp-sig-box">
+                                    <div class="mrp-sig-label">${esc(s.label)}</div>
+                                    <div class="mrp-sig-row"><span class="mrp-sig-field">MR Nos</span><span class="mrp-sig-val">${esc(s.designation)}</span></div>
+                                    <div class="mrp-sig-row"><span class="mrp-sig-field">Departments</span><span class="mrp-sig-val">${esc(s.dept)}</span></div>
+                                </div>`;
+                            }
+                            const isApproved = !!s.h || (s.isCreator && (d.plannedBy || d.planningDate));
+                            const name = s.h ? (s.h.actor || '') : (s.isCreator ? (d.plannedBy || '') : '');
+                            const dept = s.h ? (s.h.dept || s.dept || '') : (s.isCreator ? (d.depts.join(', ') || '') : '');
+                            const dateTime = s.h ? fmtDateTime(s.h.ts) : (s.isCreator ? fmtDateTime(d.planningDate) : '');
                             return `
                             <div class="mrp-sig-box">
                                 <div class="mrp-sig-label">${esc(s.label)}</div>
-                                <div class="mrp-sig-row"><span class="mrp-sig-field">Name</span><span class="mrp-sig-val">${esc(name) || (s.designation && !s.h ? esc(s.designation) : '&nbsp;')}</span></div>
-                                ${s.h || !s.designation ? `<div class="mrp-sig-row"><span class="mrp-sig-field">Designation</span><span class="mrp-sig-val">${esc(s.designation)}</span></div>` : ''}
-                                <div class="mrp-sig-row"><span class="mrp-sig-field">Department</span><span class="mrp-sig-val">${esc(dept) || '&nbsp;'}</span></div>
-                                <div class="mrp-sig-row"><span class="mrp-sig-field">Date &amp; Time</span><span class="mrp-sig-val">${esc(dateTime) || '&nbsp;'}</span></div>
-                                <div class="mrp-sig-sig-line">${name ? 'E-Signed' : 'Signature: ______________________'}</div>
+                                <div class="mrp-sig-row"><span class="mrp-sig-field">Name</span><span class="mrp-sig-val">${isApproved && name ? esc(name) : '&nbsp;'}</span></div>
+                                <div class="mrp-sig-row"><span class="mrp-sig-field">Designation</span><span class="mrp-sig-val">${esc(s.designation)}</span></div>
+                                <div class="mrp-sig-row"><span class="mrp-sig-field">Department</span><span class="mrp-sig-val">${isApproved && dept ? esc(dept) : '&nbsp;'}</span></div>
+                                <div class="mrp-sig-row"><span class="mrp-sig-field">Date &amp; Time</span><span class="mrp-sig-val">${isApproved && dateTime ? esc(dateTime) : '&nbsp;'}</span></div>
+                                <div class="mrp-sig-sig-line">${isApproved && name ? 'E-Signed' : 'Signature: ______________________'}</div>
                             </div>`;
                         }).join('')}
                         </div>
@@ -9627,7 +9636,7 @@ function renderMrRow(item, idx, xlInputCss) {
         const procurementEntry = findEntry('PR Accepted', 'PO Given', 'PO Issued');
 
         const signatureBoxes = [
-            { label: 'Prepared By',              designation: 'Requester',            dept: mr.dept, h: raisedEntry, fallbackName: mr.raisedBy },
+            { label: 'Prepared By',              designation: 'Requester',            dept: mr.dept, h: raisedEntry, fallbackName: mr.raisedBy, isCreator: true },
             { label: 'Department L2 Approval',    designation: 'L2 Approver',          dept: mr.dept, h: deptL2Entry },
             { label: 'Final Authorization',       designation: 'Authorizer',           dept: '',      h: finalAuthEntry },
             { label: 'Planning',                  designation: 'Planner',              dept: '',      h: planningEntry },
@@ -9795,17 +9804,18 @@ function renderMrRow(item, idx, xlInputCss) {
                     <td colspan="12" style="border:none; padding:0;">
                         <div class="mrp-sig-grid">
                         ${signatureBoxes.map(s => {
-                            const name = (s.h && s.h.actor) || s.fallbackName || '';
-                            const dept = (s.h && s.h.dept) || s.dept || (name ? mr.dept : '') || '';
-                            const dateTime = s.h ? fmtDateTime(s.h.ts) : '';
+                            const isApproved = !!s.h || (s.isCreator && (mr.raisedBy || mr.createdAt));
+                            const name = s.h ? (s.h.actor || '') : (s.isCreator ? (mr.raisedBy || '') : '');
+                            const dept = s.h ? (s.h.dept || s.dept || '') : (s.isCreator ? (mr.dept || '') : '');
+                            const dateTime = s.h ? fmtDateTime(s.h.ts) : (s.isCreator ? fmtDateTime(mr.createdAt) : '');
                             return `
                             <div class="mrp-sig-box">
                                 <div class="mrp-sig-label">${esc(s.label)}</div>
-                                <div class="mrp-sig-row"><span class="mrp-sig-field">Name</span><span class="mrp-sig-val">${esc(name) || '&nbsp;'}</span></div>
+                                <div class="mrp-sig-row"><span class="mrp-sig-field">Name</span><span class="mrp-sig-val">${isApproved && name ? esc(name) : '&nbsp;'}</span></div>
                                 <div class="mrp-sig-row"><span class="mrp-sig-field">Designation</span><span class="mrp-sig-val">${esc(s.designation)}</span></div>
-                                <div class="mrp-sig-row"><span class="mrp-sig-field">Department</span><span class="mrp-sig-val">${esc(dept) || '&nbsp;'}</span></div>
-                                <div class="mrp-sig-row"><span class="mrp-sig-field">Date &amp; Time</span><span class="mrp-sig-val">${esc(dateTime) || '&nbsp;'}</span></div>
-                                <div class="mrp-sig-sig-line">${name ? 'E-Signed' : 'Signature: ______________________'}</div>
+                                <div class="mrp-sig-row"><span class="mrp-sig-field">Department</span><span class="mrp-sig-val">${isApproved && dept ? esc(dept) : '&nbsp;'}</span></div>
+                                <div class="mrp-sig-row"><span class="mrp-sig-field">Date &amp; Time</span><span class="mrp-sig-val">${isApproved && dateTime ? esc(dateTime) : '&nbsp;'}</span></div>
+                                <div class="mrp-sig-sig-line">${isApproved && name ? 'E-Signed' : 'Signature: ______________________'}</div>
                             </div>`;
                         }).join('')}
                         </div>
