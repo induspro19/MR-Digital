@@ -7173,32 +7173,32 @@ function renderMrRow(item, idx, xlInputCss) {
         </div>
 
         <!-- ROW 1: KPI CARDS -->
-        <div class="grid grid-cols-2 sm:grid-cols-4 xl:grid-cols-8 gap-2.5 mb-5">
+        <div class="grid grid-cols-2 sm:grid-cols-4 xl:grid-cols-8 gap-2 mb-5">
             ${kpiCards.map(k => `
-            <div class="rounded-xl border p-3 flex flex-col gap-1.5 hover:-translate-y-0.5 hover:shadow-md transition-all cursor-default" style="background:${k.bg};border-color:${k.color}22">
-                <div class="flex items-center justify-between">
-                    <div class="w-7 h-7 rounded-lg flex items-center justify-center" style="background:${k.color}18">
+            <div class="rounded-xl border p-2.5 flex flex-col gap-1.5 hover:-translate-y-0.5 hover:shadow-md transition-all cursor-default overflow-hidden" style="background:${k.bg};border-color:${k.color}22">
+                <div class="flex items-center justify-between gap-1">
+                    <div class="w-7 h-7 shrink-0 rounded-lg flex items-center justify-center" style="background:${k.color}18">
                         <i data-lucide="${k.icon}" class="w-3.5 h-3.5" style="color:${k.color}"></i>
                     </div>
-                    <span class="text-[9px] font-black px-1.5 py-0.5 rounded-full" style="background:${k.color}22;color:${k.color}">${k.trend}</span>
+                    <span class="text-[9px] font-black px-1.5 py-0.5 rounded-full truncate" style="background:${k.color}22;color:${k.color}" title="${k.trend}">${k.trend}</span>
                 </div>
-                <p class="text-2xl font-display font-black leading-none" style="color:${k.color}">${k.val}</p>
-                <p class="text-[9px] font-black uppercase tracking-wider leading-tight text-slate-500">${k.label}</p>
-                <div class="mt-auto">${spark(k.sparkVals, k.color)}</div>
+                <p class="text-lg xl:text-xl 2xl:text-2xl font-display font-black leading-none truncate mt-0.5" title="${k.val}" style="color:${k.color}">${k.val}</p>
+                <p class="text-[8px] xl:text-[9px] font-black uppercase tracking-wider leading-tight text-slate-500 truncate" title="${k.label}">${k.label}</p>
+                <div class="mt-auto shrink-0 w-full overflow-hidden pt-1">${spark(k.sparkVals, k.color)}</div>
             </div>`).join('')}
         </div>
 
         <!-- ROW 2: PERFORMANCE GAUGES -->
         <div class="grid grid-cols-2 lg:grid-cols-4 gap-3 mb-5">
-            <div class="bg-white border border-rule rounded-xl p-4 flex flex-col items-center gap-2 shadow-sm hover:shadow-md transition-all">
-                <p class="text-[10px] font-black uppercase tracking-widest text-slate-500">Planning Completion</p>
+            <div class="bg-white border border-rule rounded-xl p-4 flex flex-col items-center gap-2 shadow-sm hover:shadow-md transition-all overflow-hidden">
+                <p class="text-[9px] xl:text-[10px] font-black uppercase tracking-widest text-slate-500 truncate w-full text-center" title="Planning Completion">Planning Completion</p>
                 ${circleGauge(planCompPct, '#4F46E5', 72)}
-                <p class="text-[10px] text-slate-500 font-bold">${doneItems} of ${totalItems} done</p>
+                <p class="text-[9px] xl:text-[10px] text-slate-500 font-bold truncate w-full text-center" title="${doneItems} of ${totalItems} done">${doneItems} of ${totalItems} done</p>
             </div>
-            <div class="bg-white border border-rule rounded-xl p-4 flex flex-col items-center gap-2 shadow-sm hover:shadow-md transition-all">
-                <p class="text-[10px] font-black uppercase tracking-widest text-slate-500">Schedule Adherence</p>
+            <div class="bg-white border border-rule rounded-xl p-4 flex flex-col items-center gap-2 shadow-sm hover:shadow-md transition-all overflow-hidden">
+                <p class="text-[9px] xl:text-[10px] font-black uppercase tracking-widest text-slate-500 truncate w-full text-center" title="Schedule Adherence">Schedule Adherence</p>
                 ${circleGauge(schedAdh, schedAdh >= 80 ? '#047857' : '#DC2626', 72)}
-                <p class="text-[10px] font-bold" style="color:${schedAdh>=80?'#047857':'#DC2626'}">${schedAdh >= 80 ? 'On Track' : 'Behind Schedule'}</p>
+                <p class="text-[9px] xl:text-[10px] font-bold truncate w-full text-center" style="color:${schedAdh>=80?'#047857':'#DC2626'}" title="${schedAdh >= 80 ? 'On Track' : 'Behind Schedule'}">${schedAdh >= 80 ? 'On Track' : 'Behind Schedule'}</p>
             </div>
             <div class="bg-white border border-rule rounded-xl p-4 shadow-sm hover:shadow-md transition-all">
                 <p class="text-[10px] font-black uppercase tracking-widest text-slate-500 mb-3">Planner Workload</p>
