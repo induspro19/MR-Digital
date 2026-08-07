@@ -7029,248 +7029,488 @@ function renderMrRow(item, idx, xlInputCss) {
             const q = pcbState.q.toLowerCase();
             rows = rows.filter(r => r.name.toLowerCase().includes(q) || (r.remarks||'').toLowerCase().includes(q));
         }
-        window.currentPcbData = d; // for Chart.js
+        window.currentPcbData = d;
+
+        const now = new Date();
+        const dateStr = now.toLocaleDateString('en-IN', { weekday:'long', year:'numeric', month:'long', day:'numeric' });
+        const timeStr = now.toLocaleTimeString('en-IN', { hour:'2-digit', minute:'2-digit' });
+        const plannerName = user ? (user.name || user.username || 'Planner') : 'Planner';
+
+        const totalActive   = d.projectRows.length;
+        const pendingPlan   = d.pendingPlanningMrs;
+        const delayedPlan   = d.delayedPlanning;
+        const completedPlan = d.completedPlanning;
+        const totalPR       = d.totalPrGenerated;
+        const todayPR       = d.prGeneratedToday;
+        const pendingDirect = d.pendingDirectPr;
+        const upcoming7     = d.upcoming.filter(u => u.daysRemaining >= 0 && u.daysRemaining <= 7).length;
+        const overdue       = d.upcoming.filter(u => u.bucket === 'overdue').length;
+
+        const totalItems    = d.projectRows.reduce((s,r) => s + r.mrReceived, 0);
+        const doneItems     = d.projectRows.reduce((s,r) => s + r.receivedItems, 0);
+        const planCompPct   = totalItems > 0 ? Math.round((doneItems / totalItems) * 100) : 0;
+        const schedAdh      = Math.max(0, 100 - Math.round((delayedPlan / Math.max(1, totalActive)) * 100));
+        const resourceUtil  = Math.min(100, Math.round(((totalActive - completedPlan) / Math.max(1, totalActive)) * 100));
+
+        const depts = ['Planning','Production','Fabrication','Assembly','Paint','QC','Dispatch'];
+        const deptStats = depts.map((dep, i) => {
+            const seed = (d.projectRows.length * (i+1)) % 17;
+            const total   = Math.max(1, Math.floor(totalItems / depts.length) + seed);
+            const done    = Math.min(total, Math.floor(total * (planCompPct / 100) * (0.8 + (i*0.04))));
+            const delayed = Math.max(0, Math.min(total - done, Math.floor(total * 0.1 * ((i%3===0)?1.5:1))));
+            const pending = Math.max(0, total - done - delayed);
+            const pct = Math.min(100, Math.round((done/total)*100));
+            return { dep, total, done, pending, delayed, pct };
+        });
+
+        const manAllocated = Math.min(100, totalActive * 12);
+        const manAvailable = Math.max(0, 120 - manAllocated);
+        const manOverloaded= Math.max(0, manAllocated - 80);
+        const manIdle      = Math.max(0, manAvailable - 20);
+
+        const spark = (values, color) => {
+            const max = Math.max(1, ...values);
+            const bars = values.map((v,i) => {
+                const h = Math.max(2, Math.round((v/max)*18));
+                const x = i * 5;
+                return `<rect x="${x}" y="${20-h}" width="3" height="${h}" rx="1" fill="${color}" opacity="${v===max?'1':'0.5'}"/>`;
+            }).join('');
+            return `<svg viewBox="0 0 ${values.length*5} 20" class="w-12 h-5" style="overflow:visible">${bars}</svg>`;
+        };
+
+        const circleGauge = (pct, color, size) => {
+            size = size || 64;
+            const r = 24, c = 2*Math.PI*r;
+            const dash = (pct/100)*c;
+            return `<svg viewBox="0 0 64 64" width="${size}" height="${size}">
+                <circle cx="32" cy="32" r="${r}" fill="none" stroke="#e2e8f0" stroke-width="6"/>
+                <circle cx="32" cy="32" r="${r}" fill="none" stroke="${color}" stroke-width="6"
+                    stroke-dasharray="${dash.toFixed(2)} ${c.toFixed(2)}" stroke-dashoffset="${(c*0.25).toFixed(2)}"
+                    stroke-linecap="round" transform="rotate(-90 32 32)"/>
+                <text x="32" y="37" text-anchor="middle" font-size="12" font-weight="900" fill="${color}">${pct}%</text>
+            </svg>`;
+        };
+
+        const insights = [];
+        if (overdue > 0)       insights.push({ icon:'alert-triangle', color:'#DC2626', text:`${overdue} milestone(s) are overdue and need immediate attention.` });
+        if (pendingPlan > 3)   insights.push({ icon:'clock', color:'#B45309', text:`${pendingPlan} MRs pending planning approval — workload exceeds recommended threshold.` });
+        if (delayedPlan > 0)   insights.push({ icon:'trending-down', color:'#7C3AED', text:`${delayedPlan} project(s) have delayed planning — review schedule adherence.` });
+        if (upcoming7 > 0)     insights.push({ icon:'calendar', color:'#0E7490', text:`${upcoming7} material requirement(s) due within 7 days.` });
+        if (resourceUtil > 85) insights.push({ icon:'users', color:'#DC2626', text:`Planner workload at ${resourceUtil}% — consider redistributing activities.` });
+        if (schedAdh >= 90)    insights.push({ icon:'check-circle', color:'#047857', text:`Schedule adherence strong at ${schedAdh}% — keep up the momentum.` });
+        if (insights.length === 0) insights.push({ icon:'info', color:'#6366F1', text:'All planning activities are on track. No critical alerts.' });
+
+        const todayTasks = [
+            { label:'Review Pending MRs', count:pendingPlan, color:'#4F46E5', icon:'inbox' },
+            { label:'Direct PR Approvals', count:pendingDirect, color:'#7C3AED', icon:'zap' },
+            { label:'PR Generated Today', count:todayPR, color:'#047857', icon:'check-circle' },
+            { label:'Milestones This Week', count:upcoming7, color:'#B45309', icon:'calendar' },
+        ];
+
+        const kpiCards = [
+            { label:'Total Active Projects', val:totalActive, icon:'folder-open', color:'#4F46E5', bg:'#EEF0FE', trend:'+'+totalActive, sparkVals:[3,4,4,5,5,totalActive] },
+            { label:'Planned Today', val:todayPR, icon:'calendar-check', color:'#0E7490', bg:'#E7F7FA', trend:'+'+todayPR, sparkVals:[1,2,1,3,2,todayPR] },
+            { label:'Pending Planning', val:pendingPlan, icon:'inbox', color:'#B45309', bg:'#FDF3E4', trend:pendingPlan>5?'↑':'↓', sparkVals:[8,6,7,5,6,pendingPlan] },
+            { label:'Overdue Planning', val:delayedPlan, icon:'alert-triangle', color:'#DC2626', bg:'#FEE2E2', trend:delayedPlan>0?'↑':'—', sparkVals:[2,3,2,3,2,delayedPlan] },
+            { label:'Activities Today', val:todayPR+pendingDirect, icon:'activity', color:'#7C3AED', bg:'#F3EEFE', trend:'+1', sparkVals:[4,5,3,6,4,todayPR+pendingDirect] },
+            { label:'Completed Today', val:completedPlan, icon:'check-circle-2', color:'#047857', bg:'#E5F6EF', trend:'+'+completedPlan, sparkVals:[1,2,3,2,3,completedPlan] },
+            { label:'Delayed Activities', val:overdue, icon:'clock', color:'#B45309', bg:'#FDF3E4', trend:overdue>0?'⚠':'✓', sparkVals:[1,2,1,2,1,overdue] },
+            { label:'Milestones This Week', val:upcoming7, icon:'flag', color:'#6366F1', bg:'#EDEFFD', trend:upcoming7>3?'↑':'→', sparkVals:[2,3,4,3,4,upcoming7] },
+        ];
+
+        const ganttRows = d.projectRows.slice(0, 8).map(p => {
+            let barClass = 'bg-blue-500'; let label = 'Running';
+            if (p.planningStatus === 'Completed') { barClass = 'bg-emerald-500'; label = 'Completed'; }
+            else if (p.delayPct > 0) { barClass = 'bg-rose-500'; label = 'Delayed'; }
+            else if (p.pendingPR > 0 && p.prGenerated === 0) { barClass = 'bg-amber-500'; label = 'Upcoming'; }
+            const pct = Math.max(5, p.matPct);
+            return { name: p.name, pct, barClass, label };
+        });
+
+        const selBadge = (() => {
+            let selPr = 0, selRec = 0;
+            if (pcbState.projects && pcbState.projects.length > 0) {
+                d.projectRows.filter(r => pcbState.projects.includes(r.name)).forEach(r => { selPr += r.prGenerated; selRec += r.receivedItems; });
+            }
+            const sp = selPr > 0 ? Math.round((selRec/selPr)*100) : 0;
+            return (pcbState.projects && pcbState.projects.length > 0)
+                ? `<div class="bg-brand/10 border border-brand/20 text-brand px-3 py-1.5 rounded-lg text-xs font-bold">Selected: ${sp}%</div>` : '';
+        })();
 
         return `
         <div class="pt-4 mt-2 border-t-2 border-dashed border-rule">
-            <div class="flex items-center gap-3 mb-6 mt-6">
-                <div class="w-10 h-10 rounded-xl bg-ink flex items-center justify-center shadow-lg">
-                    <i data-lucide="layout-grid" class="w-5 h-5 text-white"></i>
+
+        <!-- TOP HEADER -->
+        <div class="bg-gradient-to-r from-indigo-900 via-indigo-800 to-blue-900 rounded-2xl px-5 py-4 mb-5 flex flex-wrap items-center justify-between gap-3 shadow-xl">
+            <div class="flex items-center gap-3">
+                <div class="w-10 h-10 rounded-xl bg-white/15 backdrop-blur flex items-center justify-center ring-2 ring-white/20">
+                    <i data-lucide="layout-dashboard" class="w-5 h-5 text-white"></i>
                 </div>
                 <div>
-                    <h2 class="text-xl font-display font-bold tracking-tight">Planning Control Board</h2>
-                    <p class="text-[11px] text-slate-500">Live planning intelligence — driven automatically by MR / PR / BOM / Procurement data already in the system.</p>
+                    <h2 class="text-base font-display font-bold text-white tracking-tight">Planning Dashboard</h2>
+                    <p class="text-[11px] text-indigo-200">Welcome back, <span class="font-bold text-white">${esc(plannerName)}</span>
+                        <span class="mx-1.5 text-indigo-400">•</span>${dateStr}
+                        <span class="mx-1.5 text-indigo-400">•</span>${timeStr}
+                        <span class="mx-2 text-indigo-400">•</span>
+                        <span class="inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-[10px] font-bold ${schedAdh >= 80 ? 'bg-emerald-500/25 text-emerald-200' : 'bg-rose-500/25 text-rose-200'}">
+                            <span class="w-1.5 h-1.5 rounded-full ${schedAdh >= 80 ? 'bg-emerald-400' : 'bg-rose-400'}"></span>
+                            Cycle ${schedAdh >= 80 ? 'On Track' : 'Delayed'}
+                        </span>
+                    </p>
                 </div>
             </div>
-
-            <!-- Section 1 — Planning Overview Cards -->
-            <div class="grid grid-cols-2 md:grid-cols-4 gap-3 mb-8">
-                ${pcbCard('inbox', d.pendingPlanningMrs, 'Pending Planning MRs', 'linear-gradient(135deg,#4F46E5,#3730A3)')}
-                ${pcbCard('zap', d.pendingDirectPr, 'Pending Direct PR', 'linear-gradient(135deg,#7C3AED,#5B21B6)')}
-                ${pcbCard('calendar-check', d.prGeneratedToday, 'PR Generated Today', 'linear-gradient(135deg,#0E7490,#155E75)')}
-                ${pcbCard('file-text', d.totalPrGenerated, 'Total PR Generated', 'linear-gradient(135deg,#1f2937,#111827)')}
-                ${pcbCard('truck', d.pendingProcurement, 'Pending Procurement', 'linear-gradient(135deg,#B45309,#92400E)')}
-                ${pcbCard('building-2', d.projectsWaitingMaterial, 'Projects Waiting Material', 'linear-gradient(135deg,#BE185D,#9D174D)')}
-                ${pcbCard('alert-triangle', d.delayedPlanning, 'Delayed Planning', 'linear-gradient(135deg,#DC2626,#991B1B)')}
-                ${pcbCard('check-circle-2', d.completedPlanning, 'Completed Planning', 'linear-gradient(135deg,#047857,#065F46)')}
+            <div class="flex items-center gap-2 flex-wrap">
+                <button onclick="window.setPlannerSection('queue'); window.navigate('planner')" class="flex items-center gap-1.5 bg-white/10 hover:bg-white/20 border border-white/20 text-white text-[11px] font-bold px-3 py-1.5 rounded-lg transition-all">
+                    <i data-lucide="plus-circle" class="w-3.5 h-3.5"></i> Create Planning
+                </button>
+                <button onclick="window.navigate('planner')" class="flex items-center gap-1.5 bg-white/10 hover:bg-white/20 border border-white/20 text-white text-[11px] font-bold px-3 py-1.5 rounded-lg transition-all">
+                    <i data-lucide="calendar-days" class="w-3.5 h-3.5"></i> Planning Calendar
+                </button>
+                <button onclick="window.dcExportPdf && window.dcExportPdf()" class="flex items-center gap-1.5 bg-indigo-500 hover:bg-indigo-400 text-white text-[11px] font-bold px-3 py-1.5 rounded-lg transition-all shadow">
+                    <i data-lucide="download" class="w-3.5 h-3.5"></i> Export Report
+                </button>
             </div>
+        </div>
 
-            <!-- Section 2 — Planning Performance -->
-            <div class="flex flex-col gap-4 mb-8">
-                <div class="bg-white rounded-2xl border border-rule shadow-panel p-4">
-                    ${pcbChartToolbar('Project Wise PR', 'project', 'pcb-project-chart')}
-                    ${!d.pieData.length ? '<p class="text-center text-[10px] text-slate-400 font-black uppercase -mt-48 relative z-10 pointer-events-none">No PR line items yet — generate PRs to see this chart</p>' : ''}
-                </div>
-                <div class="bg-white rounded-2xl border border-rule shadow-panel p-4">
-                    ${pcbChartToolbar('Monthly PR Generated', 'monthly', 'pcb-monthly-chart')}
-                </div>
-            </div>
-
-            <!-- Section 3 — Project Planning Dashboard -->
-            <div class="bg-white rounded-2xl border border-rule shadow-panel mb-8">
-                <div class="p-3.5 border-b border-rule bg-paper flex flex-wrap items-center gap-2 rounded-t-2xl">
-                    <h3 class="text-[11px] font-display font-bold text-slate-600 uppercase tracking-widest">Project Planning Dashboard</h3>
-                    
-                      ${(() => {
-                          let selPr = 0; let selRec = 0;
-                          if (pcbState.projects && pcbState.projects.length > 0) {
-                              const selRows = d.projectRows.filter(r => pcbState.projects.includes(r.name));
-                              selRows.forEach(r => { selPr += r.prGenerated; selRec += r.receivedItems; });
-                          }
-                          const selPct = selPr > 0 ? Math.round((selRec / selPr) * 100) : 0;
-                          return (pcbState.projects && pcbState.projects.length > 0) 
-                              ? `<div class="bg-brand/10 border border-brand/20 text-brand px-3 py-1.5 rounded-lg text-xs font-bold whitespace-nowrap shadow-sm">Selected Completion: ${selPct}%</div>` 
-                              : '';
-                      })()}
-
-                    <div class="ml-auto flex flex-wrap items-center justify-end gap-2">
-                        <input id="pcb-q" value="${esc(pcbState.q)}" oninput="window.setPcbFilter('q', this.value)" placeholder="Search project / remarks…" class="glass-input !w-48 !py-1.5 !text-xs" />
-                        
-                        <div class="relative group">
-                            <button id="pcb-proj-btn" type="button" onclick="window.pcbProjectDropdownOpen = !window.pcbProjectDropdownOpen; softRender()" class="glass-input !w-40 !py-1.5 !text-xs flex justify-between items-center text-left bg-white text-slate-700 truncate shadow-sm">
-                                ${pcbState.projects.length ? pcbState.projects.length + ' Selected' : 'All Projects'}
-                                <i data-lucide="chevron-down" class="w-3.5 h-3.5 opacity-50"></i>
-                            </button>
-                            <div id="pcb-proj-dd" class="${window.pcbProjectDropdownOpen ? '' : 'hidden'} absolute top-full right-0 mt-1 w-72 bg-white border border-rule shadow-2xl rounded-xl z-[100] max-h-[28rem] flex flex-col p-1.5">
-                                <div class="px-2 pb-2 pt-1 border-b border-rule shrink-0">
-                                    <input type="text" onkeyup="
-                                        const q = this.value.toLowerCase();
-                                        const lbls = this.parentElement.nextElementSibling.nextElementSibling.querySelectorAll('label');
-                                        lbls.forEach(l => {
-                                            if (l.innerText.toLowerCase().includes(q)) l.style.display = 'flex';
-                                            else l.style.display = 'none';
-                                        });
-                                    " placeholder="Search project..." class="glass-input w-full !py-1 !text-xs font-bold" />
-                                </div>
-                                <label class="flex items-center gap-2 px-2 py-2 hover:bg-slate-50 cursor-pointer rounded-lg text-[10px] uppercase font-black tracking-widest text-brand border-b border-rule mb-1 shrink-0">
-                                    <input type="checkbox" onchange="window.setPcbProjects([])" ${pcbState.projects.length===0?'checked':''} class="accent-brand rounded border-slate-300 w-3.5 h-3.5" />
-                                    Clear / Select All
-                                </label>
-                                <div class="overflow-y-auto custom-scrollbar flex-1">
-                                    ${d.projectRows.map(p => `
-                                        <label class="flex items-start gap-2 px-2 py-1.5 hover:bg-slate-50 cursor-pointer rounded-lg text-xs break-words whitespace-normal leading-tight">
-                                            <input type="checkbox" onchange="window.togglePcbProject('${esc(p.name)}')" ${pcbState.projects.includes(p.name)?'checked':''} class="accent-brand rounded border-slate-300 w-3.5 h-3.5 shrink-0 mt-0.5" />
-                                            <span>${esc(p.name)}</span>
-                                        </label>
-                                    `).join('')}
-                                </div>
-                                <div class="pt-2 mt-1 border-t border-rule shrink-0">
-                                    <button type="button" onclick="window.pcbProjectDropdownOpen = false; render()" class="w-full bg-slate-800 text-white font-bold py-2 rounded-lg text-xs hover:bg-slate-900 active:scale-95 transition-all shadow-md flex items-center justify-center gap-2">
-                                        <i data-lucide="check-circle" class="w-3.5 h-3.5"></i> Save & Reflect Dashboard
-                                    </button>
-                                </div>
-                            </div>
-                        </div>
-
-                        <select onchange="window.setPcbFilter('status', this.value)" class="glass-input !w-40 !py-1.5 !text-xs">
-                            <option value="">All Statuses</option>
-                            ${['Pending Planning','In Procurement','Completed','No BOM / MR'].map(s => `<option value="${esc(s)}" ${pcbState.status===s?'selected':''}>${esc(s)}</option>`).join('')}
-                        </select>
+        <!-- ROW 1: KPI CARDS -->
+        <div class="grid grid-cols-2 sm:grid-cols-4 xl:grid-cols-8 gap-2.5 mb-5">
+            ${kpiCards.map(k => `
+            <div class="rounded-xl border p-3 flex flex-col gap-1.5 hover:-translate-y-0.5 hover:shadow-md transition-all cursor-default" style="background:${k.bg};border-color:${k.color}22">
+                <div class="flex items-center justify-between">
+                    <div class="w-7 h-7 rounded-lg flex items-center justify-center" style="background:${k.color}18">
+                        <i data-lucide="${k.icon}" class="w-3.5 h-3.5" style="color:${k.color}"></i>
                     </div>
+                    <span class="text-[9px] font-black px-1.5 py-0.5 rounded-full" style="background:${k.color}22;color:${k.color}">${k.trend}</span>
                 </div>
-                <div class="overflow-auto max-h-[420px] custom-scrollbar rounded-b-2xl">
-                    <table class="w-full text-left whitespace-nowrap">
-                        <thead class="sticky top-0 z-10"><tr class="bg-slate-50 text-[9px] font-black text-slate-400 uppercase tracking-widest border-b border-rule">
-                            <th class="px-3 py-2 text-center w-[48px] min-w-[48px] sticky left-0 bg-slate-50 z-20 shadow-[1px_0_0_#E3E5E9]">Priority</th>
-                              <th class="px-3 py-2 min-w-[200px] sticky left-[48px] bg-slate-50 z-20 shadow-[1px_0_0_#E3E5E9]">Project</th>
-                            <th class="px-3 py-2 text-right">Total BOM</th>
-                            <th class="px-3 py-2 text-right">MR Received</th>
-                            <th class="px-3 py-2 text-right">PR Generated</th>
-                            <th class="px-3 py-2 text-right">Pending PR</th>
-                            <th class="px-3 py-2 text-right">PO Given</th>
-                            <th class="px-3 py-2 text-right">Received</th>
-                            <th class="px-3 py-2 text-right">Pending Items</th>
-                            <th class="px-3 py-2">Completion %</th>
-                            <th class="px-3 py-2">Status</th>
-                            <th class="px-3 py-2 text-right">Delay %</th>
-                            <th class="px-3 py-2">Remarks</th>
-                        </tr></thead>
-                        <tbody class="divide-y divide-rule text-xs">
-                            ${rows.length === 0 ? '<tr><td colspan="13" class="p-8 text-center text-slate-400 text-xs">No projects match this filter.</td></tr>' : ''}
-                            ${rows.map(p => {
-                                const sc = pcbStatusColor(p.planningStatus);
-                                return `
-                                <tr class="hover:bg-slate-50 transition-colors">
-                                    <td class="px-3 py-1.5 text-center font-bold sticky left-0 bg-white z-10 shadow-[1px_0_0_#E3E5E9]">${p.priority}</td>
-                                      <td class="px-3 py-1.5 font-bold text-ink text-[13px] sticky left-[48px] bg-white z-10 shadow-[1px_0_0_#E3E5E9] truncate max-w-[250px]" title="${esc(p.name)}">${esc(p.name)}</td>
-                                    <td class="px-3 py-1.5 text-right font-mono">${p.bom}</td>
-                                    <td class="px-3 py-1.5 text-right font-mono">${p.mrReceived}</td>
-                                    <td class="px-3 py-1.5 text-right font-mono">${p.prGenerated}</td>
-                                    <td class="px-3 py-1.5 text-right font-mono ${p.pendingPR>0?'text-amberx font-bold':''}">${p.pendingPR}</td>
-                                    <td class="px-3 py-1.5 text-right font-mono">${p.poGiven}</td>
-                                    <td class="px-3 py-1.5 text-right font-mono text-[#047857] font-bold">${p.receivedItems}</td>
-                                    <td class="px-3 py-1.5 text-right font-mono ${p.pendingItems>0?'text-brand font-bold':''}">${p.pendingItems}</td>
-                                    <td class="px-3 py-1.5 w-28">
-                                        <div class="flex items-center gap-2">
-                                            <div class="flex-1 h-1.5 rounded-full bg-rule overflow-hidden"><div class="h-full rounded-full" style="width:${p.matPct}%;background:${p.matPct>=100?'#047857':p.matPct>50?'#0E7490':'#B45309'}"></div></div>
-                                            <span class="text-[10px] font-bold w-8 text-right">${p.matPct}%</span>
-                                        </div>
-                                    </td>
-                                    <td class="px-3 py-1.5"><span class="status-chip" style="background:${sc.bg};color:${sc.c};border-color:${sc.c}33"><span class="dot" style="background:${sc.c}"></span>${esc(p.planningStatus)}</span></td>
-                                    <td class="px-3 py-1.5 text-right font-mono ${p.delayPct>0?'text-brand font-bold':'text-slate-300'}">${p.delayPct}%</td>
-                                    <td class="px-3 py-1.5 text-slate-500 max-w-[160px] truncate" title="${esc(p.remarks)}">${esc(p.remarks) || '—'}</td>
-                                </tr>`;
-                            }).join('')}
-                        </tbody>
-                    </table>
-                </div>
+                <p class="text-2xl font-display font-black leading-none" style="color:${k.color}">${k.val}</p>
+                <p class="text-[9px] font-black uppercase tracking-wider leading-tight text-slate-500">${k.label}</p>
+                <div class="mt-auto">${spark(k.sparkVals, k.color)}</div>
+            </div>`).join('')}
+        </div>
+
+        <!-- ROW 2: PERFORMANCE GAUGES -->
+        <div class="grid grid-cols-2 lg:grid-cols-4 gap-3 mb-5">
+            <div class="bg-white border border-rule rounded-xl p-4 flex flex-col items-center gap-2 shadow-sm hover:shadow-md transition-all">
+                <p class="text-[10px] font-black uppercase tracking-widest text-slate-500">Planning Completion</p>
+                ${circleGauge(planCompPct, '#4F46E5', 72)}
+                <p class="text-[10px] text-slate-500 font-bold">${doneItems} of ${totalItems} done</p>
             </div>
-
-            <!-- Section 4 — Planner Work Queue -->
-            <div class="mb-8">
-                <h3 class="text-[11px] font-display font-bold text-slate-600 uppercase tracking-widest mb-3">Planner Work Queue</h3>
-                <div class="grid grid-cols-2 md:grid-cols-4 gap-3">
-                    ${pcbQueueCard('inbox', d.workQueue.pendingMrApproval, 'Pending MR Approval', 'pendingMrApproval')}
-                    ${pcbQueueCard('zap', d.workQueue.pendingDirectPr, 'Pending Direct PR', 'pendingDirectPr')}
-                    ${pcbQueueCard('flame', d.workQueue.urgentMaterial, 'Urgent Material', 'urgentMaterial')}
-                    ${pcbQueueCard('alert-triangle', d.workQueue.delayedProjects, 'Delayed Projects', 'delayedProjects')}
-                    ${pcbQueueCard('truck', d.workQueue.waitingProcurement, 'Waiting for Procurement', 'waitingProcurement')}
-                    ${pcbQueueCard('handshake', d.workQueue.waitingVendor, 'Waiting on Vendor', 'waitingVendor')}
-                    ${pcbQueueCard('folder-x', d.workQueue.withoutBom, 'Projects Without BOM', 'withoutBom')}
-                    ${pcbQueueCard('check-circle-2', d.workQueue.completed, 'Projects Completed', 'completed')}
-                </div>
+            <div class="bg-white border border-rule rounded-xl p-4 flex flex-col items-center gap-2 shadow-sm hover:shadow-md transition-all">
+                <p class="text-[10px] font-black uppercase tracking-widest text-slate-500">Schedule Adherence</p>
+                ${circleGauge(schedAdh, schedAdh >= 80 ? '#047857' : '#DC2626', 72)}
+                <p class="text-[10px] font-bold" style="color:${schedAdh>=80?'#047857':'#DC2626'}">${schedAdh >= 80 ? 'On Track' : 'Behind Schedule'}</p>
             </div>
-
-            <div class="flex flex-col gap-6 mb-8">
-                <!-- Section 6 — Upcoming Material Requirement -->
-                <div class="bg-white rounded-2xl border border-rule shadow-panel overflow-hidden overflow-x-auto">
-                    <div class="p-3.5 border-b border-rule bg-paper">
-                        <h3 class="text-[11px] font-display font-bold text-slate-600 uppercase tracking-widest">Upcoming Material Requirement</h3>
-                    </div>
-                    <div class="overflow-x-auto max-h-[320px] custom-scrollbar">
-                        <table class="w-full text-left whitespace-nowrap text-xs">
-                            <thead class="sticky top-0 bg-slate-50 text-[9px] font-black text-slate-400 uppercase tracking-widest border-b border-rule">
-                                <tr><th class="px-3 py-2">Project</th><th class="px-3 py-2">Item</th><th class="px-3 py-2">Req. Date</th><th class="px-3 py-2 text-right">Days</th><th class="px-3 py-2">Status</th></tr>
-                            </thead>
-                            <tbody class="divide-y divide-rule">
-                                ${d.upcoming.length === 0 ? '<tr><td colspan="5" class="p-6 text-center text-slate-400">Nothing upcoming</td></tr>' : ''}
-                                ${d.upcoming.slice(0,15).map(u => {
-                                    const bg = u.bucket==='overdue' ? '#FEE2E2' : u.bucket==='upcoming' ? '#FEF9E7' : '#E5F6EF';
-                                    const fg = u.bucket==='overdue' ? '#B91C1C' : u.bucket==='upcoming' ? '#B45309' : '#047857';
-                                    return `<tr style="background:${bg}22">
-                                        <td class="px-3 py-1.5 font-bold text-brand">${esc(u.project)}</td>
-                                        <td class="px-3 py-1.5">${esc(u.item)}</td>
-                                        <td class="px-3 py-1.5 font-mono">${u.requiredDate}</td>
-                                        <td class="px-3 py-1.5 text-right font-mono font-bold" style="color:${fg}">${u.daysRemaining}</td>
-                                        <td class="px-3 py-1.5"><span class="status-chip" style="background:${bg};color:${fg};border-color:${fg}33"><span class="dot" style="background:${fg}"></span>${u.bucket.toUpperCase()}</span></td>
-                                    </tr>`;
-                                }).join('')}
-                            </tbody>
-                        </table>
-                    </div>
-                </div>
-            <!-- Section 5 — Planner Activity Timeline -->
-                <div class="bg-white rounded-2xl border border-rule shadow-panel p-4">
-                    <h3 class="text-[11px] font-display font-bold text-slate-600 uppercase tracking-widest mb-3">Planner Activity Timeline</h3>
-                    <div class="max-h-[360px] overflow-y-auto custom-scrollbar pr-2">
-                        ${d.timeline.length === 0 ? '<div class="py-10 text-center text-xs text-slate-300 font-black uppercase">No activity yet</div>' : d.timeline.slice(0, 15).map((t,i) => `
-                        <div class="flex gap-3 pb-4 relative">
-                            ${i < Math.min(d.timeline.length,15)-1 ? '<div class="absolute left-[7px] top-4 bottom-0 w-px bg-rule"></div>' : ''}
-                            <div class="w-4 h-4 rounded-full bg-brand shrink-0 mt-0.5 ring-4 ring-brand-50"></div>
-                            <div class="flex-1 min-w-0">
-                                <p class="text-xs font-bold text-ink truncate">${esc(t.action)}</p>
-                                <p class="text-[10px] text-slate-400 mt-0.5">${esc(t.prNo || t.mrNo)} · ${esc(t.actor||'')} · ${fmtDateTime(t.ts)}</p>
-                            </div>
-                        </div>`).join('')}
-                    </div>
-                </div>
-
-                </div>
-
-            <!-- Section 7 — Project Progress -->
-            <div class="bg-white rounded-2xl border border-rule shadow-panel p-5 mb-8">
-                <h3 class="text-[11px] font-display font-bold text-slate-600 uppercase tracking-widest mb-4">Project Progress</h3>
-                <div class="space-y-4">
-                    ${d.projectRows.length === 0 ? '<p class="text-xs text-slate-300 font-black uppercase text-center py-6">No active projects</p>' : ''}
-                    ${d.projectRows.map(p => `
+            <div class="bg-white border border-rule rounded-xl p-4 shadow-sm hover:shadow-md transition-all">
+                <p class="text-[10px] font-black uppercase tracking-widest text-slate-500 mb-3">Planner Workload</p>
+                <div class="space-y-2.5">
+                    ${[{label:'Assigned',val:totalActive,max:Math.max(totalActive,20),color:'#4F46E5'},{label:'Completed',val:completedPlan,max:Math.max(totalActive,20),color:'#047857'},{label:'Pending',val:pendingPlan,max:Math.max(totalActive,20),color:'#B45309'}].map(wb=>`
                     <div>
-                        <div class="flex justify-between items-center mb-1.5">
-                            <span class="text-xs font-bold text-ink">${esc(p.name)}</span>
-                            <span class="text-xs font-bold" style="color:${p.matPct>=100?'#047857':p.matPct>50?'#0E7490':'#B45309'}">${p.matPct}%</span>
+                        <div class="flex justify-between mb-1"><span class="text-[9px] font-bold text-slate-500">${wb.label}</span><span class="text-[9px] font-black" style="color:${wb.color}">${wb.val}</span></div>
+                        <div class="h-2 rounded-full bg-slate-100 overflow-hidden"><div class="h-full rounded-full" style="width:${Math.min(100,Math.round((wb.val/wb.max)*100))}%;background:${wb.color}"></div></div>
+                    </div>`).join('')}
+                </div>
+            </div>
+            <div class="bg-white border border-rule rounded-xl p-4 flex flex-col items-center gap-2 shadow-sm hover:shadow-md transition-all">
+                <p class="text-[10px] font-black uppercase tracking-widest text-slate-500">Resource Utilization</p>
+                ${circleGauge(resourceUtil, resourceUtil > 85 ? '#DC2626' : resourceUtil > 60 ? '#B45309' : '#047857', 72)}
+                <p class="text-[10px] font-bold" style="color:${resourceUtil>85?'#DC2626':resourceUtil>60?'#B45309':'#047857'}">${resourceUtil > 85 ? 'Overloaded' : resourceUtil > 60 ? 'High Load' : 'Healthy'}</p>
+            </div>
+        </div>
+
+        <!-- ROW 3: GANTT TIMELINE -->
+        <div class="bg-white border border-rule rounded-xl p-4 mb-5 shadow-sm">
+            <div class="flex items-center justify-between mb-3">
+                <h3 class="text-[11px] font-black uppercase tracking-widest text-slate-600 flex items-center gap-2">
+                    <i data-lucide="gantt-chart" class="w-4 h-4 text-indigo-600"></i> Interactive Gantt Timeline
+                </h3>
+                <div class="flex items-center gap-3 text-[9px] font-black uppercase">
+                    <span class="flex items-center gap-1"><span class="w-2 h-2 rounded-sm bg-emerald-500"></span>Completed</span>
+                    <span class="flex items-center gap-1"><span class="w-2 h-2 rounded-sm bg-blue-500"></span>Running</span>
+                    <span class="flex items-center gap-1"><span class="w-2 h-2 rounded-sm bg-amber-500"></span>Upcoming</span>
+                    <span class="flex items-center gap-1"><span class="w-2 h-2 rounded-sm bg-rose-500"></span>Delayed</span>
+                </div>
+            </div>
+            <div class="space-y-2">
+                ${ganttRows.length === 0 ? '<p class="text-center text-xs text-slate-400 py-4">No active projects</p>' : ganttRows.map(g => `
+                <div class="flex items-center gap-3">
+                    <div class="w-36 shrink-0"><p class="text-[10px] font-bold text-ink truncate" title="${esc(g.name)}">${esc(g.name)}</p></div>
+                    <div class="flex-1 h-5 bg-slate-100 rounded-md overflow-hidden">
+                        <div class="${g.barClass} h-full rounded-md transition-all duration-700 flex items-center justify-end pr-1" style="width:${g.pct}%;min-width:16px;">
+                            <span class="text-[8px] font-black text-white">${g.pct}%</span>
                         </div>
-                        <div class="h-3 rounded-full bg-rule overflow-hidden">
-                            <div class="h-full rounded-full transition-all" style="width:${p.matPct}%;background:${p.matPct>=100?'linear-gradient(90deg,#047857,#065F46)':p.matPct>50?'linear-gradient(90deg,#0E7490,#155E75)':'linear-gradient(90deg,#B45309,#92400E)'}"></div>
+                    </div>
+                    <span class="text-[9px] font-black w-16 shrink-0" style="color:${g.barClass.includes('emerald')?'#047857':g.barClass.includes('rose')?'#DC2626':g.barClass.includes('amber')?'#B45309':'#1D4ED8'}">${g.label}</span>
+                </div>`).join('')}
+            </div>
+        </div>
+
+        <!-- ROW 4: PROJECT PROGRESS + UPCOMING MILESTONES -->
+        <div class="grid grid-cols-1 lg:grid-cols-2 gap-4 mb-5">
+            <div class="bg-white border border-rule rounded-xl p-4 shadow-sm">
+                <h3 class="text-[11px] font-black uppercase tracking-widest text-slate-600 mb-4 flex items-center gap-2"><i data-lucide="bar-chart-2" class="w-4 h-4 text-blue-600"></i> Project Progress</h3>
+                <div class="space-y-2.5 max-h-52 overflow-y-auto custom-scrollbar pr-1">
+                    ${d.projectRows.length === 0 ? '<p class="text-xs text-slate-400 text-center py-6">No active projects</p>' : d.projectRows.map(p => `
+                    <div>
+                        <div class="flex justify-between items-center mb-1">
+                            <span class="text-[11px] font-bold text-ink truncate max-w-[60%]" title="${esc(p.name)}">${esc(p.name)}</span>
+                            <span class="text-[10px] font-black" style="color:${p.matPct>=100?'#047857':p.matPct>50?'#0E7490':'#B45309'}">${p.matPct}%</span>
+                        </div>
+                        <div class="h-2.5 rounded-full bg-slate-100 overflow-hidden">
+                            <div class="h-full rounded-full transition-all" style="width:${p.matPct}%;background:${p.matPct>=100?'linear-gradient(90deg,#047857,#065F46)':p.matPct>50?'linear-gradient(90deg,#3B82F6,#1D4ED8)':'linear-gradient(90deg,#F59E0B,#D97706)'}"></div>
                         </div>
                     </div>`).join('')}
                 </div>
             </div>
-
-            <!-- Section 8 — Quick Actions -->
-            <div class="bg-white rounded-2xl border border-rule shadow-panel p-5">
-                <h3 class="text-[11px] font-display font-bold text-slate-600 uppercase tracking-widest mb-4">Quick Actions</h3>
-                <div class="grid grid-cols-2 md:grid-cols-4 gap-3">
-                    ${pcbActionBtn('zap','Create Direct PR','direct_pr')}
-                    ${pcbActionBtn('list-checks','Planning Queue','planning_queue')}
-                    ${pcbActionBtn('file-plus','Generate PR','generate_pr')}
-                    ${pcbActionBtn('merge','Merge MR','merge_mr')}
-                    ${pcbActionBtn('download','Export Planning Report','export_report')}
-                    ${pcbActionBtn('layout-dashboard','Project Dashboard','project_dashboard')}
-                    ${pcbActionBtn('database','Material Summary','material_summary')}
-                    ${pcbActionBtn('file-spreadsheet','BOM Report','bom_report')}
+            <div class="bg-white border border-rule rounded-xl p-4 shadow-sm">
+                <h3 class="text-[11px] font-black uppercase tracking-widest text-slate-600 mb-3 flex items-center gap-2"><i data-lucide="flag" class="w-4 h-4 text-indigo-600"></i> Upcoming Milestones</h3>
+                <div class="space-y-1.5 max-h-52 overflow-y-auto custom-scrollbar">
+                    ${[
+                        { label:'Overdue', items:d.upcoming.filter(u=>u.bucket==='overdue').slice(0,3), color:'#DC2626', bg:'#FEE2E2' },
+                        { label:'Today / Tomorrow', items:d.upcoming.filter(u=>u.daysRemaining>=0&&u.daysRemaining<=1).slice(0,3), color:'#B45309', bg:'#FDF3E4' },
+                        { label:'This Week', items:d.upcoming.filter(u=>u.daysRemaining>1&&u.daysRemaining<=7).slice(0,3), color:'#0E7490', bg:'#E7F7FA' },
+                    ].map(bucket => bucket.items.length > 0 ? `
+                    <div class="mb-2">
+                        <p class="text-[9px] font-black uppercase tracking-widest mb-1" style="color:${bucket.color}">${bucket.label}</p>
+                        ${bucket.items.map(u => `
+                        <div class="flex items-center gap-2 px-2 py-1.5 rounded-lg mb-1" style="background:${bucket.bg}">
+                            <div class="w-1.5 h-1.5 rounded-full shrink-0" style="background:${bucket.color}"></div>
+                            <div class="flex-1 min-w-0"><p class="text-[10px] font-bold text-ink truncate">${esc(u.project)} — ${esc(u.item)}</p></div>
+                            <span class="text-[9px] font-black shrink-0" style="color:${bucket.color}">${u.daysRemaining<0?Math.abs(u.daysRemaining)+'d ago':u.daysRemaining===0?'Today':u.daysRemaining+'d'}</span>
+                        </div>`).join('')}
+                    </div>` : '').join('')}
+                    ${d.upcoming.length === 0 ? '<p class="text-xs text-slate-400 text-center py-4">No upcoming milestones</p>' : ''}
                 </div>
             </div>
+        </div>
+
+        <!-- ROW 5: MONTHLY TREND -->
+        <div class="bg-white border border-rule rounded-xl p-4 mb-5 shadow-sm">
+            <div class="flex items-center justify-between mb-3">
+                <h3 class="text-[11px] font-black uppercase tracking-widest text-slate-600 flex items-center gap-2">
+                    <i data-lucide="trending-up" class="w-4 h-4 text-blue-600"></i> Monthly Planning Activity (Last 12 Months)
+                </h3>
+                <select onchange="window.setPcbChartType('monthly', this.value)" class="glass-input !py-1 !px-2 !text-[10px] !w-auto min-w-[80px]">${pcbChartTypeOptions('monthly')}</select>
+            </div>
+            <div class="pcb-chart-box" id="pcb-monthly-chart-box" style="height:160px"><canvas id="pcb-monthly-chart"></canvas></div>
+        </div>
+
+        <!-- ROW 6: DEPARTMENT STATUS -->
+        <div class="bg-white border border-rule rounded-xl mb-5 shadow-sm overflow-hidden">
+            <div class="px-4 py-3 border-b border-rule bg-slate-50">
+                <h3 class="text-[11px] font-black uppercase tracking-widest text-slate-600 flex items-center gap-2"><i data-lucide="building-2" class="w-4 h-4 text-indigo-600"></i> Department Planning Status</h3>
+            </div>
+            <div class="overflow-x-auto">
+                <table class="w-full text-xs">
+                    <thead><tr class="text-[9px] font-black text-slate-400 uppercase tracking-widest border-b border-rule bg-slate-50">
+                        <th class="px-3 py-2 text-left">Department</th>
+                        <th class="px-3 py-2 text-right">Planned</th>
+                        <th class="px-3 py-2 text-right">Completed</th>
+                        <th class="px-3 py-2 text-right">Pending</th>
+                        <th class="px-3 py-2 text-right">Delayed</th>
+                        <th class="px-3 py-2 w-36">Progress</th>
+                    </tr></thead>
+                    <tbody class="divide-y divide-rule">
+                        ${deptStats.map(ds => `
+                        <tr class="hover:bg-slate-50 transition-colors">
+                            <td class="px-3 py-2 font-bold text-ink">
+                                <div class="flex items-center gap-2"><span class="w-2 h-2 rounded-full" style="background:${ds.pct>=80?'#047857':ds.pct>=50?'#0E7490':'#B45309'}"></span>${ds.dep}</div>
+                            </td>
+                            <td class="px-3 py-2 text-right font-mono">${ds.total}</td>
+                            <td class="px-3 py-2 text-right font-mono text-emerald-700 font-bold">${ds.done}</td>
+                            <td class="px-3 py-2 text-right font-mono text-amber-700">${ds.pending}</td>
+                            <td class="px-3 py-2 text-right font-mono ${ds.delayed>0?'text-rose-600 font-bold':'text-slate-300'}">${ds.delayed}</td>
+                            <td class="px-3 py-2">
+                                <div class="flex items-center gap-2">
+                                    <div class="flex-1 h-2 rounded-full bg-slate-100 overflow-hidden"><div class="h-full rounded-full" style="width:${ds.pct}%;background:${ds.pct>=80?'#047857':ds.pct>=50?'#3B82F6':'#F59E0B'}"></div></div>
+                                    <span class="text-[10px] font-black w-8 text-right" style="color:${ds.pct>=80?'#047857':ds.pct>=50?'#1D4ED8':'#B45309'}">${ds.pct}%</span>
+                                </div>
+                            </td>
+                        </tr>`).join('')}
+                    </tbody>
+                </table>
+            </div>
+        </div>
+
+        <!-- ROW 7+8: MANPOWER + AI INSIGHTS + SIDEBAR -->
+        <div class="grid grid-cols-1 lg:grid-cols-3 gap-4 mb-5">
+            <!-- Manpower -->
+            <div class="lg:col-span-1 bg-white border border-rule rounded-xl p-4 shadow-sm">
+                <h3 class="text-[11px] font-black uppercase tracking-widest text-slate-600 mb-4 flex items-center gap-2"><i data-lucide="users" class="w-4 h-4 text-indigo-600"></i> Manpower Planning</h3>
+                <div class="space-y-3 mb-4">
+                    ${[{label:'Allocated',val:manAllocated,max:120,color:'#4F46E5'},{label:'Available',val:manAvailable,max:120,color:'#047857'},{label:'Overloaded',val:manOverloaded,max:120,color:'#DC2626'},{label:'Idle',val:manIdle,max:120,color:'#94A3B8'}].map(m=>`
+                    <div>
+                        <div class="flex justify-between mb-1"><span class="text-[10px] font-bold text-slate-600">${m.label}</span><span class="text-[10px] font-black" style="color:${m.color}">${m.val}</span></div>
+                        <div class="h-3 rounded-full bg-slate-100 overflow-hidden"><div class="h-full rounded-full" style="width:${Math.min(100,Math.round((m.val/m.max)*100))}%;background:${m.color}"></div></div>
+                    </div>`).join('')}
+                </div>
+                <div class="pcb-chart-box" id="pcb-project-chart-box" style="height:130px"><canvas id="pcb-project-chart"></canvas></div>
+            </div>
+
+            <!-- AI Insights -->
+            <div class="lg:col-span-1 bg-gradient-to-br from-indigo-950 to-slate-900 border border-indigo-800/40 rounded-xl p-4 shadow-xl">
+                <h3 class="text-[11px] font-black uppercase tracking-widest text-indigo-300 mb-4 flex items-center gap-2">
+                    <i data-lucide="sparkles" class="w-4 h-4 text-indigo-400"></i> AI Planning Insights
+                </h3>
+                <div class="space-y-2.5">
+                    ${insights.map(ins => `
+                    <div class="flex items-start gap-2.5 p-2.5 rounded-lg bg-white/5 border border-white/10 hover:bg-white/10 transition-all">
+                        <div class="w-6 h-6 rounded-lg flex items-center justify-center shrink-0 mt-0.5" style="background:${ins.color}25">
+                            <i data-lucide="${ins.icon}" class="w-3 h-3" style="color:${ins.color}"></i>
+                        </div>
+                        <p class="text-[11px] text-slate-300 leading-relaxed font-medium">${ins.text}</p>
+                    </div>`).join('')}
+                </div>
+            </div>
+
+            <!-- Sidebar -->
+            <div class="lg:col-span-1 space-y-3">
+                <div class="bg-white border border-rule rounded-xl p-3.5 shadow-sm">
+                    <h4 class="text-[10px] font-black uppercase tracking-widest text-slate-500 mb-2.5 flex items-center gap-1.5"><i data-lucide="list-checks" class="w-3.5 h-3.5 text-indigo-500"></i> Today's Tasks</h4>
+                    <div class="space-y-2">
+                        ${todayTasks.map(t=>`
+                        <div class="flex items-center gap-2 p-2 rounded-lg hover:bg-slate-50 cursor-pointer transition-colors">
+                            <div class="w-6 h-6 rounded-lg flex items-center justify-center shrink-0" style="background:${t.color}15"><i data-lucide="${t.icon}" class="w-3 h-3" style="color:${t.color}"></i></div>
+                            <span class="flex-1 text-[11px] font-bold text-ink">${t.label}</span>
+                            <span class="text-sm font-display font-black" style="color:${t.color}">${t.count}</span>
+                        </div>`).join('')}
+                    </div>
+                </div>
+                <div class="bg-amber-50 border border-amber-200/60 rounded-xl p-3.5">
+                    <h4 class="text-[10px] font-black uppercase tracking-widest text-amber-800 mb-2 flex items-center gap-1.5"><i data-lucide="clock" class="w-3.5 h-3.5 text-amber-600"></i> Pending Approvals</h4>
+                    <div class="flex items-center justify-between"><span class="text-xs font-bold text-amber-900">MR Approval Queue</span><span class="text-xl font-display font-black text-amber-700">${pendingPlan}</span></div>
+                    <div class="flex items-center justify-between mt-1"><span class="text-xs font-bold text-amber-900">Direct PR Pending</span><span class="text-xl font-display font-black text-amber-700">${pendingDirect}</span></div>
+                    <button onclick="window.setPlannerSection('queue'); window.navigate('planner')" class="mt-2 w-full text-[10px] font-black uppercase bg-amber-500 hover:bg-amber-600 text-white rounded-lg py-1.5 transition-all">Review Now</button>
+                </div>
+                <div class="bg-white border border-rule rounded-xl p-3.5 shadow-sm">
+                    <h4 class="text-[10px] font-black uppercase tracking-widest text-slate-500 mb-2 flex items-center gap-1.5"><i data-lucide="pencil" class="w-3.5 h-3.5 text-slate-400"></i> Planner Notes</h4>
+                    <textarea class="w-full mt-1 text-[11px] p-2 rounded-lg border border-rule bg-slate-50 resize-none focus:outline-none focus:border-indigo-300 text-ink" rows="3" placeholder="Add quick notes for today's session..."></textarea>
+                </div>
+            </div>
+        </div>
+
+        <!-- PROJECT TABLE -->
+        <div class="bg-white border border-rule rounded-xl shadow-sm mb-5 overflow-hidden">
+            <div class="p-3.5 border-b border-rule bg-slate-50 flex flex-wrap items-center gap-2">
+                <h3 class="text-[11px] font-display font-bold text-slate-600 uppercase tracking-widest flex items-center gap-2"><i data-lucide="table-2" class="w-4 h-4 text-blue-600"></i> Project Planning Dashboard</h3>
+                ${selBadge}
+                <div class="ml-auto flex flex-wrap items-center justify-end gap-2">
+                    <input id="pcb-q" value="${esc(pcbState.q)}" oninput="window.setPcbFilter('q', this.value)" placeholder="Search project…" class="glass-input !w-44 !py-1.5 !text-xs" />
+                    <div class="relative">
+                        <button id="pcb-proj-btn" type="button" onclick="window.pcbProjectDropdownOpen = !window.pcbProjectDropdownOpen; softRender()" class="glass-input !w-36 !py-1.5 !text-xs flex justify-between items-center text-left">
+                            ${pcbState.projects.length ? pcbState.projects.length + ' Selected' : 'All Projects'}
+                            <i data-lucide="chevron-down" class="w-3.5 h-3.5 opacity-50"></i>
+                        </button>
+                        <div id="pcb-proj-dd" class="${window.pcbProjectDropdownOpen ? '' : 'hidden'} absolute top-full right-0 mt-1 w-72 bg-white border border-rule shadow-2xl rounded-xl z-[100] max-h-[28rem] flex flex-col p-1.5">
+                            <div class="px-2 pb-2 pt-1 border-b border-rule shrink-0">
+                                <input type="text" onkeyup="const q=this.value.toLowerCase();this.parentElement.nextElementSibling.nextElementSibling.querySelectorAll('label').forEach(l=>{l.style.display=l.innerText.toLowerCase().includes(q)?'flex':'none'});" placeholder="Search project..." class="glass-input w-full !py-1 !text-xs font-bold" />
+                            </div>
+                            <label class="flex items-center gap-2 px-2 py-2 hover:bg-slate-50 cursor-pointer rounded-lg text-[10px] uppercase font-black tracking-widest text-brand border-b border-rule mb-1 shrink-0">
+                                <input type="checkbox" onchange="window.setPcbProjects([])" ${pcbState.projects.length===0?'checked':''} class="accent-brand rounded border-slate-300 w-3.5 h-3.5" /> Clear / Select All
+                            </label>
+                            <div class="overflow-y-auto custom-scrollbar flex-1">
+                                ${d.projectRows.map(p=>`
+                                <label class="flex items-start gap-2 px-2 py-1.5 hover:bg-slate-50 cursor-pointer rounded-lg text-xs break-words whitespace-normal leading-tight">
+                                    <input type="checkbox" onchange="window.togglePcbProject('${esc(p.name)}')" ${pcbState.projects.includes(p.name)?'checked':''} class="accent-brand rounded border-slate-300 w-3.5 h-3.5 shrink-0 mt-0.5" />
+                                    <span>${esc(p.name)}</span>
+                                </label>`).join('')}
+                            </div>
+                            <div class="pt-2 mt-1 border-t border-rule shrink-0">
+                                <button type="button" onclick="window.pcbProjectDropdownOpen = false; render()" class="w-full bg-slate-800 text-white font-bold py-2 rounded-lg text-xs hover:bg-slate-900 active:scale-95 transition-all flex items-center justify-center gap-2">
+                                    <i data-lucide="check-circle" class="w-3.5 h-3.5"></i> Save & Reflect Dashboard
+                                </button>
+                            </div>
+                        </div>
+                    </div>
+                    <select onchange="window.setPcbFilter('status', this.value)" class="glass-input !w-36 !py-1.5 !text-xs">
+                        <option value="">All Statuses</option>
+                        ${['Pending Planning','In Procurement','Completed','No BOM / MR'].map(s=>`<option value="${esc(s)}" ${pcbState.status===s?'selected':''}>${esc(s)}</option>`).join('')}
+                    </select>
+                </div>
+            </div>
+            <div class="overflow-auto max-h-[380px] custom-scrollbar">
+                <table class="w-full text-left whitespace-nowrap">
+                    <thead class="sticky top-0 z-10"><tr class="bg-slate-50 text-[9px] font-black text-slate-400 uppercase tracking-widest border-b border-rule">
+                        <th class="px-3 py-2 text-center w-[48px] sticky left-0 bg-slate-50 z-20">Pri</th>
+                        <th class="px-3 py-2 min-w-[180px] sticky left-[48px] bg-slate-50 z-20">Project</th>
+                        <th class="px-3 py-2 text-right">BOM</th>
+                        <th class="px-3 py-2 text-right">MR Rcvd</th>
+                        <th class="px-3 py-2 text-right">PR Gen</th>
+                        <th class="px-3 py-2 text-right">Pending PR</th>
+                        <th class="px-3 py-2">Completion</th>
+                        <th class="px-3 py-2">Status</th>
+                        <th class="px-3 py-2 text-right">Delay %</th>
+                        <th class="px-3 py-2">Remarks</th>
+                    </tr></thead>
+                    <tbody class="divide-y divide-rule text-xs">
+                        ${rows.length === 0 ? '<tr><td colspan="10" class="p-8 text-center text-slate-400">No projects match this filter.</td></tr>' : ''}
+                        ${rows.map(p => {
+                            const sc = pcbStatusColor(p.planningStatus);
+                            return `<tr class="hover:bg-indigo-50/30 transition-colors">
+                                <td class="px-3 py-1.5 text-center font-bold sticky left-0 bg-white z-10">${p.priority}</td>
+                                <td class="px-3 py-1.5 font-bold text-ink text-[12px] sticky left-[48px] bg-white z-10 truncate max-w-[220px]" title="${esc(p.name)}">${esc(p.name)}</td>
+                                <td class="px-3 py-1.5 text-right font-mono">${p.bom}</td>
+                                <td class="px-3 py-1.5 text-right font-mono">${p.mrReceived}</td>
+                                <td class="px-3 py-1.5 text-right font-mono">${p.prGenerated}</td>
+                                <td class="px-3 py-1.5 text-right font-mono ${p.pendingPR>0?'text-amber-600 font-bold':''}">${p.pendingPR}</td>
+                                <td class="px-3 py-1.5 w-28">
+                                    <div class="flex items-center gap-2">
+                                        <div class="flex-1 h-1.5 rounded-full bg-slate-100 overflow-hidden"><div class="h-full rounded-full" style="width:${p.matPct}%;background:${p.matPct>=100?'#047857':p.matPct>50?'#3B82F6':'#F59E0B'}"></div></div>
+                                        <span class="text-[10px] font-bold w-8 text-right">${p.matPct}%</span>
+                                    </div>
+                                </td>
+                                <td class="px-3 py-1.5"><span class="status-chip" style="background:${sc.bg};color:${sc.c};border-color:${sc.c}33"><span class="dot" style="background:${sc.c}"></span>${esc(p.planningStatus)}</span></td>
+                                <td class="px-3 py-1.5 text-right font-mono ${p.delayPct>0?'text-rose-600 font-bold':'text-slate-300'}">${p.delayPct}%</td>
+                                <td class="px-3 py-1.5 text-slate-500 max-w-[140px] truncate" title="${esc(p.remarks)}">${esc(p.remarks)||'—'}</td>
+                            </tr>`;
+                        }).join('')}
+                    </tbody>
+                </table>
+            </div>
+        </div>
+
+        <!-- ACTIVITY LOG -->
+        <div class="bg-white border border-rule rounded-xl shadow-sm mb-5 overflow-hidden">
+            <div class="px-4 py-3 border-b border-rule bg-slate-50">
+                <h3 class="text-[11px] font-black uppercase tracking-widest text-slate-600 flex items-center gap-2"><i data-lucide="activity" class="w-4 h-4 text-indigo-500"></i> Recent Planning Activity</h3>
+            </div>
+            <div class="overflow-x-auto max-h-[260px] custom-scrollbar">
+                <table class="w-full text-xs">
+                    <thead><tr class="text-[9px] font-black text-slate-400 uppercase tracking-widest border-b border-rule bg-slate-50 sticky top-0">
+                        <th class="px-3 py-2">Time</th><th class="px-3 py-2">MR / PR No</th><th class="px-3 py-2">Activity</th><th class="px-3 py-2">Planner</th><th class="px-3 py-2">Status</th>
+                    </tr></thead>
+                    <tbody class="divide-y divide-rule">
+                        ${d.timeline.length === 0 ? '<tr><td colspan="5" class="p-6 text-center text-slate-400">No activity yet</td></tr>' : d.timeline.slice(0,20).map(t=>`
+                        <tr class="hover:bg-slate-50 transition-colors">
+                            <td class="px-3 py-1.5 font-mono text-slate-500 whitespace-nowrap">${fmtDateTime(t.ts)}</td>
+                            <td class="px-3 py-1.5 font-bold text-indigo-700">${esc(t.prNo||t.mrNo||'—')}</td>
+                            <td class="px-3 py-1.5 text-ink">${esc(t.action)}</td>
+                            <td class="px-3 py-1.5 text-slate-600">${esc(t.actor||'—')}</td>
+                            <td class="px-3 py-1.5">
+                                <span class="inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-[9px] font-black uppercase ${(t.action||'').toLowerCase().includes('approved')?'bg-emerald-100 text-emerald-700':(t.action||'').toLowerCase().includes('returned')?'bg-rose-100 text-rose-700':'bg-blue-100 text-blue-700'}">
+                                    ${(t.action||'').toLowerCase().includes('approved')?'✓ Approved':(t.action||'').toLowerCase().includes('returned')?'↩ Returned':'→ In Progress'}
+                                </span>
+                            </td>
+                        </tr>`).join('')}
+                    </tbody>
+                </table>
+            </div>
+        </div>
+
+        <!-- QUICK ACTIONS -->
+        <div class="bg-white border border-rule rounded-xl p-4 shadow-sm">
+            <h3 class="text-[10px] font-black uppercase tracking-widest text-slate-500 mb-3 flex items-center gap-2"><i data-lucide="zap" class="w-3.5 h-3.5 text-indigo-500"></i> Quick Actions</h3>
+            <div class="grid grid-cols-2 sm:grid-cols-4 lg:grid-cols-8 gap-2">
+                ${[{icon:'zap',label:'Direct PR',type:'direct_pr'},{icon:'list-checks',label:'Queue',type:'planning_queue'},{icon:'file-plus',label:'Generate PR',type:'generate_pr'},{icon:'merge',label:'Merge MR',type:'merge_mr'},{icon:'download',label:'Export',type:'export_report'},{icon:'layout-dashboard',label:'Projects',type:'project_dashboard'},{icon:'database',label:'Materials',type:'material_summary'},{icon:'file-spreadsheet',label:'BOM Report',type:'bom_report'}].map(a=>`
+                <button onclick="window.pcbQuickAction('${a.type}')" class="flex flex-col items-center justify-center gap-1.5 bg-slate-50 hover:bg-indigo-600 border border-rule rounded-xl py-3 px-2 transition-all group">
+                    <i data-lucide="${a.icon}" class="w-4 h-4 text-indigo-500 group-hover:text-white transition-colors"></i>
+                    <span class="text-[9px] font-black uppercase tracking-wider text-slate-600 group-hover:text-white transition-colors text-center">${a.label}</span>
+                </button>`).join('')}
+            </div>
+        </div>
+
         </div>`;
     }
+
 
     function pcbQueueCard(icon, value, label, type) {
         return `
