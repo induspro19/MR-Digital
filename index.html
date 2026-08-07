@@ -731,8 +731,33 @@
     let deptForm = { name: "" };
     let userForm = { id: "", name: "", role: "creator", dept: "", password: "", responsibility: "", approvalLevel: "" };
 
-    let trackingFilters = { q:"", status:"", dept:"", project:"", from:"", to:"" };
-    let reportFilters   = { q:"", status:"", dept:"", project:"", from:"", to:"" };
+    function getCurrentMonthKey() {
+        const now = new Date();
+        return `${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, '0')}`;
+    }
+
+    function getMonthFilterOptions() {
+        const options = [];
+        const now = new Date();
+        const currentYear = now.getFullYear();
+        const currentMonth = now.getMonth();
+
+        options.push({ val: 'all', label: 'All Months' });
+
+        for (let i = 0; i < 12; i++) {
+            const d = new Date(currentYear, currentMonth - i, 1);
+            const yyyy = d.getFullYear();
+            const mm = String(d.getMonth() + 1).padStart(2, '0');
+            const val = `${yyyy}-${mm}`;
+            const monthName = d.toLocaleString('en-US', { month: 'long' });
+            const label = i === 0 ? `${monthName} ${yyyy} (Current Month)` : `${monthName} ${yyyy}`;
+            options.push({ val, label });
+        }
+        return options;
+    }
+
+    let trackingFilters = { q:"", status:"", dept:"", project:"", from:"", to:"", month: getCurrentMonthKey() };
+    let reportFilters   = { q:"", status:"", dept:"", project:"", from:"", to:"", month: getCurrentMonthKey() };
     let reportRollupView = 'monthly'; // one of daily | weekly | monthly | yearly — for the Period Rollup Report
     let registryFilters = { users:"", assets:"", projects:"", departments:"" };
     let procHandlerFilter = "";
@@ -1398,6 +1423,19 @@
             if (f.status && getMrDisplayStatus(m) !== f.status) return false;
             if (f.dept && m.dept !== f.dept) return false;
             if (f.project && !(m.items||[]).some(it => it.project === f.project)) return false;
+            
+            // Month filter (Default: Current Month YYYY-MM, or 'all')
+            if (f.month && f.month !== 'all') {
+                const parts = f.month.split('-');
+                if (parts.length === 2) {
+                    const yr = parseInt(parts[0], 10);
+                    const mo = parseInt(parts[1], 10) - 1;
+                    const mStart = new Date(yr, mo, 1).getTime();
+                    const mEnd = new Date(yr, mo + 1, 0, 23, 59, 59, 999).getTime();
+                    if (m.createdAt < mStart || m.createdAt > mEnd) return false;
+                }
+            }
+
             if (f.from && m.createdAt < new Date(f.from).getTime()) return false;
             if (f.to && m.createdAt > new Date(f.to).getTime() + 86399999) return false;
             if (f.q && !matchesKeyword(m, f.q)) return false;
@@ -3400,10 +3438,10 @@
 
     // ── FILTER ACTIONS ─────────────────────────────────────────────────────
     window.setTrackFilter = (key, val) => { trackingFilters[key] = val; softRender(); };
-    window.clearTrackFilters = () => { trackingFilters = { q:"", status:"", dept:"", project:"", from:"", to:"" }; render(); };
+    window.clearTrackFilters = () => { trackingFilters = { q:"", status:"", dept:"", project:"", from:"", to:"", month: getCurrentMonthKey() }; render(); };
 
     window.setReportFilter = (key, val) => { reportFilters[key] = val; softRender(); };
-    window.clearReportFilters = () => { reportFilters = { q:"", status:"", dept:"", project:"", from:"", to:"" }; render(); };
+    window.clearReportFilters = () => { reportFilters = { q:"", status:"", dept:"", project:"", from:"", to:"", month: getCurrentMonthKey() }; render(); };
 
     window.setRegistryFilter = (type, val) => { registryFilters[type] = val; softRender(); };
     window.setQueueFilter = (key, val) => { queueFilters[key] = val; softRender(); };
@@ -4849,9 +4887,14 @@ function renderMrRow(item, idx, xlInputCss) {
                 <span class="text-[10px] font-black uppercase tracking-widest">Find &amp; Filter</span>
             </div>
             <div class="grid grid-cols-1 md:grid-cols-12 gap-3">
-                <div class="md:col-span-4">
+                <div class="md:col-span-3">
                     <input id="${cfg.scope}-q" value="${esc(cfg.filters.q)}" oninput="window.${cfg.setFn}('q', this.value)"
                         class="glass-input" placeholder="${cfg.placeholder || 'Search MR no., item, project, dept, remarks…'}" />
+                </div>
+                <div class="md:col-span-2">
+                    <select onchange="window.${cfg.setFn}('month', this.value)" class="glass-input font-bold text-slate-700" title="Filter by Month">
+                        ${getMonthFilterOptions().map(opt => `<option value="${opt.val}" ${cfg.filters.month===opt.val?'selected':''}>${esc(opt.label)}</option>`).join('')}
+                    </select>
                 </div>
                 <div class="md:col-span-2">
                     <select onchange="window.${cfg.setFn}('status', this.value)" class="glass-input">
@@ -4877,8 +4920,8 @@ function renderMrRow(item, idx, xlInputCss) {
                 <div class="md:col-span-1"><input type="date" onchange="window.${cfg.setFn}('from', this.value)" value="${esc(cfg.filters.from)}" class="glass-input" title="From date" /></div>
                 <div class="md:col-span-1"><input type="date" onchange="window.${cfg.setFn}('to', this.value)" value="${esc(cfg.filters.to)}" class="glass-input" title="To date" /></div>
                 ` : ''}
-                <div class="md:col-span-${cfg.showDateRange ? 12 : (cfg.showProject ? 2 : 4)} flex ${cfg.showDateRange ? 'justify-end' : ''}">
-                    <button onclick="window.${cfg.clearFn}()" class="w-full md:w-auto px-4 py-2 border border-rule rounded-lg text-[10px] font-black uppercase tracking-widest text-slate-500 hover:bg-paper flex items-center justify-center gap-2">
+                <div class="md:col-span-1 flex items-center justify-end">
+                    <button onclick="window.${cfg.clearFn}()" class="w-full px-3 py-2 border border-rule rounded-lg text-[10px] font-black uppercase tracking-widest text-slate-500 hover:bg-paper flex items-center justify-center gap-1.5" title="Reset Filters">
                         <i data-lucide="rotate-ccw" class="w-3 h-3"></i> Clear
                     </button>
                 </div>
@@ -4969,12 +5012,11 @@ function renderMrRow(item, idx, xlInputCss) {
 
             ${renderKeywordFilterBar({ scope:'report', filters: reportFilters, setFn:'setReportFilter', clearFn:'clearReportFilters', showDept: canSeeAllDepartmentMrs(), showProject:true, showDateRange:true, placeholder:'Search this report by keyword…' })}
 
-            <div class="grid grid-cols-2 md:grid-cols-5 gap-4">
+            <div class="grid grid-cols-2 md:grid-cols-4 gap-4">
                 ${statCard(stats.total,'Matched MRs','text-slate-900','clipboard-list')}
                 ${statCard(stats.items,'Line Items','text-blue-600','list')}
-                ${statCard(stats.qty,'Total Qty','text-purple-600','boxes')}
                 ${statCard(stats.closed,'Closed','text-emerald-600','check-circle-2')}
-                ${statCard(stats.avgDays,'Avg. Days to Close','text-amberx','timer')}
+                ${statCard(stats.avgDays,'Avg. Days to Close','text-amber-600','timer')}
             </div>
 
             <div class="grid grid-cols-1 lg:grid-cols-2 gap-5">
