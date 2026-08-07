@@ -4376,18 +4376,35 @@
             monthlyTrendMap[k] = { label: monthLabel, accepted: 0, po: 0, received: 0 };
         }
 
+        const parseYmKey = (dVal) => {
+            if (!dVal) return null;
+            if (typeof dVal === 'number') {
+                const d = new Date(dVal);
+                if (isNaN(d.getTime())) return null;
+                return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}`;
+            }
+            const str = String(dVal).trim();
+            if (!str) return null;
+            if (str.match(/^\d{4}-\d{2}/)) return str.substring(0, 7);
+            const d = new Date(str);
+            if (!isNaN(d.getTime())) return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}`;
+            return null;
+        };
+
         prRows.forEach(r => {
-            if (r.date) {
-                const k = String(r.date).substring(0, 7);
-                if (monthlyTrendMap[k]) monthlyTrendMap[k].accepted++;
+            const accKey = parseYmKey(r.date) || parseYmKey(r.poDate) || parseYmKey(r.materialReceived);
+            if (accKey && monthlyTrendMap[accKey]) {
+                monthlyTrendMap[accKey].accepted++;
             }
-            if (r.poDate) {
-                const k = String(r.poDate).substring(0, 7);
-                if (monthlyTrendMap[k]) monthlyTrendMap[k].po++;
+            
+            const poKey = parseYmKey(r.poDate);
+            if (poKey && monthlyTrendMap[poKey]) {
+                monthlyTrendMap[poKey].po++;
             }
-            if (r.materialReceived) {
-                const k = String(r.materialReceived).substring(0, 7);
-                if (monthlyTrendMap[k]) monthlyTrendMap[k].received++;
+            
+            const recKey = parseYmKey(r.materialReceived) || parseYmKey(r.actualDelivery);
+            if (recKey && monthlyTrendMap[recKey]) {
+                monthlyTrendMap[recKey].received++;
             }
         });
         const monthlyTrendKeys = Object.keys(monthlyTrendMap);
