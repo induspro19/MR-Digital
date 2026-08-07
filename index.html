@@ -4633,32 +4633,37 @@
                 </div>
 
                 <!-- PROCUREMENT STATUS DOUGHNUT -->
-                <div class="bg-white border border-slate-200/80 rounded-2xl p-6 shadow-sm flex flex-col justify-between">
+                <div class="bg-white border border-slate-200/80 rounded-2xl p-4 sm:p-5 shadow-sm flex flex-col justify-between overflow-hidden">
                     <div>
-                        <div class="flex items-center justify-between mb-4">
+                        <div class="flex items-center justify-between mb-3">
                             <h3 class="text-xs font-black uppercase tracking-widest text-slate-900">
                                 PROCUREMENT STATUS
                             </h3>
                         </div>
 
-                        <div class="flex items-center gap-4">
-                            <div class="relative w-32 h-32 shrink-0 flex items-center justify-center">
+                        <div class="flex items-center gap-3 sm:gap-4 min-w-0">
+                            <div class="relative w-28 h-28 shrink-0 flex items-center justify-center">
                                 <svg viewBox="0 0 100 100" class="w-full h-full -rotate-90">
                                     ${donutSvgSlices}
                                 </svg>
                                 <div class="absolute inset-0 flex flex-col items-center justify-center text-center">
-                                    <span class="text-2xl font-display font-black text-slate-900 leading-none">${acceptedItemCount}</span>
-                                    <span class="text-[9px] font-bold text-slate-400 uppercase mt-0.5">Total Items</span>
+                                    <span class="text-xl font-display font-black text-slate-900 leading-none">${acceptedItemCount}</span>
+                                    <span class="text-[8px] font-bold text-slate-400 uppercase mt-0.5">Total Items</span>
                                 </div>
                             </div>
 
-                            <div class="flex-1 space-y-1.5 text-[11px] font-bold text-slate-600">
+                            <div class="flex-1 min-w-0 space-y-1.5 text-[11px] font-bold text-slate-600">
                                 ${slices.map(s => {
                                     const pct = acceptedItemCount > 0 ? Math.round((s.count / acceptedItemCount) * 100) : 0;
                                     return `
-                                    <div class="flex items-center justify-between">
-                                        <span class="flex items-center gap-1.5 truncate"><span class="w-2 h-2 rounded-full shrink-0" style="background:${s.color};"></span> ${s.label}</span>
-                                        <span class="text-slate-900 font-black ml-2">${s.count} <span class="text-slate-400 font-normal">(${pct}%)</span></span>
+                                    <div class="flex items-center justify-between gap-1 min-w-0">
+                                        <span class="flex items-center gap-1.5 truncate min-w-0" title="${esc(s.label)}">
+                                            <span class="w-2 h-2 rounded-full shrink-0" style="background:${s.color};"></span>
+                                            <span class="truncate">${esc(s.label)}</span>
+                                        </span>
+                                        <span class="text-slate-900 font-black shrink-0 ml-1 text-right whitespace-nowrap text-[11px]">
+                                            ${s.count} <span class="text-slate-400 font-semibold text-[10px]">(${pct}%)</span>
+                                        </span>
                                     </div>`;
                                 }).join('')}
                             </div>
