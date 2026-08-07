@@ -7486,14 +7486,23 @@ function renderMrRow(item, idx, xlInputCss) {
 
     window.dcStatusFilterDropdownOpen = false;
     window.dcStatusDropdownSearchQuery = '';
+    window.dcStatusPendingSelection = [];
 
     window.dcToggleStatusFilterDropdown = (e) => {
         if (e) e.stopPropagation();
         window.dcStatusFilterDropdownOpen = !window.dcStatusFilterDropdownOpen;
-        if (!window.dcStatusFilterDropdownOpen) {
-            window.dcStatusDropdownSearchQuery = '';
+        if (window.dcStatusFilterDropdownOpen) {
+            const s = dcColFilter.status;
+            if (Array.isArray(s)) {
+                window.dcStatusPendingSelection = [...s];
+            } else if (s) {
+                window.dcStatusPendingSelection = [s];
+            } else {
+                window.dcStatusPendingSelection = [];
+            }
         }
-        softRender();
+        window.dcStatusDropdownSearchQuery = '';
+        render();
     };
 
     window.dcUpdateStatusDropdownSearch = (val) => {
@@ -7512,51 +7521,48 @@ function renderMrRow(item, idx, xlInputCss) {
         }
     };
 
-    window.dcSetStatusCheckboxFilter = (statusVal, isChecked) => {
-        let current = dcColFilter.status;
-        if (!Array.isArray(current)) {
-            current = (current && current !== 'OPEN') ? [current] : (current === 'OPEN' ? ['OPEN'] : []);
-        }
+    window.dcToggleStatusCheckboxPending = (statusVal, isChecked) => {
+        let current = window.dcStatusPendingSelection || [];
         if (isChecked) {
             if (!current.includes(statusVal)) current.push(statusVal);
         } else {
             current = current.filter(v => v !== statusVal);
         }
-        dcColFilter.status = current.length > 0 ? current : '';
-        dcPage = 1;
-        if (document.getElementById('dc-tbody')) {
-            window.dcUpdateGridRowsOnly();
-        } else {
-            softRender();
+        window.dcStatusPendingSelection = current;
+        
+        const badge = document.getElementById('dc-status-selected-count');
+        if (badge) {
+            badge.innerText = `${current.length} selected`;
         }
     };
 
     window.dcSetStatusPresetFilter = (preset) => {
         if (preset === 'OPEN') {
             dcColFilter.status = 'OPEN';
+            window.dcStatusPendingSelection = ['OPEN'];
         } else {
             dcColFilter.status = '';
+            window.dcStatusPendingSelection = [];
         }
+        window.dcStatusFilterDropdownOpen = false; // MINIMIZE / CLOSE BOX IMMEDIATELY!
         window.dcStatusDropdownSearchQuery = '';
         dcPage = 1;
-        const mainInp = document.getElementById('dc-col-status');
-        if (mainInp) mainInp.value = preset === 'OPEN' ? 'OPEN' : '';
-        if (document.getElementById('dc-tbody')) {
-            window.dcUpdateGridRowsOnly();
-        } else {
-            softRender();
-        }
+        render(); // Full re-render to apply filter & hide popover box!
     };
 
     window.dcApplyStatusDropdownFilter = () => {
-        window.dcStatusFilterDropdownOpen = false;
+        const sel = window.dcStatusPendingSelection || [];
+        if (sel.length === 0) {
+            dcColFilter.status = '';
+        } else if (sel.length === 1) {
+            dcColFilter.status = sel[0];
+        } else {
+            dcColFilter.status = [...sel];
+        }
+        window.dcStatusFilterDropdownOpen = false; // MINIMIZE / CLOSE BOX IMMEDIATELY!
         window.dcStatusDropdownSearchQuery = '';
         dcPage = 1;
-        if (document.getElementById('dc-tbody')) {
-            window.dcUpdateGridRowsOnly();
-        } else {
-            softRender();
-        }
+        render(); // Full re-render to apply filter & hide popover box!
     };
 
     let _dcFilterDebounceTimer = null;
@@ -8879,8 +8885,8 @@ function renderMrRow(item, idx, xlInputCss) {
                             if (c.key === 'status') {
                                 const isFiltered = Boolean(dcColFilter.status && (Array.isArray(dcColFilter.status) ? dcColFilter.status.length > 0 : String(dcColFilter.status).trim() !== ''));
                                 const displayVal = Array.isArray(dcColFilter.status) ? (dcColFilter.status.length === 1 ? dcColFilter.status[0] : `${dcColFilter.status.length} selected`) : (dcColFilter.status || '');
-                                const currentArr = Array.isArray(dcColFilter.status) ? dcColFilter.status : (dcColFilter.status ? [dcColFilter.status] : []);
-                                const isOpenSelected = currentArr.includes('OPEN') || dcColFilter.status === 'OPEN';
+                                const pendingArr = window.dcStatusPendingSelection || [];
+                                const isOpenSelected = pendingArr.includes('OPEN');
 
                                 return `
                                 <th data-col-key="${c.key}" style="position:sticky; top:29px; ${c.sticky?`left:${left}px; z-index:3;`:'z-index:1;'} background:#f1f5f9; border:1px solid #dde3ea; padding:2px 4px;">
@@ -8894,26 +8900,26 @@ function renderMrRow(item, idx, xlInputCss) {
                                     </div>
 
                                     ${window.dcStatusFilterDropdownOpen ? `
-                                    <div onclick="event.stopPropagation()" style="position:absolute; top:100%; left:0; margin-top:4px; z-index:99999; background:#fff; border:1.5px solid #cbd5e1; border-radius:10px; box-shadow:0 12px 30px rgba(0,0,0,0.25); width:230px; padding:10px; font-size:11px; text-align:left;">
-                                        <div style="display:flex; align-items:center; justify-content:space-between; margin-bottom:8px; border-b:1px solid #f1f5f9; padding-bottom:6px;">
-                                            <span style="font-weight:900; text-transform:uppercase; font-size:10px; color:#475569; letter-spacing:0.05em;">Status Filter</span>
-                                            <button onclick="window.dcToggleStatusFilterDropdown(event)" style="background:none; border:none; color:#94a3b8; font-weight:900; cursor:pointer; font-size:12px;">✕</button>
+                                    <div onclick="event.stopPropagation()" style="position:absolute; top:100%; left:0; margin-top:4px; z-index:99999; background:#fff; border:1.5px solid #cbd5e1; border-radius:12px; box-shadow:0 15px 35px rgba(0,0,0,0.25); width:235px; padding:12px; font-size:11px; text-align:left;">
+                                        <div style="display:flex; align-items:center; justify-content:space-between; margin-bottom:10px; border-b:1px solid #f1f5f9; padding-bottom:6px;">
+                                            <span style="font-weight:900; text-transform:uppercase; font-size:10px; color:#475569; letter-spacing:0.05em;">STATUS FILTER</span>
+                                            <button onclick="window.dcToggleStatusFilterDropdown(event)" style="background:none; border:none; color:#94a3b8; font-weight:900; cursor:pointer; font-size:14px; line-height:1;" title="Minimize / Close">✕</button>
                                         </div>
 
-                                        <div style="display:flex; align-items:center; gap:4px; margin-bottom:8px;">
-                                            <button onclick="window.dcSetStatusPresetFilter('OPEN')" style="flex:1; background:${isOpenSelected ? '#10b981' : '#ecfdf5'}; color:${isOpenSelected ? '#fff' : '#047857'}; border:1px solid #a7f3d0; padding:4px 6px; border-radius:6px; font-size:10px; font-weight:900; cursor:pointer;">
-                                                🟢 OPEN (Active)
+                                        <div style="display:flex; align-items:center; gap:6px; margin-bottom:10px;">
+                                            <button onclick="window.dcSetStatusPresetFilter('OPEN')" style="flex:1; background:${isOpenSelected ? '#10b981' : '#ecfdf5'}; color:${isOpenSelected ? '#fff' : '#047857'}; border:1px solid #a7f3d0; padding:6px 8px; border-radius:8px; font-size:10px; font-weight:900; cursor:pointer; display:flex; align-items:center; justify-content:center; gap:4px;">
+                                                <span>🟢</span> OPEN (Active)
                                             </button>
-                                            <button onclick="window.dcSetStatusPresetFilter('CLEAR')" style="background:#f1f5f9; color:#64748b; border:1px solid #cbd5e1; padding:4px 8px; border-radius:6px; font-size:10px; font-weight:800; cursor:pointer;">
+                                            <button onclick="window.dcSetStatusPresetFilter('CLEAR')" style="background:#f1f5f9; color:#475569; border:1px solid #cbd5e1; padding:6px 10px; border-radius:8px; font-size:10px; font-weight:800; cursor:pointer;">
                                                 Clear
                                             </button>
                                         </div>
 
-                                        <div style="position:relative; margin-bottom:8px;">
-                                            <input type="text" id="dc-status-search-box" value="${esc(window.dcStatusDropdownSearchQuery||'')}" oninput="window.dcUpdateStatusDropdownSearch(this.value)" placeholder="Search status options..." style="width:100%; font-size:10px; padding:5px 8px; border:1px solid #cbd5e1; border-radius:6px; background:#fafafa; box-sizing:border-box;" />
+                                        <div style="position:relative; margin-bottom:10px;">
+                                            <input type="text" id="dc-status-search-box" value="${esc(window.dcStatusDropdownSearchQuery||'')}" oninput="window.dcUpdateStatusDropdownSearch(this.value)" placeholder="Search status options..." style="width:100%; font-size:11px; padding:6px 10px; border:1px solid #cbd5e1; border-radius:8px; background:#fafafa; outline:none; box-sizing:border-box;" />
                                         </div>
 
-                                        <div id="dc-status-checkbox-list" style="display:flex; flex-direction:column; gap:6px; max-height:180px; overflow-y:auto; padding-right:2px;">
+                                        <div id="dc-status-checkbox-list" style="display:flex; flex-direction:column; gap:8px; max-height:180px; overflow-y:auto; padding-right:4px;">
                                             ${[
                                                 { id: 'OPEN', label: '🟢 OPEN (Active Items)', color: '#10b981' },
                                                 { id: 'PR_ACCEPTED', label: '📄 PO Pending (PR Accepted)', color: '#3b82f6' },
@@ -8923,19 +8929,19 @@ function renderMrRow(item, idx, xlInputCss) {
                                                 { id: 'HOLD', label: '⏸️ Hold', color: '#64748b' },
                                                 { id: 'CANCELLED', label: '🚫 Cancelled', color: '#ef4444' }
                                             ].map(opt => {
-                                                const isChecked = opt.id === 'OPEN' ? isOpenSelected : currentArr.includes(opt.id);
+                                                const isChecked = pendingArr.includes(opt.id);
                                                 const matchesSearch = !window.dcStatusDropdownSearchQuery || opt.label.toLowerCase().includes(window.dcStatusDropdownSearchQuery);
                                                 return `
-                                                <label class="dc-status-cb-label" style="display:${matchesSearch ? 'flex' : 'none'}; align-items:center; gap:6px; cursor:pointer; font-weight:700; color:#1e293b;">
-                                                    <input type="checkbox" ${isChecked ? 'checked' : ''} onchange="window.dcSetStatusCheckboxFilter('${opt.id}', this.checked)" style="accent-color:${opt.color}; width:13px; height:13px;" />
+                                                <label class="dc-status-cb-label" style="display:${matchesSearch ? 'flex' : 'none'}; align-items:center; gap:8px; cursor:pointer; font-weight:700; color:#1e293b; user-select:none;">
+                                                    <input type="checkbox" ${isChecked ? 'checked' : ''} onchange="window.dcToggleStatusCheckboxPending('${opt.id}', this.checked)" style="accent-color:${opt.color}; width:15px; height:15px; cursor:pointer;" />
                                                     <span style="font-size:11px;">${opt.label}</span>
                                                 </label>`;
                                             }).join('')}
                                         </div>
 
-                                        <div style="margin-top:8px; padding-top:6px; border-t:1px solid #f1f5f9; display:flex; align-items:center; justify-content:space-between;">
-                                            <span style="font-size:9px; font-weight:800; color:#94a3b8;">${currentArr.length} selected</span>
-                                            <button onclick="window.dcApplyStatusDropdownFilter()" style="background:#10b981; color:#fff; border:none; padding:4px 10px; border-radius:6px; font-size:10px; font-weight:900; cursor:pointer; box-shadow:0 2px 6px rgba(16,185,129,0.3);">
+                                        <div style="margin-top:10px; padding-top:8px; border-t:1px solid #f1f5f9; display:flex; align-items:center; justify-content:space-between;">
+                                            <span id="dc-status-selected-count" style="font-size:10px; font-weight:800; color:#64748b;">${pendingArr.length} selected</span>
+                                            <button onclick="window.dcApplyStatusDropdownFilter()" style="background:#10b981; color:#fff; border:none; padding:6px 14px; border-radius:8px; font-size:10px; font-weight:900; cursor:pointer; box-shadow:0 2px 8px rgba(16,185,129,0.35); text-transform:uppercase; letter-spacing:0.03em;">
                                                 Apply & Close
                                             </button>
                                         </div>
