@@ -810,9 +810,13 @@
     let pcbState = { q: '', projects: [], status: '' };
     try {
         const _pcbRaw = localStorage.getItem('pcbState');
-        if (_pcbRaw) pcbState = { ...pcbState, ...JSON.parse(_pcbRaw) };
+        if (_pcbRaw) {
+            const _saved = JSON.parse(_pcbRaw);
+            // projects intentionally NOT restored — always open with all projects visible
+            pcbState.q = _saved.q || '';
+            pcbState.status = _saved.status || '';
+        }
     } catch(e) {}
-    if (typeof pcbState.project === 'string') { pcbState.projects = pcbState.project ? [pcbState.project] : []; delete pcbState.project; }
     if (!Array.isArray(pcbState.projects)) pcbState.projects = [];
     window.pcbProjectDropdownOpen = false;
 
@@ -6824,11 +6828,17 @@ function renderMrRow(item, idx, xlInputCss) {
         }
     }
 
-    window.setPcbFilter = (key, val) => { pcbState[key] = val; localStorage.setItem('pcbState', JSON.stringify(pcbState)); softRender(); };
+    window.setPcbFilter = (key, val) => {
+        pcbState[key] = val;
+        // projects are session-only — never saved to localStorage
+        const toSave = { q: pcbState.q, status: pcbState.status };
+        localStorage.setItem('pcbState', JSON.stringify(toSave));
+        softRender();
+    };
     window.togglePcbProject = (name) => {
         if (!pcbState.projects.includes(name)) pcbState.projects.push(name);
         else pcbState.projects = pcbState.projects.filter(n => n !== name);
-        localStorage.setItem('pcbState', JSON.stringify(pcbState));
+        // projects are session-only — NOT saved to localStorage
         const dd = document.getElementById('pcb-proj-dd');
         if (dd) {
             const clearCb = dd.querySelector('input[type="checkbox"][onchange*="setPcbProjects"]');
@@ -6837,7 +6847,7 @@ function renderMrRow(item, idx, xlInputCss) {
     };
     window.setPcbProjects = (arr) => {
         pcbState.projects = arr;
-        localStorage.setItem('pcbState', JSON.stringify(pcbState));
+        // projects are session-only — NOT saved to localStorage
         const dd = document.getElementById('pcb-proj-dd');
         if (dd) {
             dd.querySelectorAll('input[type="checkbox"]').forEach(cb => cb.checked = false);
