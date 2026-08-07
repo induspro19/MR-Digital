@@ -812,12 +812,15 @@
         const _pcbRaw = localStorage.getItem('pcbState');
         if (_pcbRaw) {
             const _saved = JSON.parse(_pcbRaw);
-            // projects intentionally NOT restored — always open with all projects visible
             pcbState.q = _saved.q || '';
             pcbState.status = _saved.status || '';
         }
     } catch(e) {}
+    // projects are loaded from appData (Supabase cloud) so they sync across all PCs
     if (!Array.isArray(pcbState.projects)) pcbState.projects = [];
+    if (appData && appData.settings && Array.isArray(appData.settings.pcbProjects)) {
+        pcbState.projects = appData.settings.pcbProjects.slice();
+    }
     window.pcbProjectDropdownOpen = false;
 
     // Bulk PO Update State
@@ -980,6 +983,9 @@
         
         // OCC Versioning
         data.vsn = data.vsn || 1;
+        // Planning Control Board persistent project selection (cloud-synced across all devices)
+        if (!data.settings) data.settings = {};
+        if (!Array.isArray(data.settings.pcbProjects)) data.settings.pcbProjects = [];
         
         return data;
     }
@@ -6838,7 +6844,10 @@ function renderMrRow(item, idx, xlInputCss) {
     window.togglePcbProject = (name) => {
         if (!pcbState.projects.includes(name)) pcbState.projects.push(name);
         else pcbState.projects = pcbState.projects.filter(n => n !== name);
-        // projects are session-only — NOT saved to localStorage
+        // Sync to cloud via appData so all PCs see the same selection
+        if (!appData.settings) appData.settings = {};
+        appData.settings.pcbProjects = pcbState.projects.slice();
+        saveDB();
         const dd = document.getElementById('pcb-proj-dd');
         if (dd) {
             const clearCb = dd.querySelector('input[type="checkbox"][onchange*="setPcbProjects"]');
@@ -6847,7 +6856,10 @@ function renderMrRow(item, idx, xlInputCss) {
     };
     window.setPcbProjects = (arr) => {
         pcbState.projects = arr;
-        // projects are session-only — NOT saved to localStorage
+        // Sync to cloud via appData so all PCs see the same selection
+        if (!appData.settings) appData.settings = {};
+        appData.settings.pcbProjects = arr.slice();
+        saveDB();
         const dd = document.getElementById('pcb-proj-dd');
         if (dd) {
             dd.querySelectorAll('input[type="checkbox"]').forEach(cb => cb.checked = false);
