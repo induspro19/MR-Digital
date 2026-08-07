@@ -8155,6 +8155,7 @@ function renderMrRow(item, idx, xlInputCss) {
                     <button onclick="window.dcSaveCurrentFilterAsPreset()" title="Save current filters as a named view" class="text-[10px] font-black uppercase tracking-widest bg-white border border-rule px-3 py-2 rounded-lg hover:bg-slate-50 flex items-center gap-1.5"><i data-lucide="bookmark-plus" class="w-3.5 h-3.5"></i> Save View</button>
                     <button onclick="window.dcUndo()" title="Undo (Ctrl+Z)" class="text-[10px] font-black uppercase tracking-widest bg-white border border-rule px-2.5 py-2 rounded-lg hover:bg-slate-50 ${dcUndoStack.length?'':'opacity-40'}"><i data-lucide="undo-2" class="w-3.5 h-3.5"></i></button>
                     <button onclick="window.dcRedo()" title="Redo (Ctrl+Y)" class="text-[10px] font-black uppercase tracking-widest bg-white border border-rule px-2.5 py-2 rounded-lg hover:bg-slate-50 ${dcRedoStack.length?'':'opacity-40'}"><i data-lucide="redo-2" class="w-3.5 h-3.5"></i></button>
+                    <button onclick="window.dcOpenBulkPoModal()" class="text-[10px] font-black uppercase tracking-widest bg-emerald-600 text-white px-3.5 py-2 rounded-lg hover:bg-emerald-700 flex items-center gap-1.5 shadow-sm" title="Bulk Update PO, Status & Received Date"><i data-lucide="edit-3" class="w-3.5 h-3.5"></i> Bulk Update</button>
                     <button onclick="window.dcExportExcel()" class="text-[10px] font-black uppercase tracking-widest bg-white border border-rule px-3 py-2 rounded-lg hover:bg-slate-50 flex items-center gap-1.5"><i data-lucide="file-spreadsheet" class="w-3.5 h-3.5"></i> Excel</button>
                     <button onclick="window.dcPrintFilteredPr()" class="text-[10px] font-black uppercase tracking-widest bg-violet-700 text-white px-3 py-2 rounded-lg hover:bg-violet-800 flex items-center gap-1.5"><i data-lucide="printer" class="w-3.5 h-3.5"></i> Print PR Sheet</button>
                     <button onclick="window.dcExportPdf()" class="text-[10px] font-black uppercase tracking-widest bg-white border border-rule px-3 py-2 rounded-lg hover:bg-slate-50 flex items-center gap-1.5"><i data-lucide="file-text" class="w-3.5 h-3.5"></i> PDF</button>
@@ -8469,7 +8470,11 @@ function renderMrRow(item, idx, xlInputCss) {
         updateBulkSelectionUI();
     };
     window.dcOpenBulkPoModal = () => {
-        if (!window.dcBulkSelected || window.dcBulkSelected.size === 0) { showToast('Select at least one row first.'); return; }
+        if (!window.dcBulkSelected || window.dcBulkSelected.size === 0) {
+            showToast('Please check the checkboxes on the left side of the items first.');
+            alert('To perform a Bulk Update:\n\n1. Select the checkboxes on the far-left side of the item rows in Data Centre table.\n2. Click "Bulk Update" again.');
+            return;
+        }
         window.dcBulkPoModal = true;
         render();
         setTimeout(() => { const el = document.getElementById('bulk-po-number'); if (el) el.focus(); }, 80);
