@@ -8302,27 +8302,45 @@ function renderMrRow(item, idx, xlInputCss) {
 
             ${window.dcBulkPoModal ? `
             <div style="position:fixed;inset:0;background:rgba(0,0,0,0.55);z-index:999999;display:flex;align-items:center;justify-content:center;" onclick="if(event.target===this){window.dcCloseBulkPoModal();}">
-                <div style="background:#fff;border-radius:16px;box-shadow:0 25px 60px rgba(0,0,0,0.25);width:100%;max-width:420px;padding:32px;position:relative;">
-                    <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:20px;">
+                <div style="background:#fff;border-radius:16px;box-shadow:0 25px 60px rgba(0,0,0,0.25);width:100%;max-width:440px;padding:28px;position:relative;">
+                    <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:18px;">
                         <div>
-                            <p style="font-size:17px;font-weight:900;color:#1e2530;letter-spacing:-0.3px;">Bulk PO Update</p>
-                            <p style="font-size:11px;color:#64748b;font-weight:600;margin-top:3px;">${window.dcBulkSelected ? window.dcBulkSelected.size : 0} item${(window.dcBulkSelected && window.dcBulkSelected.size===1)?'':'s'} selected</p>
+                            <p style="font-size:17px;font-weight:900;color:#1e2530;letter-spacing:-0.3px;">Bulk Item Update</p>
+                            <p style="font-size:11px;color:#64748b;font-weight:600;margin-top:2px;">${window.dcBulkSelected ? window.dcBulkSelected.size : 0} item${(window.dcBulkSelected && window.dcBulkSelected.size===1)?'':'s'} selected</p>
                         </div>
                         <button onclick="window.dcCloseBulkPoModal()" style="color:#94a3b8;padding:4px;border-radius:6px;background:none;border:none;cursor:pointer;" title="Cancel"><i data-lucide="x" style="width:18px;height:18px;"></i></button>
                     </div>
-                    <div style="display:flex;flex-direction:column;gap:14px;">
-                        <div>
-                            <label style="display:block;font-size:10px;font-weight:900;text-transform:uppercase;letter-spacing:.08em;color:#64748b;margin-bottom:6px;">PO Number</label>
-                            <input id="bulk-po-number" type="text" placeholder="e.g. PO-2026-0042" onkeydown="if(event.key==='Enter'){event.preventDefault();window.dcApplyBulkPo();}" style="width:100%;font-size:13px;padding:10px 12px;border:1.5px solid #cbd5e1;border-radius:8px;outline:none;font-weight:600;color:#1e2530;box-sizing:border-box;" />
+                    <div style="display:flex;flex-direction:column;gap:12px;">
+                        <div style="display:grid;grid-template-columns:1fr 1fr;gap:10px;">
+                            <div>
+                                <label style="display:block;font-size:10px;font-weight:900;text-transform:uppercase;letter-spacing:.08em;color:#64748b;margin-bottom:4px;">PO Number</label>
+                                <input id="bulk-po-number" type="text" placeholder="e.g. PO-2026-0042" style="width:100%;font-size:12px;padding:8px 10px;border:1.5px solid #cbd5e1;border-radius:8px;outline:none;font-weight:600;color:#1e2530;box-sizing:border-box;" />
+                            </div>
+                            <div>
+                                <label style="display:block;font-size:10px;font-weight:900;text-transform:uppercase;letter-spacing:.08em;color:#64748b;margin-bottom:4px;">PO Date</label>
+                                <input id="bulk-po-date" type="date" style="width:100%;font-size:12px;padding:8px 10px;border:1.5px solid #cbd5e1;border-radius:8px;outline:none;font-weight:600;color:#1e2530;box-sizing:border-box;" />
+                            </div>
                         </div>
                         <div>
-                            <label style="display:block;font-size:10px;font-weight:900;text-transform:uppercase;letter-spacing:.08em;color:#64748b;margin-bottom:6px;">PO Date</label>
-                            <input id="bulk-po-date" type="date" onkeydown="if(event.key==='Enter'){event.preventDefault();window.dcApplyBulkPo();}" style="width:100%;font-size:13px;padding:10px 12px;border:1.5px solid #cbd5e1;border-radius:8px;outline:none;font-weight:600;color:#1e2530;box-sizing:border-box;" />
+                            <label style="display:block;font-size:10px;font-weight:900;text-transform:uppercase;letter-spacing:.08em;color:#64748b;margin-bottom:4px;">Item Status</label>
+                            <select id="bulk-item-status" style="width:100%;font-size:12px;padding:8px 10px;border:1.5px solid #cbd5e1;border-radius:8px;outline:none;font-weight:600;color:#1e2530;box-sizing:border-box;background:#fff;">
+                                <option value="">-- Do Not Change Status --</option>
+                                <option value="PO_GIVEN">PO Given</option>
+                                <option value="ONLY_RECEIVED">Only Received</option>
+                                <option value="CLOSED">Received (Closed)</option>
+                                <option value="PARTIAL">Partial Received</option>
+                                <option value="HOLD">Hold</option>
+                                <option value="CANCELLED">Cancelled</option>
+                            </select>
+                        </div>
+                        <div>
+                            <label style="display:block;font-size:10px;font-weight:900;text-transform:uppercase;letter-spacing:.08em;color:#64748b;margin-bottom:4px;">Material Received Date</label>
+                            <input id="bulk-received-date" type="date" style="width:100%;font-size:12px;padding:8px 10px;border:1.5px solid #cbd5e1;border-radius:8px;outline:none;font-weight:600;color:#1e2530;box-sizing:border-box;" />
                         </div>
                     </div>
-                    <div style="display:flex;gap:10px;margin-top:24px;">
-                        <button onclick="window.dcApplyBulkPo()" style="flex:1;background:#B3122E;color:#fff;border:none;padding:12px 20px;border-radius:10px;font-size:11px;font-weight:900;text-transform:uppercase;letter-spacing:.08em;cursor:pointer;">Apply</button>
-                        <button onclick="window.dcCloseBulkPoModal()" style="flex:0 0 auto;background:#f1f5f9;color:#475569;border:none;padding:12px 20px;border-radius:10px;font-size:11px;font-weight:900;text-transform:uppercase;letter-spacing:.08em;cursor:pointer;">Cancel</button>
+                    <div style="display:flex;gap:10px;margin-top:20px;">
+                        <button onclick="window.dcApplyBulkPo()" style="flex:1;background:#B3122E;color:#fff;border:none;padding:10px 18px;border-radius:10px;font-size:11px;font-weight:900;text-transform:uppercase;letter-spacing:.08em;cursor:pointer;">Apply Bulk Changes</button>
+                        <button onclick="window.dcCloseBulkPoModal()" style="flex:0 0 auto;background:#f1f5f9;color:#475569;border:none;padding:10px 18px;border-radius:10px;font-size:11px;font-weight:900;text-transform:uppercase;letter-spacing:.08em;cursor:pointer;">Cancel</button>
                     </div>
                 </div>
             </div>
@@ -8471,21 +8489,20 @@ function renderMrRow(item, idx, xlInputCss) {
 
         const poNumEl = document.getElementById('bulk-po-number');
         const poDateEl = document.getElementById('bulk-po-date');
+        const statusEl = document.getElementById('bulk-item-status');
+        const recDateEl = document.getElementById('bulk-received-date');
+
         const poNumber = (poNumEl ? poNumEl.value : '').trim();
         const poDate   = (poDateEl ? poDateEl.value : '').trim();
+        const itemStatus = (statusEl ? statusEl.value : '').trim();
+        const recDate = (recDateEl ? recDateEl.value : '').trim();
 
-        console.log('[Bulk PO] PO Number:', poNumber);
-        console.log('[Bulk PO] PO Date:', poDate);
-
-        if (!poNumber && !poDate) {
-            console.warn('[Bulk PO] Neither PO Number nor PO Date provided');
-            showToast('Please enter a PO Number or PO Date.');
+        if (!poNumber && !poDate && !itemStatus && !recDate) {
+            showToast('Please enter PO details, Item Status, or Material Received Date.');
             return;
         }
 
         const count = selectedKeys.length;
-        console.log('[Bulk PO] Bulk update started for', count, 'records');
-
         let updatedCount = 0;
         try {
             try {
@@ -8501,28 +8518,38 @@ function renderMrRow(item, idx, xlInputCss) {
                 var mrId    = parts[0];
                 var itemIdx = parseInt(parts[1], 10);
                 var mr = (appData.mrs || []).find(function(m) { return m.id === mrId; });
-                if (!mr || !mr.items || !mr.items[itemIdx]) {
-                    console.warn('[Bulk PO] Could not find item for key:', key, 'mrId:', mrId, 'itemIdx:', itemIdx);
-                    return;
-                }
+                if (!mr || !mr.items || !mr.items[itemIdx]) return;
+
                 var item = mr.items[itemIdx];
                 var oldPoNo   = item.poNumber || '';
                 var oldPoDate = item.poDate || '';
+                var oldStatus = item.status || '';
 
                 if (poNumber) item.poNumber = poNumber;
                 if (poDate)   item.poDate   = poDate;
-                
-                // Auto-advance status if both PO Number and PO Date exist
-                if (typeof window.checkAutoPoGiven === 'function') {
-                    window.checkAutoPoGiven(mr, item);
-                } else if (typeof checkAutoPoGiven === 'function') {
-                    checkAutoPoGiven(mr, item);
+
+                if (itemStatus) {
+                    item.status = itemStatus;
+                    if ((itemStatus === 'ONLY_RECEIVED' || itemStatus === 'CLOSED') && (!item.receivedQty || Number(item.receivedQty) < Number(item.qty))) {
+                        item.receivedQty = Number(item.qty) || 0;
+                    }
                 }
-                
+
+                if (recDate) {
+                    item.materialReceivedDate = recDate;
+                } else if ((itemStatus === 'ONLY_RECEIVED' || itemStatus === 'CLOSED') && !item.materialReceivedDate) {
+                    item.materialReceivedDate = new Date().toISOString().split('T')[0];
+                }
+
+                // Auto-advance status if both PO Number and PO Date exist and status wasn't manually overridden
+                if (!itemStatus && (typeof window.checkAutoPoGiven === 'function')) {
+                    window.checkAutoPoGiven(mr, item);
+                }
+
                 mr.history = mr.history || [];
                 mr.history.push({
-                    action: 'Bulk PO Update', actor: user.name, role: user.role, dept: user.dept, ts: Date.now(),
-                    field: 'poNumber/poDate', oldValue: `${oldPoNo || '—'} / ${oldPoDate || '—'}`, newValue: `${item.poNumber || '—'} / ${item.poDate || '—'}`,
+                    action: 'Bulk Item Update', actor: user.name, role: user.role, dept: user.dept, ts: Date.now(),
+                    field: 'bulkUpdate', oldValue: `${oldStatus} / ${oldPoNo}`, newValue: `${item.status} / ${item.poNumber || oldPoNo}`,
                     note: `${esc(item.name || 'Item')} — Bulk updated.`
                 });
                 modifiedMrs.add(mr);
