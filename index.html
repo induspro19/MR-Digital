@@ -4394,26 +4394,24 @@
         const maxTrendVal = Math.max(1, ...monthlyTrendKeys.flatMap(k => [monthlyTrendMap[k].accepted, monthlyTrendMap[k].po, monthlyTrendMap[k].received]));
 
         return `
-        <div class="space-y-8 fade-in">
-            <!-- Header Banner -->
-            <div class="flex items-center justify-between flex-wrap gap-4 bg-white border border-rule rounded-2xl p-6 shadow-sm">
-                <div>
-                    <div class="flex items-center gap-3">
-                        <div class="w-10 h-10 bg-brand/10 text-brand rounded-xl flex items-center justify-center font-bold">
-                            <i data-lucide="layout-dashboard" class="w-5 h-5"></i>
-                        </div>
-                        <div>
-                            <h2 class="text-2xl font-display font-bold tracking-tight text-ink">Enterprise Procurement Dashboard</h2>
-                            <p class="text-xs text-slate-500 mt-0.5">Welcome back, ${esc(user.name.split(' ')[0])} · Real-time operational funnel & priority task suite</p>
-                        </div>
+        <div class="space-y-4 fade-in">
+            <!-- Header Banner (Ultra Compact) -->
+            <div class="flex items-center justify-between flex-wrap gap-3 bg-white border border-rule rounded-xl px-4 py-2.5 shadow-xs">
+                <div class="flex items-center gap-2.5">
+                    <div class="w-7 h-7 bg-brand/10 text-brand rounded-lg flex items-center justify-center font-bold shrink-0">
+                        <i data-lucide="layout-dashboard" class="w-4 h-4"></i>
+                    </div>
+                    <div class="flex items-center gap-2">
+                        <h2 class="text-base font-display font-bold tracking-tight text-ink">Enterprise Procurement Dashboard</h2>
+                        <span class="text-[10px] text-slate-400 font-semibold">• Real-time operational funnel</span>
                     </div>
                 </div>
-                <div class="flex items-center gap-3">
-                    <button onclick="window.navigate('proc_inbox')" class="text-xs font-bold uppercase tracking-wider bg-brand text-white px-4 py-2.5 rounded-xl hover:bg-brand-dark transition-all flex items-center gap-2 shadow-sm">
-                        <i data-lucide="inbox" class="w-4 h-4"></i> Procurement Inbox (${newPrs})
+                <div class="flex items-center gap-2">
+                    <button onclick="window.navigate('proc_inbox')" class="text-[10px] font-bold uppercase tracking-wider bg-brand text-white px-3 py-1.5 rounded-lg hover:bg-brand-dark transition-all flex items-center gap-1.5 shadow-xs">
+                        <i data-lucide="inbox" class="w-3.5 h-3.5"></i> Procurement Inbox (${newPrs})
                     </button>
-                    <button onclick="window.navigate('data_centre')" class="text-xs font-bold uppercase tracking-wider bg-emerald-600 text-white px-4 py-2.5 rounded-xl hover:bg-emerald-700 transition-all flex items-center gap-2 shadow-sm">
-                        <i data-lucide="database" class="w-4 h-4"></i> Data Centre
+                    <button onclick="window.navigate('data_centre')" class="text-[10px] font-bold uppercase tracking-wider bg-emerald-600 text-white px-3 py-1.5 rounded-lg hover:bg-emerald-700 transition-all flex items-center gap-1.5 shadow-xs">
+                        <i data-lucide="database" class="w-3.5 h-3.5"></i> Data Centre
                     </button>
                 </div>
             </div>
