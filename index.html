@@ -4641,18 +4641,40 @@
                             <span class="flex items-center gap-1"><span class="w-2 h-2 rounded-full bg-emerald-500"></span> Rec'd</span>
                         </div>
                     </div>
-                    <div class="grid grid-cols-6 gap-2 items-end h-40 pt-4 border-b border-rule pb-2">
+                    <div class="grid grid-cols-6 gap-2 items-end h-44 pt-6 border-b border-rule pb-2">
                         ${monthlyTrendKeys.map(k => {
                             const d = monthlyTrendMap[k];
-                            const accH = Math.round((d.accepted / maxTrendVal) * 100);
-                            const poH = Math.round((d.po / maxTrendVal) * 100);
-                            const recH = Math.round((d.received / maxTrendVal) * 100);
+                            const accH = Math.max(d.accepted > 0 ? 8 : 0, Math.round((d.accepted / maxTrendVal) * 100));
+                            const poH = Math.max(d.po > 0 ? 8 : 0, Math.round((d.po / maxTrendVal) * 100));
+                            const recH = Math.max(d.received > 0 ? 8 : 0, Math.round((d.received / maxTrendVal) * 100));
+
+                            const getTagStyle = (val) => {
+                                const len = String(val).length;
+                                let fontSize = '8px';
+                                if (len >= 6) fontSize = '5.5px';
+                                else if (len >= 5) fontSize = '6.5px';
+                                else if (len >= 4) fontSize = '7px';
+                                return `font-size:${fontSize}; font-weight:900; line-height:1; white-space:nowrap; cursor:default;`;
+                            };
+
                             return `
                             <div class="flex flex-col items-center gap-1 h-full justify-end">
-                                <div class="flex items-end gap-1 w-full justify-center h-28">
-                                    <div class="w-2 bg-blue-500 rounded-t-sm transition-all" style="height:${accH}%;" title="Accepted: ${d.accepted}"></div>
-                                    <div class="w-2 bg-cyan-500 rounded-t-sm transition-all" style="height:${poH}%;" title="PO Issued: ${d.po}"></div>
-                                    <div class="w-2 bg-emerald-500 rounded-t-sm transition-all" style="height:${recH}%;" title="Received: ${d.received}"></div>
+                                <div class="flex items-end gap-1.5 w-full justify-center h-32">
+                                    <!-- Accepted Bar + Tag -->
+                                    <div class="flex flex-col items-center justify-end h-full w-3 relative group/bar">
+                                        ${d.accepted > 0 ? `<span style="${getTagStyle(d.accepted)}" class="text-blue-600 mb-0.5 tracking-tighter" title="Accepted: ${d.accepted}">${d.accepted}</span>` : ''}
+                                        <div class="w-full bg-blue-500 rounded-t-sm transition-all shadow-xs group-hover/bar:bg-blue-600" style="height:${accH}%; min-height:${d.accepted>0?4:0}px;" title="Accepted: ${d.accepted}"></div>
+                                    </div>
+                                    <!-- PO Bar + Tag -->
+                                    <div class="flex flex-col items-center justify-end h-full w-3 relative group/bar">
+                                        ${d.po > 0 ? `<span style="${getTagStyle(d.po)}" class="text-cyan-600 mb-0.5 tracking-tighter" title="PO Issued: ${d.po}">${d.po}</span>` : ''}
+                                        <div class="w-full bg-cyan-500 rounded-t-sm transition-all shadow-xs group-hover/bar:bg-cyan-600" style="height:${poH}%; min-height:${d.po>0?4:0}px;" title="PO Issued: ${d.po}"></div>
+                                    </div>
+                                    <!-- Received Bar + Tag -->
+                                    <div class="flex flex-col items-center justify-end h-full w-3 relative group/bar">
+                                        ${d.received > 0 ? `<span style="${getTagStyle(d.received)}" class="text-emerald-600 mb-0.5 tracking-tighter" title="Received: ${d.received}">${d.received}</span>` : ''}
+                                        <div class="w-full bg-emerald-500 rounded-t-sm transition-all shadow-xs group-hover/bar:bg-emerald-600" style="height:${recH}%; min-height:${d.received>0?4:0}px;" title="Received: ${d.received}"></div>
+                                    </div>
                                 </div>
                                 <span class="text-[10px] font-bold text-slate-500 uppercase mt-1">${d.label}</span>
                             </div>`;
