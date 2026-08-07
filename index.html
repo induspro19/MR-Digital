@@ -928,14 +928,15 @@
                 DC_COLUMNS.forEach(c => { if (!cleaned.includes(c.key)) cleaned.push(c.key); });
                 dcColOrder = cleaned;
             }
-            if (layout.widths && typeof layout.widths === 'object') dcColWidths = layout.widths;
+            // dcColWidths intentionally NOT restored — column widths always reset to defaults on load.
             if (Array.isArray(layout.hidden)) dcHidden = new Set(layout.hidden.filter(k => validKeys.has(k) && !DC_FROZEN_KEYS.includes(k)));
         } catch(e) {}
     }
     function saveDcLayout() {
         try {
+            // widths are session-only — not persisted so they always reset to defaults on reload
             localStorage.setItem(DC_LAYOUT_KEY, JSON.stringify({
-                order: dcColOrder, widths: dcColWidths, hidden: Array.from(dcHidden)
+                order: dcColOrder, hidden: Array.from(dcHidden)
             }));
         } catch(e) {}
     }
@@ -1983,6 +1984,8 @@
             return;
         }
         activeTab = tab;
+        // Reset column widths to defaults on every section navigation so dragged-off columns always recover
+        if (tab !== 'data_centre') dcColWidths = {};
         if (tab === 'new_mr') {
             isDirectPR = false;
             currentEditRevisionId = null;
@@ -7822,7 +7825,7 @@ function renderMrRow(item, idx, xlInputCss) {
         const onUp = () => {
             document.removeEventListener('mousemove', onMove);
             document.removeEventListener('mouseup', onUp);
-            saveDcLayout();
+            // widths are session-only — no saveDcLayout() call here
             render();
         };
         document.addEventListener('mousemove', onMove);
