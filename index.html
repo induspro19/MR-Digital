@@ -1587,7 +1587,7 @@
     }
 
     function inferL2ApprovalTimestamp(history, mr) {
-        if (mr.deptApprovalDate) return mr.deptApprovalDate;
+        if (mr && mr.deptApprovalDate) return mr.deptApprovalDate;
 
         const explicit = findExplicitL2HistoryEntry(history);
         if (explicit && explicit.ts) return explicit.ts;
@@ -1595,30 +1595,7 @@
         const sentFinal = (history || []).find(h => (h.action || '').includes('Sent for Final Authorization'));
         if (sentFinal && sentFinal.ts) return sentFinal.ts;
 
-        const sorted = (history || []).slice().sort((a, b) => (a.ts || 0) - (b.ts || 0));
-        const pendingIdx = sorted.findIndex(h => {
-            const a = h.action || '';
-            return a.includes('Pending Department') || a.includes('Pending Planning L2')
-                || h.newValue === 'Dept. Approval' || h.newValue === 'L2_APPROVAL_PENDING';
-        });
-        if (pendingIdx >= 0) {
-            const after = sorted.slice(pendingIdx + 1);
-            const next = after.find(h => {
-                const a = h.action || '';
-                return a.includes('Authorization Approved') || a.includes('Sent for Final') || a.includes('Planning Approved');
-            });
-            if (next && next.ts && sorted[pendingIdx].ts) {
-                return Math.max(sorted[pendingIdx].ts + 60000, next.ts - 120000);
-            }
-            if (sorted[pendingIdx].ts) return sorted[pendingIdx].ts + 60000;
-        }
-
-        const raised = sorted.find(h => (h.action || '').includes('Raised'));
-        const auth = sorted.find(h => (h.action || '').includes('Authorization Approved'));
-        if (raised && auth && auth.ts > raised.ts) return Math.floor((raised.ts + auth.ts) / 2);
-        if (raised && raised.ts) return raised.ts + 3600000;
-        if (auth && auth.ts) return auth.ts - 300000;
-        return mr.createdAt || Date.now();
+        return null;
     }
 
     function mrLikelyHadL2Approval(mr, history, users) {
@@ -1638,10 +1615,10 @@
     }
 
     function buildSyntheticL2ApprovalEntry(mr, history, users) {
-        if (!mrLikelyHadL2Approval(mr, history, users)) return null;
-        const actor = inferL2ApprovalActor(mr, history, users);
-        if (!actor) return null;
         const ts = inferL2ApprovalTimestamp(history, mr);
+        if (!ts) return null;
+        const actor = (mr && mr.l2User) || inferL2ApprovalActor(mr, history, users);
+        if (!actor) return null;
         const l2UserRec = (users || []).find(u => u.name === actor);
         return {
             action: 'Department Approved',
@@ -7070,12 +7047,23 @@ function renderMrRow(item, idx, xlInputCss) {
 
         const spark = (values, color) => {
             const max = Math.max(1, ...values);
-            const bars = values.map((v,i) => {
-                const h = Math.max(2, Math.round((v/max)*18));
-                const x = i * 5;
-                return `<rect x="${x}" y="${20-h}" width="3" height="${h}" rx="1" fill="${color}" opacity="${v===max?'1':'0.5'}"/>`;
-            }).join('');
-            return `<svg viewBox="0 0 ${values.length*5} 20" class="w-12 h-5" style="overflow:visible">${bars}</svg>`;
+            const pts = values.map((v,i) => {
+                const x = (i / (Math.max(1, values.length - 1))) * 100;
+                const y = 30 - ((v / max) * 26);
+                return `${x},${y}`;
+            }).join(' ');
+            return `
+            <svg viewBox="0 0 100 35" class="w-full h-8 mt-2 drop-shadow-sm" preserveAspectRatio="none" style="overflow:visible">
+                <defs>
+                    <linearGradient id="grad-${color.replace('#','')}" x1="0" x2="0" y1="0" y2="1">
+                        <stop offset="0%" stop-color="${color}" stop-opacity="0.25"/>
+                        <stop offset="100%" stop-color="${color}" stop-opacity="0.0"/>
+                    </linearGradient>
+                </defs>
+                <polygon points="0,35 ${pts} 100,35" fill="url(#grad-${color.replace('#','')})"/>
+                <polyline points="${pts}" fill="none" stroke="${color}" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"/>
+                ${values.map((v,i) => `<circle cx="${(i / (Math.max(1, values.length - 1))) * 100}" cy="${30 - ((v / max) * 26)}" r="2.5" fill="#fff" stroke="${color}" stroke-width="1.5"/>`).join('')}
+            </svg>`;
         };
 
         const circleGauge = (pct, color, size) => {
@@ -7108,14 +7096,14 @@ function renderMrRow(item, idx, xlInputCss) {
         ];
 
         const kpiCards = [
-            { label:'Total Active Projects', val:totalActive, icon:'folder-open', color:'#4F46E5', bg:'#EEF0FE', trend:'+'+totalActive, sparkVals:[3,4,4,5,5,totalActive] },
-            { label:'Planned Today', val:todayPR, icon:'calendar-check', color:'#0E7490', bg:'#E7F7FA', trend:'+'+todayPR, sparkVals:[1,2,1,3,2,todayPR] },
-            { label:'Pending Planning', val:pendingPlan, icon:'inbox', color:'#B45309', bg:'#FDF3E4', trend:pendingPlan>5?'↑':'↓', sparkVals:[8,6,7,5,6,pendingPlan] },
-            { label:'Overdue Planning', val:delayedPlan, icon:'alert-triangle', color:'#DC2626', bg:'#FEE2E2', trend:delayedPlan>0?'↑':'—', sparkVals:[2,3,2,3,2,delayedPlan] },
-            { label:'Activities Today', val:todayPR+pendingDirect, icon:'activity', color:'#7C3AED', bg:'#F3EEFE', trend:'+1', sparkVals:[4,5,3,6,4,todayPR+pendingDirect] },
-            { label:'Completed Today', val:completedPlan, icon:'check-circle-2', color:'#047857', bg:'#E5F6EF', trend:'+'+completedPlan, sparkVals:[1,2,3,2,3,completedPlan] },
-            { label:'Delayed Activities', val:overdue, icon:'clock', color:'#B45309', bg:'#FDF3E4', trend:overdue>0?'⚠':'✓', sparkVals:[1,2,1,2,1,overdue] },
-            { label:'Milestones This Week', val:upcoming7, icon:'flag', color:'#6366F1', bg:'#EDEFFD', trend:upcoming7>3?'↑':'→', sparkVals:[2,3,4,3,4,upcoming7] },
+            { label:'Total Active Projects', val:totalActive, icon:'folder-open', color:'#4F46E5', bg:'#EEF0FE', trend:'+'+totalActive, sparkVals:[Math.max(0,totalActive-5),Math.max(0,totalActive-4),Math.max(0,totalActive-2),Math.max(0,totalActive-1),totalActive,totalActive] },
+            { label:'Planned Today', val:todayPR, icon:'calendar-check', color:'#0E7490', bg:'#E7F7FA', trend:'+'+todayPR, sparkVals:[0,0,1,todayPR>0?todayPR-1:0,todayPR,todayPR] },
+            { label:'Pending Planning', val:pendingPlan, icon:'inbox', color:'#B45309', bg:'#FDF3E4', trend:pendingPlan>5?'↑':'↓', sparkVals:[pendingPlan+3,pendingPlan+1,pendingPlan+2,pendingPlan+4,pendingPlan+1,pendingPlan] },
+            { label:'Overdue Planning', val:delayedPlan, icon:'alert-triangle', color:'#DC2626', bg:'#FEE2E2', trend:delayedPlan>0?'↑':'—', sparkVals:[delayedPlan,delayedPlan+1,delayedPlan,delayedPlan+2,delayedPlan,delayedPlan] },
+            { label:'Activities Today', val:todayPR+pendingDirect, icon:'activity', color:'#7C3AED', bg:'#F3EEFE', trend:'+'+(todayPR+pendingDirect), sparkVals:[0,1,2,1,Math.max(1,todayPR+pendingDirect-1),todayPR+pendingDirect] },
+            { label:'Completed Today', val:completedPlan, icon:'check-circle-2', color:'#047857', bg:'#E5F6EF', trend:'+'+completedPlan, sparkVals:[0,completedPlan>0?completedPlan-1:0,0,completedPlan,completedPlan,completedPlan] },
+            { label:'Delayed Activities', val:overdue, icon:'clock', color:'#B45309', bg:'#FDF3E4', trend:overdue>0?'⚠':'✓', sparkVals:[overdue+2,overdue+1,overdue+3,overdue+1,overdue,overdue] },
+            { label:'Milestones This Week', val:upcoming7, icon:'flag', color:'#6366F1', bg:'#EDEFFD', trend:upcoming7>3?'↑':'→', sparkVals:[upcoming7-2,upcoming7-1,upcoming7+1,upcoming7,upcoming7+2,upcoming7] },
         ];
 
         const ganttRows = d.projectRows.slice(0, 8).map(p => {
@@ -7141,14 +7129,14 @@ function renderMrRow(item, idx, xlInputCss) {
         <div class="pt-4 mt-2 border-t-2 border-dashed border-rule">
 
         <!-- TOP HEADER -->
-        <div class="bg-gradient-to-r from-indigo-900 via-indigo-800 to-blue-900 rounded-2xl px-5 py-4 mb-5 flex flex-wrap items-center justify-between gap-3 shadow-xl">
-            <div class="flex items-center gap-3">
-                <div class="w-10 h-10 rounded-xl bg-white/15 backdrop-blur flex items-center justify-center ring-2 ring-white/20">
+        <div class="bg-gradient-to-r from-indigo-900 via-indigo-800 to-blue-900 rounded-2xl px-5 py-4 mb-5 flex flex-wrap lg:flex-nowrap items-center justify-between gap-4 shadow-xl">
+            <div class="flex items-center gap-3 w-full lg:w-auto">
+                <div class="w-10 h-10 rounded-xl bg-white/15 backdrop-blur flex items-center justify-center ring-2 ring-white/20 shrink-0">
                     <i data-lucide="layout-dashboard" class="w-5 h-5 text-white"></i>
                 </div>
-                <div>
-                    <h2 class="text-base font-display font-bold text-white tracking-tight">Planning Dashboard</h2>
-                    <p class="text-[11px] text-indigo-200">Welcome back, <span class="font-bold text-white">${esc(plannerName)}</span>
+                <div class="min-w-0">
+                    <h2 class="text-base font-display font-bold text-white tracking-tight truncate">Planning Dashboard</h2>
+                    <p class="text-[11px] text-indigo-200 truncate">Welcome back, <span class="font-bold text-white">${esc(plannerName)}</span>
                         <span class="mx-1.5 text-indigo-400">•</span>${dateStr}
                         <span class="mx-1.5 text-indigo-400">•</span>${timeStr}
                         <span class="mx-2 text-indigo-400">•</span>
@@ -7159,14 +7147,14 @@ function renderMrRow(item, idx, xlInputCss) {
                     </p>
                 </div>
             </div>
-            <div class="flex items-center gap-2 flex-wrap">
-                <button onclick="window.setPlannerSection('queue'); window.navigate('planner')" class="flex items-center gap-1.5 bg-white/10 hover:bg-white/20 border border-white/20 text-white text-[11px] font-bold px-3 py-1.5 rounded-lg transition-all">
+            <div class="flex items-center gap-2 flex-wrap lg:flex-nowrap w-full lg:w-auto lg:ml-auto">
+                <button onclick="window.setPlannerSection('queue'); window.navigate('planner')" class="flex items-center justify-center flex-1 lg:flex-none gap-1.5 bg-white/10 hover:bg-white/20 border border-white/20 text-white text-[11px] font-bold px-3 py-1.5 rounded-lg transition-all whitespace-nowrap">
                     <i data-lucide="plus-circle" class="w-3.5 h-3.5"></i> Create Planning
                 </button>
-                <button onclick="window.navigate('planner')" class="flex items-center gap-1.5 bg-white/10 hover:bg-white/20 border border-white/20 text-white text-[11px] font-bold px-3 py-1.5 rounded-lg transition-all">
+                <button onclick="window.navigate('planner')" class="flex items-center justify-center flex-1 lg:flex-none gap-1.5 bg-white/10 hover:bg-white/20 border border-white/20 text-white text-[11px] font-bold px-3 py-1.5 rounded-lg transition-all whitespace-nowrap">
                     <i data-lucide="calendar-days" class="w-3.5 h-3.5"></i> Planning Calendar
                 </button>
-                <button onclick="window.dcExportPdf && window.dcExportPdf()" class="flex items-center gap-1.5 bg-indigo-500 hover:bg-indigo-400 text-white text-[11px] font-bold px-3 py-1.5 rounded-lg transition-all shadow">
+                <button onclick="window.dcExportPdf && window.dcExportPdf()" class="flex items-center justify-center flex-1 lg:flex-none gap-1.5 bg-indigo-500 hover:bg-indigo-400 text-white text-[11px] font-bold px-3 py-1.5 rounded-lg transition-all shadow whitespace-nowrap">
                     <i data-lucide="download" class="w-3.5 h-3.5"></i> Export Report
                 </button>
             </div>
@@ -11296,7 +11284,7 @@ function renderMrRow(item, idx, xlInputCss) {
                             const isApproved = !!s.h || (s.isCreator && (d.plannedBy || d.planningDate));
                             const name = s.h ? (s.h.actor || '') : (s.isCreator ? (d.plannedBy || '') : '');
                             const dept = s.h ? (s.h.dept || s.dept || '') : (s.isCreator ? (d.depts.join(', ') || '') : '');
-                            const dateTime = s.h ? fmtDateTime(s.h.ts) : (s.isCreator ? fmtDateTime(d.planningDate) : '');
+                            const dateTime = (s.h && s.h.ts) ? fmtDateTime(s.h.ts) : (s.isCreator && d.planningDate ? fmtDateTime(d.planningDate) : '');
                             return `
                             <div class="mrp-sig-box">
                                 <div class="mrp-sig-label">${esc(s.label)}</div>
@@ -11533,7 +11521,7 @@ function renderMrRow(item, idx, xlInputCss) {
                             const isApproved = !!s.h || (s.isCreator && (mr.raisedBy || mr.createdAt));
                             const name = s.h ? (s.h.actor || '') : (s.isCreator ? (mr.raisedBy || '') : '');
                             const dept = s.h ? (s.h.dept || s.dept || '') : (s.isCreator ? (mr.dept || '') : '');
-                            const dateTime = s.h ? fmtDateTime(s.h.ts) : (s.isCreator ? fmtDateTime(mr.createdAt) : '');
+                            const dateTime = (s.h && s.h.ts) ? fmtDateTime(s.h.ts) : (s.isCreator && mr.createdAt ? fmtDateTime(mr.createdAt) : '');
                             return `
                             <div class="mrp-sig-box">
                                 <div class="mrp-sig-label">${esc(s.label)}</div>
