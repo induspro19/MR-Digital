@@ -4167,7 +4167,7 @@
                     <div class="flex-1 p-8">
                         <div class="flex justify-between items-start mb-6">
                             <div>
-                                <p class="text-2xl font-display font-bold text-brand tracking-tight font-mono">${esc(m.mrNumber)}</p>
+                                <p class="text-2xl font-display font-bold text-brand tracking-tight font-mono">${esc(m.prNumber || m.mrNumber)}</p>
                                 <p class="text-xs text-slate-400 mt-1">${esc(m.dept)} · ${fmtDate(m.createdAt)} · By ${esc(m.raisedBy)}${m.source === 'DIRECT_PR' ? ' · <span class="text-violet-600 font-black uppercase">Direct PR</span>' : ' (L1)'}</p>
                             </div>
                             <div class="flex items-center">${renderStatusBadge(m.status)}</div>
@@ -5203,7 +5203,7 @@
                       <tr class="text-xs font-bold hover:bg-paper/60">
                           <td class="px-6 py-4">
                               <div class="flex flex-col gap-1 items-start">
-                                  ${m.mrNumber ? `<span class="idx-chip text-brand">${esc(m.mrNumber)}</span>` : ''}
+                                  ${m.mrNumber ? `<span class="idx-chip text-brand">${esc(m.prNumber || m.mrNumber)}</span>` : ''}
                                   ${m.prNumber ? `<span class="idx-chip text-[#0E7490]">${esc(m.prNumber)}</span>` : ''}
                                   ${!m.mrNumber && !m.prNumber ? `<span class="text-slate-400">—</span>` : ''}
                               </div>
@@ -5809,7 +5809,7 @@ function renderMrRow(item, idx, xlInputCss) {
                       <tr class="text-xs font-bold hover:bg-paper/60">
                           <td class="px-6 py-4">
                               <div class="flex flex-col gap-1 items-start">
-                                  ${m.mrNumber ? `<span class="idx-chip text-brand">${esc(m.mrNumber)}</span>` : ''}
+                                  ${m.mrNumber ? `<span class="idx-chip text-brand">${esc(m.prNumber || m.mrNumber)}</span>` : ''}
                                   ${m.prNumber ? `<span class="idx-chip text-[#0E7490]">${esc(m.prNumber)}</span>` : ''}
                                   ${!m.mrNumber && !m.prNumber ? `<span class="text-slate-400">—</span>` : ''}
                               </div>
@@ -6022,7 +6022,7 @@ function renderMrRow(item, idx, xlInputCss) {
                         <div class="flex justify-between items-start mb-6">
                             <div>
                                 <p class="text-2xl font-display font-bold text-brand tracking-tight font-mono">
-                                    ${esc(m.mrNumber)}
+                                    ${esc(m.prNumber || m.mrNumber)}
                                     ${(m.history && m.history.length > 0 && typeof m.history[m.history.length - 1].action === 'string' && m.history[m.history.length - 1].action.startsWith('Revised & Resubmitted')) ? '<span class="ml-3 inline-block px-2.5 py-1 bg-amberx text-white text-[10px] uppercase font-black rounded-lg shadow-sm align-middle mb-1 border border-amberx-dark/30">Resubmitted</span>' : ''}
                                 </p>
                                 <p class="text-xs text-slate-400 mt-1">${esc(m.dept)} · ${fmtDate(m.createdAt)} · By ${esc(m.raisedBy)}${m.source === 'DIRECT_PR' ? ' · <span class="text-violet-600 font-black uppercase">Direct PR</span>' : ' (L1)'}</p>
