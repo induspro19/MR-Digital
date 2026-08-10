@@ -6827,11 +6827,8 @@ function renderMrRow(item, idx, xlInputCss) {
         if (!appData.settings) appData.settings = {};
         appData.settings.pcbProjects = pcbState.projects.slice();
         saveDB();
-        const dd = document.getElementById('pcb-proj-dd');
-        if (dd) {
-            const clearCb = dd.querySelector('input[type="checkbox"][onchange*="setPcbProjects"]');
-            if (clearCb) clearCb.checked = (pcbState.projects.length === 0);
-        }
+        window.pcbProjectDropdownOpen = false;
+        render();
     };
     window.setPcbProjects = (arr) => {
         pcbState.projects = arr;
@@ -6839,12 +6836,8 @@ function renderMrRow(item, idx, xlInputCss) {
         if (!appData.settings) appData.settings = {};
         appData.settings.pcbProjects = arr.slice();
         saveDB();
-        const dd = document.getElementById('pcb-proj-dd');
-        if (dd) {
-            dd.querySelectorAll('input[type="checkbox"]').forEach(cb => cb.checked = false);
-            const clearCb = dd.querySelector('input[type="checkbox"][onchange*="setPcbProjects"]');
-            if (clearCb && arr.length === 0) clearCb.checked = true;
-        }
+        window.pcbProjectDropdownOpen = false;
+        render();
     };
     window.setPcbChartType = (which, type) => { pcbChartTypes[which] = type; window.renderPcbCharts(); };
 
