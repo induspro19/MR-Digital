@@ -325,7 +325,7 @@
     const POST_PO_STATUSES = ["PROCUREMENT","PARTIAL","ONLY_RECEIVED","CLOSED","HOLD","CANCELLED"];
     // Manual status choices available before a PO exists - PROCUREMENT ("PO Given") is deliberately
     // excluded because it can only be set automatically once both PO Number and PO Date are entered.
-    const PRE_PO_STATUSES  = STATUS_ORDER.filter(s => !["PLANNED","PROCUREMENT_QUERY","PROCUREMENT","PARTIAL","ONLY_RECEIVED","CLOSED"].includes(s));
+    const PRE_PO_STATUSES  = STATUS_ORDER.filter(s => !["PROCUREMENT","PARTIAL","ONLY_RECEIVED","CLOSED"].includes(s));
 
     const SEED = {
         users: [
@@ -2916,7 +2916,8 @@
         const note   = noteEl ? noteEl.value : "";
         const mr     = appData.mrs.find(m => m.id === id);
         if (mr) {
-            if (!dcAllowedStatuses(mr.status).includes(newStatus)) {
+            const isPostPo = POST_PO_STATUSES.includes(mr.status) && mr.status !== 'HOLD' && mr.status !== 'CANCELLED';
+            if (isPostPo && !POST_PO_STATUSES.includes(newStatus)) {
                 alert("This PR has already moved past PO Given and cannot be sent back to an earlier stage.");
                 return;
             }
