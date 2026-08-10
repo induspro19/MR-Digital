@@ -7294,42 +7294,6 @@ function renderMrRow(item, idx, xlInputCss) {
             <div class="pcb-chart-box" id="pcb-monthly-chart-box" style="height:160px"><canvas id="pcb-monthly-chart"></canvas></div>
         </div>
 
-        <!-- ROW 6: DEPARTMENT STATUS -->
-        <div class="bg-white border border-rule rounded-xl mb-5 shadow-sm overflow-hidden">
-            <div class="px-4 py-3 border-b border-rule bg-slate-50">
-                <h3 class="text-[11px] font-black uppercase tracking-widest text-slate-600 flex items-center gap-2"><i data-lucide="building-2" class="w-4 h-4 text-indigo-600"></i> Department Planning Status</h3>
-            </div>
-            <div class="overflow-x-auto">
-                <table class="w-full text-xs">
-                    <thead><tr class="text-[9px] font-black text-slate-400 uppercase tracking-widest border-b border-rule bg-slate-50">
-                        <th class="px-3 py-2 text-left">Department</th>
-                        <th class="px-3 py-2 text-right">Planned</th>
-                        <th class="px-3 py-2 text-right">Completed</th>
-                        <th class="px-3 py-2 text-right">Pending</th>
-                        <th class="px-3 py-2 text-right">Delayed</th>
-                        <th class="px-3 py-2 w-36">Progress</th>
-                    </tr></thead>
-                    <tbody class="divide-y divide-rule">
-                        ${deptStats.map(ds => `
-                        <tr class="hover:bg-slate-50 transition-colors">
-                            <td class="px-3 py-2 font-bold text-ink">
-                                <div class="flex items-center gap-2"><span class="w-2 h-2 rounded-full" style="background:${ds.pct>=80?'#047857':ds.pct>=50?'#0E7490':'#B45309'}"></span>${ds.dep}</div>
-                            </td>
-                            <td class="px-3 py-2 text-right font-mono">${ds.total}</td>
-                            <td class="px-3 py-2 text-right font-mono text-emerald-700 font-bold">${ds.done}</td>
-                            <td class="px-3 py-2 text-right font-mono text-amber-700">${ds.pending}</td>
-                            <td class="px-3 py-2 text-right font-mono ${ds.delayed>0?'text-rose-600 font-bold':'text-slate-300'}">${ds.delayed}</td>
-                            <td class="px-3 py-2">
-                                <div class="flex items-center gap-2">
-                                    <div class="flex-1 h-2 rounded-full bg-slate-100 overflow-hidden"><div class="h-full rounded-full" style="width:${ds.pct}%;background:${ds.pct>=80?'#047857':ds.pct>=50?'#3B82F6':'#F59E0B'}"></div></div>
-                                    <span class="text-[10px] font-black w-8 text-right" style="color:${ds.pct>=80?'#047857':ds.pct>=50?'#1D4ED8':'#B45309'}">${ds.pct}%</span>
-                                </div>
-                            </td>
-                        </tr>`).join('')}
-                    </tbody>
-                </table>
-            </div>
-        </div>
 
         <!-- ROW 7+8: AI INSIGHTS + SIDEBAR -->
         <div class="grid grid-cols-1 lg:grid-cols-2 gap-4 mb-5">
