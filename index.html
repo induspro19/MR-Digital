@@ -7178,38 +7178,6 @@ function renderMrRow(item, idx, xlInputCss) {
             </div>`).join('')}
         </div>
 
-        <!-- ROW 2: 4 PERFORMANCE CARDS -->
-        <div class="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4 mb-4">
-            <div class="bg-white border border-[#e8ecf2] rounded-2xl p-4 flex flex-col items-center justify-between shadow-2xs hover:shadow-sm transition-all overflow-hidden h-[200px]">
-                <p class="text-[10px] font-black uppercase tracking-widest text-[#79839a] text-center w-full" title="PLANNING COMPLETION">PLANNING COMPLETION</p>
-                ${circleGauge(planCompPct, '#5046e5', 82)}
-                <p class="text-xs font-extrabold text-[#575985] text-center" title="${doneItems} of ${totalItems} done">${doneItems} of ${totalItems} done</p>
-            </div>
-
-            <div class="bg-white border border-[#e8ecf2] rounded-2xl p-4 flex flex-col items-center justify-between shadow-2xs hover:shadow-sm transition-all overflow-hidden h-[200px]">
-                <p class="text-[10px] font-black uppercase tracking-widest text-[#79839a] text-center w-full" title="SCHEDULE ADHERENCE">SCHEDULE ADHERENCE</p>
-                ${circleGauge(schedAdh, schedAdh >= 80 ? '#047857' : '#DC2626', 82)}
-                <p class="text-xs font-black text-center" style="color:${schedAdh>=80?'#047857':'#DC2626'}" title="${schedAdh >= 80 ? 'On Track' : 'Behind Schedule'}">${schedAdh >= 80 ? 'On Track' : 'Behind Schedule'}</p>
-            </div>
-
-            <div class="bg-white border border-[#e8ecf2] rounded-2xl p-4 flex flex-col justify-between shadow-2xs hover:shadow-sm transition-all h-[200px]">
-                <p class="text-[10px] font-black uppercase tracking-widest text-[#79839a] w-full">PLANNER WORKLOAD</p>
-                <div class="space-y-3 my-auto w-full">
-                    ${[{label:'Assigned',val:totalActive,max:Math.max(totalActive,20),color:'#5046e5'},{label:'Completed',val:completedPlan,max:Math.max(totalActive,20),color:'#10b981'},{label:'Pending',val:pendingPlan,max:Math.max(totalActive,20),color:'#f59e0b'}].map(wb=>`
-                    <div>
-                        <div class="flex justify-between mb-1.5"><span class="text-[10px] font-extrabold text-[#575985]">${wb.label}</span><span class="text-[10px] font-black" style="color:${wb.color}">${wb.val}</span></div>
-                        <div class="h-2.5 rounded-full bg-[#f1f4f9] overflow-hidden"><div class="h-full rounded-full" style="width:${Math.min(100,Math.round((wb.val/wb.max)*100))}%;background:${wb.color}"></div></div>
-                    </div>`).join('')}
-                </div>
-            </div>
-
-            <div class="bg-white border border-[#e8ecf2] rounded-2xl p-4 flex flex-col items-center justify-between shadow-2xs hover:shadow-sm transition-all overflow-hidden h-[200px]">
-                <p class="text-[10px] font-black uppercase tracking-widest text-[#79839a] text-center w-full">RESOURCE UTILIZATION</p>
-                ${circleGauge(resourceUtil, resourceUtil > 85 ? '#dc2626' : resourceUtil > 60 ? '#d97706' : '#047857', 82)}
-                <p class="text-xs font-black text-center" style="color:${resourceUtil>85?'#dc2626':resourceUtil>60?'#d97706':'#047857'}">${resourceUtil > 85 ? 'Overloaded' : resourceUtil > 60 ? 'High Load' : 'Healthy'}</p>
-            </div>
-        </div>
-
         <!-- ROW 3: GANTT TIMELINE -->
         <div class="bg-white border border-rule rounded-xl p-4 mb-5 shadow-sm">
             <div class="flex items-center justify-between mb-3">
