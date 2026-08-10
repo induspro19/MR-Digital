@@ -1510,7 +1510,7 @@
 
     // MRs eligible to combine into one shared PR (multi-department → single procurement load).
     function isMergeEligibleMr(mr) {
-        return mr && mr.status === 'AUTHORIZED' && !mr.prNumber && mr.source !== 'DIRECT_PR';
+        return mr && mr.status === 'PLANNED' && !mr.prNumber && mr.source !== 'DIRECT_PR';
     }
     function getMergeEligibleMrs() {
         return (appData.mrs || []).filter(isMergeEligibleMr).sort((a, b) => b.createdAt - a.createdAt);
@@ -6091,7 +6091,7 @@ function renderMrRow(item, idx, xlInputCss) {
         }
         const mrs = mergePrSelected.map(id => appData.mrs.find(m => m.id === id)).filter(Boolean);
         if (mrs.length < 1) {
-            alert('Select at least 1 Authorized MR to generate a PR.');
+            alert('Select at least 1 Planner Approved MR to generate a PR.');
             return;
         }
         if (mrs.some(m => !isMergeEligibleMr(m))) {
@@ -6603,10 +6603,10 @@ function renderMrRow(item, idx, xlInputCss) {
             <div class="grid grid-cols-1 lg:grid-cols-2 gap-6">
                 <div class="bg-white rounded-2xl border border-rule shadow-panel overflow-hidden overflow-x-auto">
                     <div class="px-5 py-3 border-b border-rule bg-paper">
-                        <h3 class="text-[11px] font-black text-slate-500 uppercase tracking-widest">Authorized MRs (awaiting PR)</h3>
+                        <h3 class="text-[11px] font-black text-slate-500 uppercase tracking-widest">Planner Approved MRs (awaiting PR)</h3>
                     </div>
                     ${eligible.length === 0 ? `
-                    <div class="py-14 text-center text-xs text-slate-300 font-black uppercase">No Authorized MRs available for merge</div>` : `
+                    <div class="py-14 text-center text-xs text-slate-300 font-black uppercase">No Planner Approved MRs available for PR generation</div>` : `
                     <div class="divide-y divide-rule max-h-[420px] overflow-y-auto custom-scrollbar">
                         ${eligible.map(m => {
                             const checked = mergePrSelected.includes(m.id);
