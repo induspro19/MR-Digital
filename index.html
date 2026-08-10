@@ -5707,7 +5707,7 @@ function renderMrRow(item, idx, xlInputCss) {
                     ${sorted.length === 0 ? `<tr><td colspan="${canSeeAllDepartmentMrs() ? 7 : 6}" class="px-6 py-12 text-center text-slate-300 font-bold uppercase text-xs">No material requests match these filters</td></tr>` :
                       sorted.map(m => `
                       <tr class="hover:bg-paper/60 text-xs font-bold transition-all">
-                          <td class="px-4 py-5 whitespace-nowrap"><span class="idx-chip text-brand">${esc(m.mrNumber || m.prNumber)}</span></td>
+                          <td class="px-4 py-5 whitespace-nowrap"><span class="idx-chip ${m.prNumber ? 'text-[#0E7490]' : 'text-brand'}">${esc(m.prNumber || m.mrNumber)}</span></td>
                           <td class="px-4 py-5 text-slate-400 whitespace-nowrap">${fmtDate(m.createdAt)}</td>
                           ${canSeeAllDepartmentMrs() ? `<td class="px-4 py-5 text-slate-600">${esc(m.dept)}</td>` : ''}
                           <td class="px-4 py-5 text-slate-600 normal-case">${esc(m.raisedBy)}</td>
