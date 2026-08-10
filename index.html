@@ -6986,13 +6986,13 @@ function renderMrRow(item, idx, xlInputCss) {
 
     function pcbChartTypeOptions(which) {
         const types = [
-            { v: 'pie', l: 'Pie' },
-            { v: 'doughnut', l: 'Doughnut' },
-            { v: 'bar', l: 'Bar' },
-            { v: 'line', l: 'Line' },
-            { v: 'polarArea', l: 'Polar' }
+            { v: 'pie', l: 'Pie Chart' },
+            { v: 'line', l: 'Line Chart' },
+            { v: 'bar', l: 'Bar Chart' },
+            { v: 'doughnut', l: 'Doughnut Chart' },
+            { v: 'polarArea', l: 'Polar Chart' }
         ];
-        const cur = pcbChartTypes[which] || 'pie';
+        const cur = pcbChartTypes[which] || (which === 'project' ? 'pie' : 'bar');
         return types.map(t => `<option value="${t.v}" ${cur === t.v ? 'selected' : ''}>${t.l}</option>`).join('');
     }
 
@@ -7407,17 +7407,33 @@ function renderMrRow(item, idx, xlInputCss) {
             </div>
         </div>
 
-        <!-- ROW 5: MONTHLY TREND -->
-        <div class="bg-white border border-rule rounded-xl p-4 mb-5 shadow-sm">
-            <div class="flex items-center justify-between mb-3">
-                <h3 class="text-[11px] font-black uppercase tracking-widest text-slate-600 flex items-center gap-2">
-                    <i data-lucide="trending-up" class="w-4 h-4 text-blue-600"></i> Monthly Planning Activity (Last 12 Months)
-                </h3>
-                <select onchange="window.setPcbChartType('monthly', this.value)" class="glass-input !py-1 !px-2 !text-[10px] !w-auto min-w-[80px]">${pcbChartTypeOptions('monthly')}</select>
+        <!-- ROW 5: INTERACTIVE PROJECT ANALYTICS CHARTS (PIE / LINE / BAR) -->
+        <div class="grid grid-cols-1 lg:grid-cols-2 gap-4 mb-5">
+            <div class="bg-white border border-rule rounded-xl p-4 shadow-sm">
+                <div class="flex items-center justify-between mb-3">
+                    <h3 class="text-[11px] font-black uppercase tracking-widest text-slate-600 flex items-center gap-2">
+                        <i data-lucide="pie-chart" class="w-4 h-4 text-indigo-600"></i> Project Item Breakdown (Selected Projects)
+                    </h3>
+                    <div class="flex items-center gap-2">
+                        <select onchange="window.setPcbChartType('project', this.value)" class="glass-input !py-1 !px-2 !text-[10px] !w-auto min-w-[90px] font-bold">${pcbChartTypeOptions('project')}</select>
+                        <button onclick="window.downloadPcbChart('project')" title="Download PNG" class="p-1 rounded hover:bg-slate-100 text-slate-500"><i data-lucide="download" class="w-3.5 h-3.5"></i></button>
+                    </div>
+                </div>
+                <div class="pcb-chart-box" id="pcb-project-chart-box" style="height:220px"><canvas id="pcb-project-chart"></canvas></div>
             </div>
-            <div class="pcb-chart-box" id="pcb-monthly-chart-box" style="height:160px"><canvas id="pcb-monthly-chart"></canvas></div>
+            <div class="bg-white border border-rule rounded-xl p-4 shadow-sm">
+                <div class="flex items-center justify-between mb-3">
+                    <h3 class="text-[11px] font-black uppercase tracking-widest text-slate-600 flex items-center gap-2">
+                        <i data-lucide="trending-up" class="w-4 h-4 text-blue-600"></i> Monthly Planning Activity
+                    </h3>
+                    <div class="flex items-center gap-2">
+                        <select onchange="window.setPcbChartType('monthly', this.value)" class="glass-input !py-1 !px-2 !text-[10px] !w-auto min-w-[90px] font-bold">${pcbChartTypeOptions('monthly')}</select>
+                        <button onclick="window.downloadPcbChart('monthly')" title="Download PNG" class="p-1 rounded hover:bg-slate-100 text-slate-500"><i data-lucide="download" class="w-3.5 h-3.5"></i></button>
+                    </div>
+                </div>
+                <div class="pcb-chart-box" id="pcb-monthly-chart-box" style="height:220px"><canvas id="pcb-monthly-chart"></canvas></div>
+            </div>
         </div>
-
 
         <!-- ROW 7+8: AI INSIGHTS + SIDEBAR -->
         <div class="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-3.5 mb-4">
