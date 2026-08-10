@@ -868,6 +868,8 @@
     let dcHidden    = new Set();
     let dcPage      = 1;
     let dcPageSize  = 100;
+    let dcRenderedCount = 100;
+    window.dcKpiCollapsed = (window.dcKpiCollapsed !== undefined ? window.dcKpiCollapsed : true);
     let dcShowCols  = false;
     let dcColWidths = {};   // { colKey: widthPx } — populated on-demand from DC_COLUMNS.w, mutated by column resize
     let dcColOrder  = DC_COLUMNS.map(c => c.key); // display order of column keys — drag & drop reorders this only
@@ -7994,9 +7996,24 @@ function renderMrRow(item, idx, xlInputCss) {
 
     let _dcFilterDebounceTimer = null;
 
+    window.dcHandleScroll = (el) => {
+        if (!el) return;
+        const { scrollTop, clientHeight, scrollHeight } = el;
+        if (scrollTop + clientHeight >= scrollHeight - 200) {
+            const allRows = dcFilteredRows();
+            if (dcRenderedCount < allRows.length) {
+                dcRenderedCount += 100;
+                if (document.getElementById('dc-tbody')) {
+                    window.dcUpdateGridRowsOnly();
+                }
+            }
+        }
+    };
+
     window.dcSetGlobalQ = (val) => {
         dcGlobalQ = val;
         dcPage = 1;
+        dcRenderedCount = 100;
         if (_dcFilterDebounceTimer) clearTimeout(_dcFilterDebounceTimer);
         _dcFilterDebounceTimer = setTimeout(() => {
             _dcFilterDebounceTimer = null;
@@ -8011,6 +8028,7 @@ function renderMrRow(item, idx, xlInputCss) {
     window.dcSetColFilter = (key, val) => {
         dcColFilter[key] = val;
         dcPage = 1;
+        dcRenderedCount = 100;
         if (_dcFilterDebounceTimer) clearTimeout(_dcFilterDebounceTimer);
         _dcFilterDebounceTimer = setTimeout(() => {
             _dcFilterDebounceTimer = null;
@@ -8022,10 +8040,11 @@ function renderMrRow(item, idx, xlInputCss) {
         }, 150);
     };
     window.dcSort = (key) => {
+        dcRenderedCount = 100;
         dcSort = { key, dir: (dcSort.key === key && dcSort.dir === 'asc') ? 'desc' : 'asc' };
         render();
     };
-    window.dcClearFilters = () => { dcGlobalQ = ''; dcColFilter = {}; dcSort = { key:'date', dir:'desc' }; dcPreset = null; render(); };
+    window.dcClearFilters = () => { dcGlobalQ = ''; dcColFilter = {}; dcSort = { key:'date', dir:'desc' }; dcPreset = null; dcRenderedCount = 100; render(); };
     window.dcToggleCol = (key) => {
         if (DC_FROZEN_KEYS.includes(key)) return; // MR No / PR No are always visible & frozen
         dcHidden.has(key) ? dcHidden.delete(key) : dcHidden.add(key);
@@ -8640,6 +8659,7 @@ function renderMrRow(item, idx, xlInputCss) {
         dcSort = { ...(f.sort || { key:'date', dir:'desc' }) };
         dcPreset = null;
         dcPage = 1;
+        dcRenderedCount = 100;
         render();
     };
     window.dcDeleteSavedFilter = (name) => {
@@ -8904,9 +8924,18 @@ function renderMrRow(item, idx, xlInputCss) {
         const canEdit = (user.role === 'admin' || user.role === 'procurement');
         const allRows = dcFilteredRows();
         const summary = dcSummary(allRows);
-        const totalPages = Math.max(1, Math.ceil(allRows.length / dcPageSize));
-        if (dcPage > totalPages) dcPage = totalPages;
-        const pageRows = allRows.slice((dcPage-1)*dcPageSize, dcPage*dcPageSize);
+        
+        const pageRows = allRows.slice(0, dcRenderedCount);
+        const existingIds = new Set();
+        const pageRowsFiltered = [];
+        pageRows.forEach(r => {
+            const key = r.mrId + '|' + r.itemIdx;
+            if (!existingIds.has(key)) {
+                existingIds.add(key);
+                pageRowsFiltered.push(r);
+            }
+        });
+
         const cols = dcOrderedColumns(DC_COLUMNS.filter(c => !dcHidden.has(c.key) && (!c.procOnly || user.role === 'procurement')));
         const handlerNames = activeProcHandlers().map(h => h.name);
 
@@ -8991,7 +9020,7 @@ function renderMrRow(item, idx, xlInputCss) {
             return `<input type="text" id="dc-in-${ri}-${ci}" ${navAttrs} value="${esc(r[c.key])}" onchange="window.dcUpdateItemField('${r.mrId}',${r.itemIdx},'${c.key}',this.value)" style="width:100%;font-size:10px;padding:2px;border:1px solid #cbd5e1;border-radius:4px;" placeholder="${c.key==='vendor'?'Vendor...':''}" />`;
         };
 
-        tbody.innerHTML = pageRows.map((r, ri) => {
+        tbody.innerHTML = pageRowsFiltered.map((r, ri) => {
             const key = r.mrId + '|' + r.itemIdx;
             const isSelected = window.dcBulkSelected && window.dcBulkSelected.has(key);
             const worstDelay = Math.max(r.reqDelayDays||0, r.deliveryDelayDays||0);
@@ -9034,26 +9063,28 @@ function renderMrRow(item, idx, xlInputCss) {
                 ${dcCard(summary.hold,'Hold','#78716C')}
                 ${dcCard(summary.cancel,'Cancel','#B91C1C')}
                 ${dcCard(summary.poPending,'Pending Procurement','#B45309')}
-                ${dcCard(summary.reqDelayDays,'Requirement Delay (Days)','#DC2626')}
-                ${dcCard(summary.deliveryDelayDays,'Delivery Delay (Days)','#DC2626')}
+                ${dcCard(summary.reqDelayDays,'Requirement Delay','#DC2626')}
+                ${dcCard(summary.deliveryDelayDays,'Delivery Delay','#DC2626')}
                 ${dcCard(summary.overdueDeliveries,'Overdue Deliveries','#7F1D1D')}
                 ${dcCard('₹'+summary.value.toLocaleString('en-IN'),'Total PR Value','#334155')}
                 ${dcCard(summary.todayDel,"Today's Deliveries",'#6D28D9')}`;
         }
 
-        const pagWrap = document.getElementById('dc-pagination-wrap');
-        if (pagWrap) {
-            pagWrap.innerHTML = `
-                <p class="text-[10px] text-slate-500 font-bold uppercase tracking-widest">Page ${dcPage} of ${totalPages} · ${allRows.length} rows</p>
-                <div class="flex items-center gap-1">
-                    ${canEdit ? `
-                    <button id="dc-save-btn" onmousedown="window.dcSaveChanges()" title="${dcDirty ? 'Save Changes' : 'No unsaved changes'}"
-                        class="px-2.5 py-1.5 rounded-lg border transition-all flex items-center justify-center ${dcDirty ? 'bg-emerald-600 border-emerald-600 text-white shadow-lg' : 'bg-white border-rule text-slate-400 opacity-70'}">
-                        <span style="font-size:13px;line-height:1;">💾</span>
-                    </button>` : ''}
-                    <button onclick="window.dcSetPage(${Math.max(1,dcPage-1)})" class="px-3 py-1.5 text-[10px] font-black uppercase bg-white border border-rule rounded-lg">Prev</button>
-                    <div class="px-3 py-1.5 text-[10px] font-black bg-white border border-rule rounded-lg text-slate-500">${dcPage} / ${totalPages}</div>
-                    <button onclick="window.dcSetPage(${Math.min(totalPages,dcPage+1)})" class="px-3 py-1.5 text-[10px] font-black uppercase bg-white border border-rule rounded-lg">Next</button>
+        const footWrap = document.getElementById('dc-footer-wrap');
+        if (footWrap) {
+            footWrap.innerHTML = `
+                <div>
+                    ${pageRowsFiltered.length < allRows.length ? `
+                    <span class="inline-flex items-center gap-1.5 text-indigo-600 font-bold">
+                        <span class="w-2 h-2 rounded-full bg-indigo-500 animate-ping"></span>
+                        Loading more items... (${pageRowsFiltered.length} of ${allRows.length} loaded)
+                    </span>` : `
+                    <span class="inline-flex items-center gap-1 text-emerald-700 font-bold">
+                        ✓ All ${allRows.length} items loaded
+                    </span>`}
+                </div>
+                <div class="text-slate-400 font-mono text-[9px]">
+                    Double-click cell to copy · Right-click for options
                 </div>`;
         }
     };
@@ -9093,7 +9124,6 @@ function renderMrRow(item, idx, xlInputCss) {
         }
         
         saveDB();
-        // Reset inbox view
         procInboxPrNumber = null;
         procInboxMrId = null;
         render();
@@ -9123,9 +9153,9 @@ function renderMrRow(item, idx, xlInputCss) {
     }
 
     function dcCard(val, label, color, onclick) {
-        return `<div ${onclick?`onclick="${onclick}"`:''} class="bg-white rounded-xl border border-rule px-4 py-3 min-w-[130px] ${onclick?'cursor-pointer hover:border-brand/40 hover:shadow-md transition-all':''}">
-            <p class="text-xl font-display font-bold" style="color:${color}">${val}</p>
-            <p class="text-[9px] font-black text-slate-500 uppercase tracking-widest mt-0.5">${label}</p>
+        return `<div ${onclick?`onclick="${onclick}"`:''} class="bg-white rounded-xl border border-rule px-3 py-2 min-w-[115px] ${onclick?'cursor-pointer hover:border-brand/40 hover:shadow-md transition-all':''}">
+            <p class="text-lg font-display font-bold" style="color:${color}">${val}</p>
+            <p class="text-[8.5px] font-black text-slate-500 uppercase tracking-widest mt-0.5">${label}</p>
         </div>`;
     }
 
@@ -9133,9 +9163,18 @@ function renderMrRow(item, idx, xlInputCss) {
         const canEdit = (user.role === 'admin' || user.role === 'procurement');
         const allRows = dcFilteredRows();
         const summary = dcSummary(allRows);
-        const totalPages = Math.max(1, Math.ceil(allRows.length / dcPageSize));
-        if (dcPage > totalPages) dcPage = totalPages;
-        const pageRows = allRows.slice((dcPage-1)*dcPageSize, dcPage*dcPageSize);
+        
+        const pageRows = allRows.slice(0, dcRenderedCount);
+        const existingIds = new Set();
+        const pageRowsFiltered = [];
+        pageRows.forEach(r => {
+            const key = r.mrId + '|' + r.itemIdx;
+            if (!existingIds.has(key)) {
+                existingIds.add(key);
+                pageRowsFiltered.push(r);
+            }
+        });
+
         const cols = dcOrderedColumns(DC_COLUMNS.filter(c => !dcHidden.has(c.key) && (!c.procOnly || user.role === 'procurement')));
         const handlerNames = activeProcHandlers().map(h => h.name);
 
@@ -9221,36 +9260,31 @@ function renderMrRow(item, idx, xlInputCss) {
         };
 
         return `
-        <div class="flex flex-col gap-4">
-            <div class="flex items-center justify-between flex-wrap gap-3">
-                <div>
-                    <h1 class="text-2xl font-display font-bold tracking-tight">Data Centre</h1>
-                    <p class="text-xs text-slate-500">Master Purchase Request database · ${allRows.length} line items across ${summary.totalPR} PRs</p>
+        <div class="flex flex-col gap-2 h-full" style="height: calc(100vh - 85px);">
+            
+            <!-- COMPACT HEADER ROW -->
+            <div class="flex items-center justify-between gap-3 px-3 py-2 bg-slate-900 text-white rounded-xl shadow-md no-print shrink-0">
+                <div class="flex items-center gap-2.5">
+                    <div class="w-6 h-6 rounded-lg bg-indigo-500/20 border border-indigo-400/30 flex items-center justify-center">
+                        <i data-lucide="database" class="w-3.5 h-3.5 text-indigo-400"></i>
+                    </div>
+                    <h1 class="text-xs font-display font-black tracking-wider uppercase text-white">Data Centre</h1>
+                    <span class="text-[10px] font-mono font-bold px-2 py-0.5 rounded-full bg-indigo-950 border border-indigo-700/50 text-indigo-300">
+                        ${allRows.length} ${allRows.length === 1 ? 'Item' : 'Items'}
+                    </span>
+                    <span class="text-[10px] text-slate-400 font-medium hidden md:inline">• Master Procurement Database</span>
                 </div>
-                <div class="flex flex-wrap items-center gap-2 no-print">
-                    <select onchange="if(this.value) window.dcApplySavedFilter(this.value); this.value='';" class="text-[10px] font-black uppercase tracking-widest bg-white border border-rule px-2 py-2 rounded-lg">
-                        <option value="">Saved Views (${dcSavedFilters.length})</option>
-                        ${dcSavedFilters.map(f => `<option value="${esc(f.name)}">${esc(f.name)}</option>`).join('')}
-                    </select>
-                    ${dcSavedFilters.length ? `<button onclick="window.dcPromptDeleteSavedFilter()" title="Delete a saved view" class="text-[10px] font-black uppercase tracking-widest bg-white border border-rule px-2 py-2 rounded-lg hover:bg-slate-50"><i data-lucide="trash-2" class="w-3.5 h-3.5"></i></button>` : ''}
-                    <button onclick="window.dcSaveCurrentFilterAsPreset()" title="Save current filters as a named view" class="text-[10px] font-black uppercase tracking-widest bg-white border border-rule px-3 py-2 rounded-lg hover:bg-slate-50 flex items-center gap-1.5"><i data-lucide="bookmark-plus" class="w-3.5 h-3.5"></i> Save View</button>
-                    <button onclick="window.dcUndo()" title="Undo (Ctrl+Z)" class="text-[10px] font-black uppercase tracking-widest bg-white border border-rule px-2.5 py-2 rounded-lg hover:bg-slate-50 ${dcUndoStack.length?'':'opacity-40'}"><i data-lucide="undo-2" class="w-3.5 h-3.5"></i></button>
-                    <button onclick="window.dcRedo()" title="Redo (Ctrl+Y)" class="text-[10px] font-black uppercase tracking-widest bg-white border border-rule px-2.5 py-2 rounded-lg hover:bg-slate-50 ${dcRedoStack.length?'':'opacity-40'}"><i data-lucide="redo-2" class="w-3.5 h-3.5"></i></button>
-                    <button onclick="window.dcOpenBulkPoModal()" class="text-[10px] font-black uppercase tracking-widest bg-emerald-600 text-white px-3 py-2 rounded-lg hover:bg-emerald-700 flex items-center gap-1.5 shadow-sm" title="Bulk Update PO Number & PO Date"><i data-lucide="file-text" class="w-3.5 h-3.5"></i> Bulk PO</button>
-                    <button onclick="window.dcOpenBulkStatusModal()" class="text-[10px] font-black uppercase tracking-widest bg-indigo-600 text-white px-3 py-2 rounded-lg hover:bg-indigo-700 flex items-center gap-1.5 shadow-sm" title="Bulk Update Item Status & Material Received Date"><i data-lucide="tag" class="w-3.5 h-3.5"></i> Bulk Status</button>
-                    <button onclick="window.dcExportExcel()" class="text-[10px] font-black uppercase tracking-widest bg-white border border-rule px-3 py-2 rounded-lg hover:bg-slate-50 flex items-center gap-1.5"><i data-lucide="file-spreadsheet" class="w-3.5 h-3.5"></i> Excel</button>
-                    <button onclick="window.dcPrintFilteredPr()" class="text-[10px] font-black uppercase tracking-widest bg-violet-700 text-white px-3 py-2 rounded-lg hover:bg-violet-800 flex items-center gap-1.5"><i data-lucide="printer" class="w-3.5 h-3.5"></i> Print PR Sheet</button>
-                    <button onclick="window.dcExportPdf()" class="text-[10px] font-black uppercase tracking-widest bg-white border border-rule px-3 py-2 rounded-lg hover:bg-slate-50 flex items-center gap-1.5"><i data-lucide="file-text" class="w-3.5 h-3.5"></i> PDF</button>
-                    <button onclick="window.print()" class="text-[10px] font-black uppercase tracking-widest bg-white border border-rule px-3 py-2 rounded-lg hover:bg-slate-50 flex items-center gap-1.5"><i data-lucide="printer" class="w-3.5 h-3.5"></i> Print</button>
-                    <button onclick="window.dcToggleColsPanel()" class="text-[10px] font-black uppercase tracking-widest bg-white border border-rule px-3 py-2 rounded-lg hover:bg-slate-50 flex items-center gap-1.5"><i data-lucide="columns-3" class="w-3.5 h-3.5"></i> Columns</button>
-                    <button onclick="window.dcClearFilters()" class="text-[10px] font-black uppercase tracking-widest text-brand px-3 py-2 rounded-lg hover:bg-brand-50 flex items-center gap-1.5"><i data-lucide="x-circle" class="w-3.5 h-3.5"></i> Clear Filters</button>
+                <div class="flex items-center gap-2">
+                    <button onclick="window.dcKpiCollapsed = !window.dcKpiCollapsed; render();" 
+                        class="text-[10px] font-black uppercase tracking-widest px-2.5 py-1 rounded-lg bg-white/10 hover:bg-white/20 border border-white/15 text-white flex items-center gap-1.5 transition-all">
+                        <span>Summary</span>
+                        <span class="text-[12px] font-mono">${window.dcKpiCollapsed ? '⌄' : '⌃'}</span>
+                    </button>
                 </div>
             </div>
-            ${dcDirty ? `<div class="no-print flex items-center gap-2 bg-amberx-light border border-amberx/30 text-amberx px-4 py-2 rounded-xl text-[11px] font-black uppercase tracking-widest">
-                <i data-lucide="alert-triangle" class="w-3.5 h-3.5"></i> You have unsaved changes — click 💾 Save to write them, or they will be lost if you leave.
-            </div>` : ''}
 
-            <div id="dc-summary-cards-wrap" class="flex gap-3 flex-wrap no-print">
+            <!-- COLLAPSIBLE KPI CARDS -->
+            <div id="dc-summary-cards-wrap" class="flex gap-2 flex-wrap no-print shrink-0 ${window.dcKpiCollapsed ? 'hidden' : ''}">
                 ${dcCard(summary.totalMR,'Total MR','#1f2937')}
                 ${dcCard(summary.totalPR,'Total PR','#1f2937')}
                 ${dcCard(summary.poGiven,'PO Given','#0E7490')}
@@ -9259,37 +9293,71 @@ function renderMrRow(item, idx, xlInputCss) {
                 ${dcCard(summary.hold,'Hold','#78716C')}
                 ${dcCard(summary.cancel,'Cancel','#B91C1C')}
                 ${dcCard(summary.poPending,'Pending Procurement','#B45309')}
-                ${dcCard(summary.reqDelayDays,'Requirement Delay (Days)','#DC2626')}
-                ${dcCard(summary.deliveryDelayDays,'Delivery Delay (Days)','#DC2626')}
+                ${dcCard(summary.reqDelayDays,'Requirement Delay','#DC2626')}
+                ${dcCard(summary.deliveryDelayDays,'Delivery Delay','#DC2626')}
                 ${dcCard(summary.overdueDeliveries,'Overdue Deliveries','#7F1D1D')}
                 ${dcCard('₹'+summary.value.toLocaleString('en-IN'),'Total PR Value','#334155')}
                 ${dcCard(summary.todayDel,"Today's Deliveries",'#6D28D9')}
             </div>
 
+            <!-- COMPACT ONE-LINE TOOLBAR -->
+            <div class="flex items-center justify-between gap-2 flex-wrap lg:flex-nowrap bg-white border border-rule p-2 rounded-xl no-print shrink-0 shadow-2xs">
+                <div class="flex items-center gap-1.5 flex-1 min-w-0 overflow-x-auto custom-scrollbar py-0.5">
+                    <div class="relative min-w-[200px] max-w-xs flex-1">
+                        <i data-lucide="search" class="w-3.5 h-3.5 text-slate-400 absolute left-2.5 top-1/2 -translate-y-1/2"></i>
+                        <input id="dc-global-search" data-focus-key="dc-global-search" value="${esc(dcGlobalQ)}" oninput="window.dcSetGlobalQ(this.value)" onkeydown="if(event.key==='Enter'){event.stopPropagation();}"
+                            class="glass-input !py-1 !pl-8 !pr-2 !text-[11px] w-full" placeholder="Search PR, item, vendor, PO, remarks..." />
+                    </div>
+                    <select onchange="if(this.value) window.dcApplySavedFilter(this.value); this.value='';" class="glass-input !py-1 !px-2 !text-[10px] font-black uppercase tracking-widest !w-auto min-w-[110px]">
+                        <option value="">Saved Views (${dcSavedFilters.length})</option>
+                        ${dcSavedFilters.map(f => `<option value="${esc(f.name)}">${esc(f.name)}</option>`).join('')}
+                    </select>
+                    ${dcSavedFilters.length ? `<button onclick="window.dcPromptDeleteSavedFilter()" title="Delete a saved view" class="p-1.5 text-[10px] font-black uppercase bg-white border border-rule rounded-lg hover:bg-slate-50 text-slate-600 shrink-0"><i data-lucide="trash-2" class="w-3.5 h-3.5"></i></button>` : ''}
+                    <button onclick="window.dcSaveCurrentFilterAsPreset()" title="Save current filters as a named view" class="px-2 py-1 text-[10px] font-black uppercase tracking-widest bg-white border border-rule rounded-lg hover:bg-slate-50 text-slate-700 flex items-center gap-1 shrink-0"><i data-lucide="bookmark-plus" class="w-3.5 h-3.5"></i> <span class="hidden sm:inline">Save View</span></button>
+                    <div class="h-4 w-px bg-slate-200 shrink-0"></div>
+                    <button onclick="window.dcUndo()" title="Undo (Ctrl+Z)" class="p-1.5 text-[10px] font-black uppercase bg-white border border-rule rounded-lg hover:bg-slate-50 text-slate-700 shrink-0 ${dcUndoStack.length?'':'opacity-40'}"><i data-lucide="undo-2" class="w-3.5 h-3.5"></i></button>
+                    <button onclick="window.dcRedo()" title="Redo (Ctrl+Y)" class="p-1.5 text-[10px] font-black uppercase bg-white border border-rule rounded-lg hover:bg-slate-50 text-slate-700 shrink-0 ${dcRedoStack.length?'':'opacity-40'}"><i data-lucide="redo-2" class="w-3.5 h-3.5"></i></button>
+                    <div class="h-4 w-px bg-slate-200 shrink-0"></div>
+                    <button onclick="window.dcOpenBulkPoModal()" class="px-2.5 py-1 text-[10px] font-black uppercase tracking-widest bg-emerald-600 text-white rounded-lg hover:bg-emerald-700 flex items-center gap-1 shadow-2xs shrink-0" title="Bulk Update PO Number & PO Date"><i data-lucide="file-text" class="w-3.5 h-3.5"></i> Bulk PO</button>
+                    <button onclick="window.dcOpenBulkStatusModal()" class="px-2.5 py-1 text-[10px] font-black uppercase tracking-widest bg-indigo-600 text-white rounded-lg hover:bg-indigo-700 flex items-center gap-1 shadow-2xs shrink-0" title="Bulk Update Item Status & Material Received Date"><i data-lucide="tag" class="w-3.5 h-3.5"></i> Bulk Status</button>
+                    <button onclick="window.dcExportExcel()" class="px-2 py-1 text-[10px] font-black uppercase tracking-widest bg-white border border-rule rounded-lg hover:bg-slate-50 text-slate-700 flex items-center gap-1 shrink-0"><i data-lucide="file-spreadsheet" class="w-3.5 h-3.5 text-emerald-600"></i> Excel</button>
+                    <button onclick="window.dcPrintFilteredPr()" class="px-2 py-1 text-[10px] font-black uppercase tracking-widest bg-violet-700 text-white rounded-lg hover:bg-violet-800 flex items-center gap-1 shrink-0"><i data-lucide="printer" class="w-3.5 h-3.5"></i> Print PR</button>
+                    <button onclick="window.dcExportPdf()" class="px-2 py-1 text-[10px] font-black uppercase tracking-widest bg-white border border-rule rounded-lg hover:bg-slate-50 text-slate-700 flex items-center gap-1 shrink-0"><i data-lucide="file-text" class="w-3.5 h-3.5 text-rose-600"></i> PDF</button>
+                    <button onclick="window.print()" class="px-2 py-1 text-[10px] font-black uppercase tracking-widest bg-white border border-rule rounded-lg hover:bg-slate-50 text-slate-700 flex items-center gap-1 shrink-0"><i data-lucide="printer" class="w-3.5 h-3.5"></i> Print</button>
+                    <button onclick="window.dcToggleColsPanel()" class="px-2 py-1 text-[10px] font-black uppercase tracking-widest bg-white border border-rule rounded-lg hover:bg-slate-50 text-slate-700 flex items-center gap-1 shrink-0"><i data-lucide="columns-3" class="w-3.5 h-3.5"></i> Columns</button>
+                    <button onclick="window.dcClearFilters()" class="px-2 py-1 text-[10px] font-black uppercase tracking-widest text-brand border border-brand/20 rounded-lg hover:bg-brand-50 flex items-center gap-1 shrink-0"><i data-lucide="x-circle" class="w-3.5 h-3.5"></i> Clear Filters</button>
+                    ${canEdit ? `
+                    <button id="dc-save-btn" onmousedown="window.dcSaveChanges()" title="${dcDirty ? 'Save Changes' : 'No unsaved changes'}"
+                        class="p-1 rounded-lg border transition-all flex items-center justify-center shrink-0 ${dcDirty ? 'bg-emerald-600 border-emerald-600 text-white shadow-lg' : 'bg-white border-rule text-slate-400 opacity-70'}">
+                        <span style="font-size:12px;line-height:1;">💾</span>
+                    </button>` : ''}
+                </div>
+            </div>
+
+            ${dcDirty ? `<div class="no-print flex items-center gap-2 bg-amberx-light border border-amberx/30 text-amberx px-3 py-1.5 rounded-xl text-[11px] font-black uppercase tracking-widest shrink-0">
+                <i data-lucide="alert-triangle" class="w-3.5 h-3.5"></i> You have unsaved changes — click 💾 Save to write them, or they will be lost if you leave.
+            </div>` : ''}
+
             ${dcShowCols ? `
-            <div class="bg-white border border-rule rounded-xl p-4 no-print">
+            <div class="bg-white border border-rule rounded-xl p-3 no-print shrink-0">
                 <div class="flex items-center justify-between mb-2">
                     <p class="text-[10px] font-black uppercase tracking-widest text-slate-500">Show / Hide Columns · Drag header to reorder · First two columns are frozen</p>
                     <button onclick="window.dcResetLayout()" class="text-[9px] font-black uppercase tracking-widest text-brand hover:underline">Reset Layout</button>
                 </div>
                 <div class="flex flex-wrap gap-x-4 gap-y-1.5">
                     ${DC_COLUMNS.map(c => `<label class="flex items-center gap-1.5 text-[11px] font-bold ${DC_FROZEN_KEYS.includes(c.key) ? 'text-slate-400' : 'text-slate-700'}">
-                        <input type="checkbox" ${dcHidden.has(c.key)?'':'checked'} ${DC_FROZEN_KEYS.includes(c.key)?'disabled':''} onchange="window.dcToggleCol('${c.key}')" /> ${c.label}${DC_FROZEN_KEYS.includes(c.key)?' 🔒':''}
+                        <input type="checkbox" ${!dcHidden.has(c.key)?'checked':''} ${DC_FROZEN_KEYS.includes(c.key)?'disabled':''} onchange="window.dcToggleCol('${c.key}')" /> ${c.label}${DC_FROZEN_KEYS.includes(c.key)?' 🔒':''}
                     </label>`).join('')}
                 </div>
             </div>` : ''}
 
-            <div class="no-print">
-                <input id="dc-global-search" data-focus-key="dc-global-search" value="${esc(dcGlobalQ)}" oninput="window.dcSetGlobalQ(this.value)" onkeydown="if(event.key==='Enter'){event.stopPropagation();}"
-                    class="glass-input max-w-md" placeholder="Search everything — PR No, item, vendor, PO, remarks..." />
-            </div>
-
-            <div class="dc-scroll bg-white border border-rule rounded-xl" style="overflow:auto; max-height:70vh;" id="dc-table-wrap">
+            <!-- FULL HEIGHT DATA GRID CONTAINER WITH INFINITE SCROLL -->
+            <div class="dc-scroll bg-white border border-rule rounded-xl flex-1" style="overflow:auto; height: calc(100vh - ${window.dcKpiCollapsed ? '150px' : '250px'}); min-height:350px;" id="dc-table-wrap" onscroll="window.dcHandleScroll(this)">
                 <table style="border-collapse:collapse; font-size:11px; white-space:nowrap;">
                     <thead>
                         <tr>
                         <th style="position:sticky;top:0;left:0;z-index:4;background:#1e2530;border:1px solid #33404f;padding:6px 8px;width:36px;min-width:36px;text-align:center;">
-                            <input type="checkbox" id="dc-select-all" title="Select / deselect all on this page" onchange="window.dcToggleBulkAll(this.checked)" style="cursor:pointer;accent-color:#ef4444;width:14px;height:14px;" />
+                            <input type="checkbox" id="dc-select-all" title="Select / deselect all visible" onchange="window.dcToggleBulkAll(this.checked)" style="cursor:pointer;accent-color:#ef4444;width:14px;height:14px;" />
                         </th>
                         ${(() => { let acc = 0; return cols.map(c => {
                             const w = dcColWidth(c);
@@ -9373,153 +9441,156 @@ function renderMrRow(item, idx, xlInputCss) {
                                             </button>
                                         </div>
                                     </div>` : ''}
-                                </th>`;
-                            }
+                               </th>`;
+                           }
 
-                            return `
-                            <th data-col-key="${c.key}" style="position:sticky; top:29px; ${c.sticky?`left:${left}px; z-index:3;`:'z-index:1;'} background:#f1f5f9; border:1px solid #dde3ea; padding:2px 4px;">
-                                <input id="dc-col-${c.key}" data-focus-key="dc-col-${c.key}" value="${esc(dcColFilter[c.key]||'')}" oninput="window.dcSetColFilter('${c.key}', this.value)" onkeydown="if(event.key==='Enter'){event.stopPropagation();}"
-                                    style="width:100%; font-size:10px; padding:3px 4px; border:1px solid #cbd5e1; border-radius:4px; background:#fff;" placeholder="Filter..." />
-                            </th>`; }).join(''); })()}
-                        <th style="position:sticky;top:29px;right:0;z-index:3;background:#f1f5f9;border:1px solid #dde3ea;padding:2px 4px;width:22px;min-width:22px;max-width:22px;"></th>
-                        </tr>
-                    </thead>
-                    <tbody id="dc-tbody">
-                        ${pageRows.map((r, ri) => {
-                            const key = r.mrId + '|' + r.itemIdx;
-                            const isSelected = window.dcBulkSelected && window.dcBulkSelected.has(key);
-                            const worstDelay = Math.max(r.reqDelayDays||0, r.deliveryDelayDays||0);
-                            let baseBg = (ri % 2 === 0) ? '#ffffff' : '#f8fafc';
-                            if (worstDelay > 15) baseBg = '#FEE2E2';
-                            else if (worstDelay > 0) baseBg = '#FEF3E2';
+                           return `
+                           <th data-col-key="${c.key}" style="position:sticky; top:29px; ${c.sticky?`left:${left}px; z-index:3;`:'z-index:1;'} background:#f1f5f9; border:1px solid #dde3ea; padding:2px 4px;">
+                               <input id="dc-col-${c.key}" data-focus-key="dc-col-${c.key}" value="${esc(dcColFilter[c.key]||'')}" oninput="window.dcSetColFilter('${c.key}', this.value)" onkeydown="if(event.key==='Enter'){event.stopPropagation();}"
+                                   style="width:100%; font-size:10px; padding:3px 4px; border:1px solid #cbd5e1; border-radius:4px; background:#fff;" placeholder="Filter..." />
+                           </th>`; }).join(''); })()}
+                       <th style="position:sticky;top:29px;right:0;z-index:3;background:#f1f5f9;border:1px solid #dde3ea;padding:2px 4px;width:22px;min-width:22px;max-width:22px;"></th>
+                       </tr>
+                   </thead>
+                   <tbody id="dc-tbody">
+                       ${pageRowsFiltered.map((r, ri) => {
+                           const key = r.mrId + '|' + r.itemIdx;
+                           const isSelected = window.dcBulkSelected && window.dcBulkSelected.has(key);
+                           const worstDelay = Math.max(r.reqDelayDays||0, r.deliveryDelayDays||0);
+                           let baseBg = (ri % 2 === 0) ? '#ffffff' : '#f8fafc';
+                           if (worstDelay > 15) baseBg = '#FEE2E2';
+                           else if (worstDelay > 0) baseBg = '#FEF3E2';
 
-                            const effectiveBg = isSelected ? '#DCEEFF' : baseBg;
-                            const borderLeft = isSelected ? '4px solid #0D6EFD' : '4px solid transparent';
-                            const rowClass = `dc-row ${isSelected ? 'dc-row-selected' : (ri % 2 === 0 ? 'dc-row-odd' : 'dc-row-even')}`;
-                            let acc = 0;
-                            return `
-                        <tr data-row-key="${key}" data-row-idx="${ri}" data-base-bg="${baseBg}" class="${rowClass}" style="background:${effectiveBg}; border-left:${borderLeft};" oncontextmenu="window.dcOpenContextMenu(event,'${r.mrId}',${r.itemIdx})">
-                            <td class="dc-sticky-cell" style="border:1px solid #eef0f3;padding:3px 6px;width:36px;min-width:36px;text-align:center;position:sticky;left:0;background:${effectiveBg};z-index:1;">
-                                <input type="checkbox" ${isSelected ? 'checked' : ''} onchange="window.dcToggleBulkRow('${key}',this.checked)" style="cursor:pointer;accent-color:#ef4444;width:14px;height:14px;" />
-                            </td>
-                            ${cols.map((c, ci) => {
-                                const w = dcColWidth(c);
-                                const left = c.sticky ? acc : null;
-                                if (c.sticky) acc += w;
-                                const isDelayCol = (c.key === 'reqDelayDays' || c.key === 'deliveryDelayDays');
-                                return `
-                            <td data-col-key="${c.key}" ${c.sticky ? 'class="dc-sticky-cell"' : ''} ondblclick="window.dcCopyCell('${esc(String(r[c.key]??''))}')" title="Double-click to copy"
-                                style="border:1px solid #eef0f3; padding:3px 6px; min-width:${w}px; max-width:${w}px; width:${w}px; overflow:hidden; text-overflow:ellipsis; ${c.sticky?`position:sticky; left:${left}px; background:${effectiveBg}; z-index:1; font-weight:700;`:''} ${isDelayCol && r[c.key]>0 ?'color:#DC2626; font-weight:700;':''}">
-                                ${(canEdit && c.editable) ? cellEditable(r, c, ri, ci) : cellReadonly(r, c)}
-                            </td>`; }).join('')}
-                            <td title="View History" style="border:1px solid #eef0f3;padding:1px 2px;text-align:center;width:22px;min-width:22px;max-width:22px;">
-                                <button onclick="window.openHistoryModal('item','${r.mrId}',${r.itemIdx})" title="View full history" style="background:none;border:none;cursor:pointer;color:#6366f1;padding:2px 3px;border-radius:3px;display:inline-flex;align-items:center;justify-content:center;" onmouseover="this.style.background='#eef2ff'" onmouseout="this.style.background='none'"><svg xmlns='http://www.w3.org/2000/svg' width='12' height='12' viewBox='0 0 24 24' fill='none' stroke='currentColor' stroke-width='2.2' stroke-linecap='round' stroke-linejoin='round'><circle cx='12' cy='12' r='10'/><polyline points='12 6 12 12 16 14'/></svg></button>
-                            </td>
-                        </tr>`; }).join('') || `<tr><td colspan="${cols.length + 1}" style="padding:24px; text-align:center; color:#94a3b8;">No purchase requests match these filters.</td></tr>`}
-                    </tbody>
-                </table>
-            </div>
+                           const effectiveBg = isSelected ? '#DCEEFF' : baseBg;
+                           const borderLeft = isSelected ? '4px solid #0D6EFD' : '4px solid transparent';
+                           const rowClass = `dc-row ${isSelected ? 'dc-row-selected' : (ri % 2 === 0 ? 'dc-row-odd' : 'dc-row-even')}`;
+                           let acc = 0;
+                           return `
+                       <tr data-row-key="${key}" data-row-idx="${ri}" data-base-bg="${baseBg}" class="${rowClass}" style="background:${effectiveBg}; border-left:${borderLeft};" oncontextmenu="window.dcOpenContextMenu(event,'${r.mrId}',${r.itemIdx})">
+                           <td class="dc-sticky-cell" style="border:1px solid #eef0f3;padding:3px 6px;width:36px;min-width:36px;text-align:center;position:sticky;left:0;background:${effectiveBg};z-index:1;">
+                               <input type="checkbox" ${isSelected ? 'checked' : ''} onchange="window.dcToggleBulkRow('${key}',this.checked)" style="cursor:pointer;accent-color:#ef4444;width:14px;height:14px;" />
+                           </td>
+                           ${cols.map((c, ci) => {
+                               const w = dcColWidth(c);
+                               const left = c.sticky ? acc : null;
+                               if (c.sticky) acc += w;
+                               const isDelayCol = (c.key === 'reqDelayDays' || c.key === 'deliveryDelayDays');
+                               return `
+                           <td data-col-key="${c.key}" ${c.sticky ? 'class="dc-sticky-cell"' : ''} ondblclick="window.dcCopyCell('${esc(String(r[c.key]??''))}')" title="Double-click to copy"
+                               style="border:1px solid #eef0f3; padding:3px 6px; min-width:${w}px; max-width:${w}px; width:${w}px; overflow:hidden; text-overflow:ellipsis; ${c.sticky?`position:sticky; left:${left}px; background:${effectiveBg}; z-index:1; font-weight:700;`:''} ${isDelayCol && r[c.key]>0 ?'color:#DC2626; font-weight:700;':''}">
+                               ${(canEdit && c.editable) ? cellEditable(r, c, ri, ci) : cellReadonly(r, c)}
+                           </td>`; }).join('')}
+                           <td title="View History" style="border:1px solid #eef0f3;padding:1px 2px;text-align:center;width:22px;min-width:22px;max-width:22px;">
+                               <button onclick="window.openHistoryModal('item','${r.mrId}',${r.itemIdx})" title="View full history" style="background:none;border:none;cursor:pointer;color:#6366f1;padding:2px 3px;border-radius:3px;display:inline-flex;align-items:center;justify-content:center;" onmouseover="this.style.background='#eef2ff'" onmouseout="this.style.background='none'"><svg xmlns='http://www.w3.org/2000/svg' width='12' height='12' viewBox='0 0 24 24' fill='none' stroke='currentColor' stroke-width='2.2' stroke-linecap='round' stroke-linejoin='round'><circle cx='12' cy='12' r='10'/><polyline points='12 6 12 12 16 14'/></svg></button>
+                           </td>
+                       </tr>`; }).join('') || `<tr><td colspan="${cols.length + 1}" style="padding:24px; text-align:center; color:#94a3b8;">No purchase requests match these filters.</td></tr>`}
+                   </tbody>
+               </table>
+           </div>
 
-            <div class="flex items-center justify-between no-print">
-                <p class="text-[10px] text-slate-500 font-bold uppercase tracking-widest">Page ${dcPage} of ${totalPages} · ${allRows.length} rows</p>
-                <div class="flex items-center gap-1">
-                    ${canEdit ? `
-                    <button id="dc-save-btn" onmousedown="window.dcSaveChanges()" title="${dcDirty ? 'Save Changes' : 'No unsaved changes'}"
-                        class="px-2.5 py-1.5 rounded-lg border transition-all flex items-center justify-center ${dcDirty ? 'bg-emerald-600 border-emerald-600 text-white shadow-lg' : 'bg-white border-rule text-slate-400 opacity-70'}">
-                        <span style="font-size:13px;line-height:1;">💾</span>
-                    </button>` : ''}
-                    <button onclick="window.dcSetPage(${Math.max(1,dcPage-1)})" class="px-3 py-1.5 text-[10px] font-black uppercase bg-white border border-rule rounded-lg">Prev</button>
-                    <div class="px-3 py-1.5 text-[10px] font-black bg-white border border-rule rounded-lg text-slate-500">${dcPage} / ${totalPages}</div>
-                    <button onclick="window.dcSetPage(${Math.min(totalPages,dcPage+1)})" class="px-3 py-1.5 text-[10px] font-black uppercase bg-white border border-rule rounded-lg">Next</button>
-                </div>
-            </div>
-            
-            ${window.dcBulkSelected && window.dcBulkSelected.size > 0 ? `
-            <div id="dc-floating-bulk-bar" class="no-print" style="position:fixed; bottom:24px; left:50%; transform:translateX(-50%); z-index:99999; background:#1e2530; color:#fff; padding:10px 20px; border-radius:16px; box-shadow:0 10px 30px rgba(0,0,0,0.35); display:flex; align-items:center; gap:12px; border:1px solid rgba(255,255,255,0.15); max-width:90vw;">
-                <div style="display:flex; align-items:center; gap:8px;">
-                    <span style="display:inline-block; width:8px; height:8px; border-radius:50%; background:#10b981; box-shadow:0 0 8px #10b981;"></span>
-                    <p style="font-size:11px; font-weight:900; text-transform:uppercase; letter-spacing:0.08em; white-space:nowrap; margin:0;">
-                        ${window.dcBulkSelected.size} ${window.dcBulkSelected.size === 1 ? 'row' : 'rows'} selected
-                    </p>
-                </div>
-                <button onclick="window.dcOpenBulkPoModal()" style="background:#1DB79C; color:#fff; border:none; padding:8px 14px; border-radius:8px; font-size:10px; font-weight:900; text-transform:uppercase; letter-spacing:0.08em; cursor:pointer; display:inline-flex; align-items:center; gap:5px; box-shadow:0 2px 8px rgba(29,183,156,0.4);">
-                    <i data-lucide="file-text" style="width:13px;height:13px;"></i> Bulk PO Update
-                </button>
-                <button onclick="window.dcOpenBulkStatusModal()" style="background:#6366F1; color:#fff; border:none; padding:8px 14px; border-radius:8px; font-size:10px; font-weight:900; text-transform:uppercase; letter-spacing:0.08em; cursor:pointer; display:inline-flex; align-items:center; gap:5px; box-shadow:0 2px 8px rgba(99,102,241,0.4);">
-                    <i data-lucide="tag" style="width:13px;height:13px;"></i> Bulk Status Update
-                </button>
-                <button onclick="window.dcBulkSelected.clear(); render();" style="background:none; border:none; color:#94a3b8; font-size:10px; font-weight:900; text-transform:uppercase; letter-spacing:0.08em; cursor:pointer; transition:color 0.15s ease;" onmouseover="this.style.color='#fff'" onmouseout="this.style.color='#94a3b8'">
-                    Clear
-                </button>
-            </div>` : ''}
+           <!-- INFINITE SCROLL FOOTER -->
+           <div id="dc-footer-wrap" class="flex items-center justify-between px-3 py-1.5 bg-slate-50 border border-rule rounded-xl no-print text-[10px] font-bold text-slate-600 shrink-0">
+               <div>
+                   ${pageRowsFiltered.length < allRows.length ? `
+                   <span class="inline-flex items-center gap-1.5 text-indigo-600 font-bold">
+                       <span class="w-2 h-2 rounded-full bg-indigo-500 animate-ping"></span>
+                       Loading more items... (${pageRowsFiltered.length} of ${allRows.length} loaded)
+                   </span>` : `
+                   <span class="inline-flex items-center gap-1 text-emerald-700 font-bold">
+                       ✓ All ${allRows.length} items loaded
+                   </span>`}
+               </div>
+               <div class="text-slate-400 font-mono text-[9px]">
+                   Double-click cell to copy · Right-click for options
+               </div>
+           </div>
+           
+           ${window.dcBulkSelected && window.dcBulkSelected.size > 0 ? `
+           <div id="dc-floating-bulk-bar" class="no-print" style="position:fixed; bottom:24px; left:50%; transform:translateX(-50%); z-index:99999; background:#1e2530; color:#fff; padding:10px 20px; border-radius:16px; box-shadow:0 10px 30px rgba(0,0,0,0.35); display:flex; align-items:center; gap:12px; border:1px solid rgba(255,255,255,0.15); max-width:90vw;">
+               <div style="display:flex; align-items:center; gap:8px;">
+                   <span style="display:inline-block; width:8px; height:8px; border-radius:50%; background:#10b981; box-shadow:0 0 8px #10b981;"></span>
+                   <p style="font-size:11px; font-weight:900; text-transform:uppercase; letter-spacing:0.08em; white-space:nowrap; margin:0;">
+                       ${window.dcBulkSelected.size} ${window.dcBulkSelected.size === 1 ? 'row' : 'rows'} selected
+                   </p>
+               </div>
+               <button onclick="window.dcOpenBulkPoModal()" style="background:#1DB79C; color:#fff; border:none; padding:8px 14px; border-radius:8px; font-size:10px; font-weight:900; text-transform:uppercase; letter-spacing:0.08em; cursor:pointer; display:inline-flex; align-items:center; gap:5px; box-shadow:0 2px 8px rgba(29,183,156,0.4);">
+                   <i data-lucide="file-text" style="width:13px;height:13px;"></i> Bulk PO Update
+               </button>
+               <button onclick="window.dcOpenBulkStatusModal()" style="background:#6366F1; color:#fff; border:none; padding:8px 14px; border-radius:8px; font-size:10px; font-weight:900; text-transform:uppercase; letter-spacing:0.08em; cursor:pointer; display:inline-flex; align-items:center; gap:5px; shadow:0 2px 8px rgba(99,102,241,0.4);">
+                   <i data-lucide="tag" style="width:13px;height:13px;"></i> Bulk Status Update
+               </button>
+               <button onclick="window.dcBulkSelected.clear(); render();" style="background:none; border:none; color:#94a3b8; font-size:10px; font-weight:900; text-transform:uppercase; letter-spacing:0.08em; cursor:pointer; transition:color 0.15s ease;" onmouseover="this.style.color='#fff'" onmouseout="this.style.color='#94a3b8'">
+                   Clear
+               </button>
+           </div>` : ''}
 
-            ${window.dcBulkPoModal ? `
-            <div style="position:fixed;inset:0;background:rgba(0,0,0,0.55);z-index:999999;display:flex;align-items:center;justify-content:center;" onclick="if(event.target===this){window.dcCloseBulkPoModal();}">
-                <div style="background:#fff;border-radius:16px;box-shadow:0 25px 60px rgba(0,0,0,0.25);width:100%;max-width:400px;padding:28px;position:relative;">
-                    <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:18px;">
-                        <div>
-                            <p style="font-size:17px;font-weight:900;color:#1e2530;letter-spacing:-0.3px;">Bulk PO Update</p>
-                            <p style="font-size:11px;color:#64748b;font-weight:600;margin-top:2px;">${window.dcBulkSelected ? window.dcBulkSelected.size : 0} item${(window.dcBulkSelected && window.dcBulkSelected.size===1)?'':'s'} selected</p>
-                        </div>
-                        <button onclick="window.dcCloseBulkPoModal()" style="color:#94a3b8;padding:4px;border-radius:6px;background:none;border:none;cursor:pointer;" title="Cancel"><i data-lucide="x" style="width:18px;height:18px;"></i></button>
-                    </div>
-                    <div style="display:flex;flex-direction:column;gap:14px;">
-                        <div>
-                            <label style="display:block;font-size:10px;font-weight:900;text-transform:uppercase;letter-spacing:.08em;color:#64748b;margin-bottom:4px;">PO Number</label>
-                            <input id="bulk-po-number" type="text" placeholder="e.g. PO-2026-0042" style="width:100%;font-size:13px;padding:9px 12px;border:1.5px solid #cbd5e1;border-radius:8px;outline:none;font-weight:600;color:#1e2530;box-sizing:border-box;" />
-                        </div>
-                        <div>
-                            <label style="display:block;font-size:10px;font-weight:900;text-transform:uppercase;letter-spacing:.08em;color:#64748b;margin-bottom:4px;">PO Date</label>
-                            <input id="bulk-po-date" type="date" style="width:100%;font-size:13px;padding:9px 12px;border:1.5px solid #cbd5e1;border-radius:8px;outline:none;font-weight:600;color:#1e2530;box-sizing:border-box;" />
-                        </div>
-                    </div>
-                    <div style="display:flex;gap:10px;margin-top:24px;">
-                        <button onclick="window.dcApplyBulkPo()" style="flex:1;background:#1DB79C;color:#fff;border:none;padding:11px 18px;border-radius:10px;font-size:11px;font-weight:900;text-transform:uppercase;letter-spacing:.08em;cursor:pointer;">Apply PO Update</button>
-                        <button onclick="window.dcCloseBulkPoModal()" style="flex:0 0 auto;background:#f1f5f9;color:#475569;border:none;padding:11px 18px;border-radius:10px;font-size:11px;font-weight:900;text-transform:uppercase;letter-spacing:.08em;cursor:pointer;">Cancel</button>
-                    </div>
-                </div>
-            </div>
-            ` : ''}
+           ${window.dcBulkPoModal ? `
+           <div style="position:fixed;inset:0;background:rgba(0,0,0,0.55);z-index:999999;display:flex;align-items:center;justify-content:center;" onclick="if(event.target===this){window.dcCloseBulkPoModal();}">
+               <div style="background:#fff;border-radius:16px;box-shadow:0 25px 60px rgba(0,0,0,0.25);width:100%;max-width:400px;padding:28px;position:relative;">
+                   <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:18px;">
+                       <div>
+                           <p style="font-size:17px;font-weight:900;color:#1e2530;letter-spacing:-0.3px;">Bulk PO Update</p>
+                           <p style="font-size:11px;color:#64748b;font-weight:600;margin-top:2px;">${window.dcBulkSelected ? window.dcBulkSelected.size : 0} item${(window.dcBulkSelected && window.dcBulkSelected.size===1)?'':'s'} selected</p>
+                       </div>
+                       <button onclick="window.dcCloseBulkPoModal()" style="color:#94a3b8;padding:4px;border-radius:6px;background:none;border:none;cursor:pointer;" title="Cancel"><i data-lucide="x" style="width:18px;height:18px;"></i></button>
+                   </div>
+                   <div style="display:flex;flex-direction:column;gap:14px;">
+                       <div>
+                           <label style="display:block;font-size:10px;font-weight:900;text-transform:uppercase;letter-spacing:.08em;color:#64748b;margin-bottom:4px;">PO Number</label>
+                           <input id="bulk-po-number" type="text" placeholder="e.g. PO-2026-0042" style="width:100%;font-size:13px;padding:9px 12px;border:1.5px solid #cbd5e1;border-radius:8px;outline:none;font-weight:600;color:#1e2530;box-sizing:border-box;" />
+                       </div>
+                       <div>
+                           <label style="display:block;font-size:10px;font-weight:900;text-transform:uppercase;letter-spacing:.08em;color:#64748b;margin-bottom:4px;">PO Date</label>
+                           <input id="bulk-po-date" type="date" style="width:100%;font-size:13px;padding:9px 12px;border:1.5px solid #cbd5e1;border-radius:8px;outline:none;font-weight:600;color:#1e2530;box-sizing:border-box;" />
+                       </div>
+                   </div>
+                   <div style="display:flex;gap:10px;margin-top:24px;">
+                       <button onclick="window.dcApplyBulkPo()" style="flex:1;background:#1DB79C;color:#fff;border:none;padding:11px 18px;border-radius:10px;font-size:11px;font-weight:900;text-transform:uppercase;letter-spacing:.08em;cursor:pointer;">Apply PO Update</button>
+                       <button onclick="window.dcCloseBulkPoModal()" style="flex:0 0 auto;background:#f1f5f9;color:#475569;border:none;padding:11px 18px;border-radius:10px;font-size:11px;font-weight:900;text-transform:uppercase;letter-spacing:.08em;cursor:pointer;">Cancel</button>
+                   </div>
+               </div>
+           </div>
+           ` : ''}
 
-            ${window.dcBulkStatusModal ? `
-            <div style="position:fixed;inset:0;background:rgba(0,0,0,0.55);z-index:999999;display:flex;align-items:center;justify-content:center;" onclick="if(event.target===this){window.dcCloseBulkStatusModal();}">
-                <div style="background:#fff;border-radius:16px;box-shadow:0 25px 60px rgba(0,0,0,0.25);width:100%;max-width:400px;padding:28px;position:relative;">
-                    <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:18px;">
-                        <div>
-                            <p style="font-size:17px;font-weight:900;color:#1e2530;letter-spacing:-0.3px;">Bulk Status & Receipt Update</p>
-                            <p style="font-size:11px;color:#64748b;font-weight:600;margin-top:2px;">${window.dcBulkSelected ? window.dcBulkSelected.size : 0} item${(window.dcBulkSelected && window.dcBulkSelected.size===1)?'':'s'} selected</p>
-                        </div>
-                        <button onclick="window.dcCloseBulkStatusModal()" style="color:#94a3b8;padding:4px;border-radius:6px;background:none;border:none;cursor:pointer;" title="Cancel"><i data-lucide="x" style="width:18px;height:18px;"></i></button>
-                    </div>
-                    <div style="display:flex;flex-direction:column;gap:14px;">
-                        <div>
-                            <label style="display:block;font-size:10px;font-weight:900;text-transform:uppercase;letter-spacing:.08em;color:#64748b;margin-bottom:4px;">Item Status</label>
-                            <select id="bulk-item-status" style="width:100%;font-size:13px;padding:9px 12px;border:1.5px solid #cbd5e1;border-radius:8px;outline:none;font-weight:600;color:#1e2530;box-sizing:border-box;background:#fff;">
-                                <option value="">-- Select Target Status --</option>
-                                <option value="ONLY_RECEIVED">Only Received</option>
-                                <option value="CLOSED">Received (Closed)</option>
-                                <option value="PO_GIVEN">PO Given</option>
-                                <option value="PARTIAL">Partial Received</option>
-                                <option value="HOLD">Hold</option>
-                                <option value="CANCELLED">Cancelled</option>
-                            </select>
-                        </div>
-                        <div>
-                            <label style="display:block;font-size:10px;font-weight:900;text-transform:uppercase;letter-spacing:.08em;color:#64748b;margin-bottom:4px;">Material Received Date</label>
-                            <input id="bulk-received-date" type="date" style="width:100%;font-size:13px;padding:9px 12px;border:1.5px solid #cbd5e1;border-radius:8px;outline:none;font-weight:600;color:#1e2530;box-sizing:border-box;" />
-                        </div>
-                    </div>
-                    <div style="display:flex;gap:10px;margin-top:24px;">
-                        <button onclick="window.dcApplyBulkStatus()" style="flex:1;background:#6366F1;color:#fff;border:none;padding:11px 18px;border-radius:10px;font-size:11px;font-weight:900;text-transform:uppercase;letter-spacing:.08em;cursor:pointer;">Apply Status Update</button>
-                        <button onclick="window.dcCloseBulkStatusModal()" style="flex:0 0 auto;background:#f1f5f9;color:#475569;border:none;padding:11px 18px;border-radius:10px;font-size:11px;font-weight:900;text-transform:uppercase;letter-spacing:.08em;cursor:pointer;">Cancel</button>
-                    </div>
-                </div>
-            </div>
-            ` : ''}
-        </div>`;
-    }
+           ${window.dcBulkStatusModal ? `
+           <div style="position:fixed;inset:0;background:rgba(0,0,0,0.55);z-index:999999;display:flex;align-items:center;justify-content:center;" onclick="if(event.target===this){window.dcCloseBulkStatusModal();}">
+               <div style="background:#fff;border-radius:16px;box-shadow:0 25px 60px rgba(0,0,0,0.25);width:100%;max-width:400px;padding:28px;position:relative;">
+                   <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:18px;">
+                       <div>
+                           <p style="font-size:17px;font-weight:900;color:#1e2530;letter-spacing:-0.3px;">Bulk Status & Receipt Update</p>
+                           <p style="font-size:11px;color:#64748b;font-weight:600;margin-top:2px;">${window.dcBulkSelected ? window.dcBulkSelected.size : 0} item${(window.dcBulkSelected && window.dcBulkSelected.size===1)?'':'s'} selected</p>
+                       </div>
+                       <button onclick="window.dcCloseBulkStatusModal()" style="color:#94a3b8;padding:4px;border-radius:6px;background:none;border:none;cursor:pointer;" title="Cancel"><i data-lucide="x" style="width:18px;height:18px;"></i></button>
+                   </div>
+                   <div style="display:flex;flex-direction:column;gap:14px;">
+                       <div>
+                           <label style="display:block;font-size:10px;font-weight:900;text-transform:uppercase;letter-spacing:.08em;color:#64748b;margin-bottom:4px;">Item Status</label>
+                           <select id="bulk-item-status" style="width:100%;font-size:13px;padding:9px 12px;border:1.5px solid #cbd5e1;border-radius:8px;outline:none;font-weight:600;color:#1e2530;box-sizing:border-box;background:#fff;">
+                               <option value="">-- Select Target Status --</option>
+                               <option value="ONLY_RECEIVED">Only Received</option>
+                               <option value="CLOSED">Received (Closed)</option>
+                               <option value="PO_GIVEN">PO Given</option>
+                               <option value="PARTIAL">Partial Received</option>
+                               <option value="HOLD">Hold</option>
+                               <option value="CANCELLED">Cancelled</option>
+                           </select>
+                       </div>
+                       <div>
+                           <label style="display:block;font-size:10px;font-weight:900;text-transform:uppercase;letter-spacing:.08em;color:#64748b;margin-bottom:4px;">Material Received Date</label>
+                           <input id="bulk-received-date" type="date" style="width:100%;font-size:13px;padding:9px 12px;border:1.5px solid #cbd5e1;border-radius:8px;outline:none;font-weight:600;color:#1e2530;box-sizing:border-box;" />
+                       </div>
+                   </div>
+                   <div style="display:flex;gap:10px;margin-top:24px;">
+                       <button onclick="window.dcApplyBulkStatus()" style="flex:1;background:#6366F1;color:#fff;border:none;padding:11px 18px;border-radius:10px;font-size:11px;font-weight:900;text-transform:uppercase;letter-spacing:.08em;cursor:pointer;">Apply Status Update</button>
+                       <button onclick="window.dcCloseBulkStatusModal()" style="flex:0 0 auto;background:#f1f5f9;color:#475569;border:none;padding:11px 18px;border-radius:10px;font-size:11px;font-weight:900;text-transform:uppercase;letter-spacing:.08em;cursor:pointer;">Cancel</button>
+                   </div>
+               </div>
+           </div>
+           ` : ''}
+       </div>`;
+   }
 
-    // Bulk PO Update Logic
+   // Bulk PO Update Logic
     function updateBulkSelectionUI() {
         if (!window.dcBulkSelected) window.dcBulkSelected = new Set();
         const count = window.dcBulkSelected.size;
