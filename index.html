@@ -5121,8 +5121,8 @@
                 ${card(s.overdueDeliveries,'Overdue Deliveries','#7F1D1D','overdue_delivery')}
             </div>
 
-            ${(user.role === 'planner' || user.role === 'admin') ? renderApprovalPerformanceKPIs() : ''}
             ${(user.role === 'planner' || user.role === 'admin') ? renderPlanningControlBoard() : ''}
+            ${(user.role === 'planner' || user.role === 'admin') ? renderApprovalPerformanceKPIs() : ''}
             ${(user.role === 'admin' || user.role === 'procurement') ? renderProcTeamSnapshot() : ''}
         </div>`;
     }
