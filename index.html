@@ -7331,27 +7331,14 @@ function renderMrRow(item, idx, xlInputCss) {
             </div>
         </div>
 
-        <!-- ROW 7+8: MANPOWER + AI INSIGHTS + SIDEBAR -->
-        <div class="grid grid-cols-1 lg:grid-cols-3 gap-4 mb-5">
-            <!-- Manpower -->
-            <div class="lg:col-span-1 bg-white border border-rule rounded-xl p-4 shadow-sm">
-                <h3 class="text-[11px] font-black uppercase tracking-widest text-slate-600 mb-4 flex items-center gap-2"><i data-lucide="users" class="w-4 h-4 text-indigo-600"></i> Manpower Planning</h3>
-                <div class="space-y-3 mb-4">
-                    ${[{label:'Allocated',val:manAllocated,max:120,color:'#4F46E5'},{label:'Available',val:manAvailable,max:120,color:'#047857'},{label:'Overloaded',val:manOverloaded,max:120,color:'#DC2626'},{label:'Idle',val:manIdle,max:120,color:'#94A3B8'}].map(m=>`
-                    <div>
-                        <div class="flex justify-between mb-1"><span class="text-[10px] font-bold text-slate-600">${m.label}</span><span class="text-[10px] font-black" style="color:${m.color}">${m.val}</span></div>
-                        <div class="h-3 rounded-full bg-slate-100 overflow-hidden"><div class="h-full rounded-full" style="width:${Math.min(100,Math.round((m.val/m.max)*100))}%;background:${m.color}"></div></div>
-                    </div>`).join('')}
-                </div>
-                <div class="pcb-chart-box" id="pcb-project-chart-box" style="height:130px"><canvas id="pcb-project-chart"></canvas></div>
-            </div>
-
+        <!-- ROW 7+8: AI INSIGHTS + SIDEBAR -->
+        <div class="grid grid-cols-1 lg:grid-cols-2 gap-4 mb-5">
             <!-- AI Insights -->
-            <div class="lg:col-span-1 bg-gradient-to-br from-indigo-950 to-slate-900 border border-indigo-800/40 rounded-xl p-4 shadow-xl">
+            <div class="lg:col-span-1 bg-gradient-to-br from-indigo-950 to-slate-900 border border-indigo-800/40 rounded-xl p-4 shadow-xl flex flex-col justify-between">
                 <h3 class="text-[11px] font-black uppercase tracking-widest text-indigo-300 mb-4 flex items-center gap-2">
                     <i data-lucide="sparkles" class="w-4 h-4 text-indigo-400"></i> AI Planning Insights
                 </h3>
-                <div class="space-y-2.5">
+                <div class="space-y-2.5 my-auto">
                     ${insights.map(ins => `
                     <div class="flex items-start gap-2.5 p-2.5 rounded-lg bg-white/5 border border-white/10 hover:bg-white/10 transition-all">
                         <div class="w-6 h-6 rounded-lg flex items-center justify-center shrink-0 mt-0.5" style="background:${ins.color}25">
