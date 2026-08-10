@@ -7294,6 +7294,88 @@ function renderMrRow(item, idx, xlInputCss) {
             </div>`).join('')}
         </div>
 
+        <!-- PROJECT TABLE -->
+        <div class="bg-white border border-rule rounded-xl shadow-sm mb-5 relative">
+            <div class="p-3.5 border-b border-rule bg-slate-50 flex flex-wrap items-center gap-2">
+                <h3 class="text-[11px] font-display font-bold text-slate-600 uppercase tracking-widest flex items-center gap-2"><i data-lucide="table-2" class="w-4 h-4 text-blue-600"></i> Project Planning Dashboard</h3>
+                ${selBadge}
+                <div class="ml-auto flex flex-wrap items-center justify-end gap-2">
+                    <input id="pcb-q" value="${esc(pcbState.q)}" oninput="window.setPcbFilter('q', this.value)" placeholder="Search project…" class="glass-input !w-44 !py-1.5 !text-xs" />
+                    <div class="relative">
+                        <button id="pcb-proj-btn" type="button" onclick="window.togglePcbDropdown(event)" class="glass-input !w-36 !py-1.5 !text-xs flex justify-between items-center text-left cursor-pointer">
+                            <span>${pcbState.projects.length ? pcbState.projects.length + ' Selected' : 'All Projects'}</span>
+                            <i data-lucide="chevron-down" class="w-3.5 h-3.5 opacity-50"></i>
+                        </button>
+                        <div id="pcb-proj-dd" onclick="event.stopPropagation()" class="${window.pcbProjectDropdownOpen ? '' : 'hidden'} absolute top-full right-0 mt-1 w-80 bg-white border border-slate-200 shadow-2xl rounded-2xl z-[9999] flex flex-col p-2.5 max-h-[24rem]">
+                            <div class="px-2 pb-2 pt-1 border-b border-slate-100 shrink-0">
+                                <input type="text" onkeyup="const q=this.value.toLowerCase(); const labels=this.parentElement.nextElementSibling.nextElementSibling.querySelectorAll('label'); let found=0; labels.forEach(l=>{ const match=l.innerText.toLowerCase().includes(q); l.style.display=match?'flex':'none'; if(match) found++; }); const noRes=document.getElementById('pcb-proj-no-res'); if(noRes) noRes.style.display=found===0?'block':'none';" placeholder="Search project..." class="glass-input w-full !py-1.5 !text-xs font-bold" />
+                            </div>
+                            <label class="flex items-center gap-2 px-2 py-2 hover:bg-slate-50 cursor-pointer rounded-lg text-[10px] uppercase font-black tracking-widest text-brand border-b border-slate-100 mb-1 shrink-0">
+                                <input type="checkbox" onchange="window.setPcbProjects([])" ${pcbState.projects.length===0?'checked':''} class="accent-brand rounded border-slate-300 w-3.5 h-3.5" /> Clear / Select All
+                            </label>
+                            <div class="overflow-y-auto custom-scrollbar flex-1 max-h-48 my-1 pr-1">
+                                <div id="pcb-proj-no-res" class="p-3 text-center text-xs text-slate-400 font-medium hidden">No projects found</div>
+                                ${d.projectRows.map(p=>`
+                                <label class="flex items-start gap-2 px-2 py-1.5 hover:bg-slate-50 cursor-pointer rounded-lg text-xs break-words whitespace-normal leading-tight">
+                                    <input type="checkbox" onchange="window.togglePcbProject('${esc(p.name)}')" ${pcbState.projects.includes(p.name)?'checked':''} class="accent-brand rounded border-slate-300 w-3.5 h-3.5 shrink-0 mt-0.5" />
+                                    <span>${esc(p.name)}</span>
+                                </label>`).join('')}
+                            </div>
+                            <div class="pt-2 mt-1 border-t border-slate-100 shrink-0 bg-white sticky bottom-0 z-20">
+                                <button type="button" onclick="window.pcbProjectDropdownOpen = false; const dd=document.getElementById('pcb-proj-dd'); if(dd) dd.classList.add('hidden'); softRender();" class="w-full bg-[#181a4a] text-white font-bold py-2 rounded-xl text-xs hover:bg-[#282b64] active:scale-95 transition-all flex items-center justify-center gap-2 shadow-md cursor-pointer">
+                                    <i data-lucide="check-circle" class="w-4 h-4 text-emerald-400"></i> Save & Reflect Dashboard
+                                </button>
+                            </div>
+                        </div>
+                    </div>
+                    <select onchange="window.setPcbFilter('status', this.value)" class="glass-input !w-36 !py-1.5 !text-xs">
+                        <option value="">All Statuses</option>
+                        ${['Pending Planning','In Procurement','Completed','No BOM / MR'].map(s=>`<option value="${esc(s)}" ${pcbState.status===s?'selected':''}>${esc(s)}</option>`).join('')}
+                    </select>
+                </div>
+            </div>
+            <div class="overflow-auto max-h-[380px] custom-scrollbar">
+                <table class="w-full text-left whitespace-nowrap">
+                    <thead class="sticky top-0 z-10"><tr class="bg-slate-50 text-[9px] font-black text-slate-400 uppercase tracking-widest border-b border-rule">
+                        <th class="px-3 py-2 text-center w-[48px] sticky left-0 bg-slate-50 z-20">Pri</th>
+                        <th class="px-3 py-2 min-w-[180px] sticky left-[48px] bg-slate-50 z-20">Project</th>
+                        <th class="px-3 py-2 text-right">BOM</th>
+                        <th class="px-3 py-2 text-right">MR Rcvd</th>
+                        <th class="px-3 py-2 text-right">PR Gen</th>
+                        <th class="px-3 py-2 text-right">Pending PR</th>
+                        <th class="px-3 py-2">Completion</th>
+                        <th class="px-3 py-2">Status</th>
+                        <th class="px-3 py-2 text-right">Delay %</th>
+                        <th class="px-3 py-2">Remarks</th>
+                    </tr></thead>
+                    <tbody class="divide-y divide-rule text-xs">
+                        ${rows.length === 0 ? '<tr><td colspan="10" class="p-8 text-center text-slate-400">No projects match this filter.</td></tr>' : ''}
+                        ${rows.map(p => {
+                            const sc = pcbStatusColor(p.planningStatus);
+                            return `<tr class="hover:bg-indigo-50/30 transition-colors">
+                                <td class="px-3 py-1.5 text-center font-bold sticky left-0 bg-white z-10">${p.priority}</td>
+                                <td class="px-3 py-1.5 font-bold text-ink text-[12px] sticky left-[48px] bg-white z-10 truncate max-w-[220px]" title="${esc(p.name)}">${esc(p.name)}</td>
+                                <td class="px-3 py-1.5 text-right font-mono">${p.bom}</td>
+                                <td class="px-3 py-1.5 text-right font-mono">${p.mrReceived}</td>
+                                <td class="px-3 py-1.5 text-right font-mono">${p.prGenerated}</td>
+                                <td class="px-3 py-1.5 text-right font-mono ${p.pendingPR>0?'text-amber-600 font-bold':''}">${p.pendingPR}</td>
+                                <td class="px-3 py-1.5 w-28">
+                                    <div class="flex items-center gap-2">
+                                        <div class="flex-1 h-1.5 rounded-full bg-slate-100 overflow-hidden"><div class="h-full rounded-full" style="width:${p.matPct}%;background:${p.matPct>=100?'#047857':p.matPct>50?'#3B82F6':'#F59E0B'}"></div></div>
+                                        <span class="text-[10px] font-bold w-8 text-right">${p.matPct}%</span>
+                                    </div>
+                                </td>
+                                <td class="px-3 py-1.5"><span class="status-chip" style="background:${sc.bg};color:${sc.c};border-color:${sc.c}33"><span class="dot" style="background:${sc.c}"></span>${esc(p.planningStatus)}</span></td>
+                                <td class="px-3 py-1.5 text-right font-mono ${p.delayPct>0?'text-rose-600 font-bold':'text-slate-300'}">${p.delayPct}%</td>
+                                <td class="px-3 py-1.5 text-slate-500 max-w-[140px] truncate" title="${esc(p.remarks)}">${esc(p.remarks)||'—'}</td>
+                            </tr>`;
+                        }).join('')}
+                    </tbody>
+                </table>
+            </div>
+        </div>
+
+        
         <!-- ROW 3: GANTT TIMELINE -->
         <div class="bg-white border border-rule rounded-xl p-4 mb-5 shadow-sm">
             <div class="flex items-center justify-between mb-3">
@@ -7415,87 +7497,6 @@ function renderMrRow(item, idx, xlInputCss) {
             <div class="bg-white border border-[#e8ecf2] rounded-2xl p-3.5 shadow-2xs flex flex-col justify-between">
                 <h4 class="text-[10px] font-black uppercase tracking-widest text-[#79839a] mb-2 flex items-center gap-1.5 shrink-0"><i data-lucide="pencil" class="w-3.5 h-3.5 text-slate-400"></i> Planner Notes</h4>
                 <textarea class="w-full h-full min-h-[140px] text-[11px] p-2.5 rounded-xl border border-[#e8ecf2] bg-slate-50/80 resize-none focus:outline-none focus:border-indigo-400 text-slate-700 leading-relaxed font-medium" placeholder="Add quick notes for today's session..."></textarea>
-            </div>
-        </div>
-
-        <!-- PROJECT TABLE -->
-        <div class="bg-white border border-rule rounded-xl shadow-sm mb-5 relative">
-            <div class="p-3.5 border-b border-rule bg-slate-50 flex flex-wrap items-center gap-2">
-                <h3 class="text-[11px] font-display font-bold text-slate-600 uppercase tracking-widest flex items-center gap-2"><i data-lucide="table-2" class="w-4 h-4 text-blue-600"></i> Project Planning Dashboard</h3>
-                ${selBadge}
-                <div class="ml-auto flex flex-wrap items-center justify-end gap-2">
-                    <input id="pcb-q" value="${esc(pcbState.q)}" oninput="window.setPcbFilter('q', this.value)" placeholder="Search project…" class="glass-input !w-44 !py-1.5 !text-xs" />
-                    <div class="relative">
-                        <button id="pcb-proj-btn" type="button" onclick="window.togglePcbDropdown(event)" class="glass-input !w-36 !py-1.5 !text-xs flex justify-between items-center text-left cursor-pointer">
-                            <span>${pcbState.projects.length ? pcbState.projects.length + ' Selected' : 'All Projects'}</span>
-                            <i data-lucide="chevron-down" class="w-3.5 h-3.5 opacity-50"></i>
-                        </button>
-                        <div id="pcb-proj-dd" onclick="event.stopPropagation()" class="${window.pcbProjectDropdownOpen ? '' : 'hidden'} absolute top-full right-0 mt-1 w-80 bg-white border border-slate-200 shadow-2xl rounded-2xl z-[9999] flex flex-col p-2.5 max-h-[24rem]">
-                            <div class="px-2 pb-2 pt-1 border-b border-slate-100 shrink-0">
-                                <input type="text" onkeyup="const q=this.value.toLowerCase(); const labels=this.parentElement.nextElementSibling.nextElementSibling.querySelectorAll('label'); let found=0; labels.forEach(l=>{ const match=l.innerText.toLowerCase().includes(q); l.style.display=match?'flex':'none'; if(match) found++; }); const noRes=document.getElementById('pcb-proj-no-res'); if(noRes) noRes.style.display=found===0?'block':'none';" placeholder="Search project..." class="glass-input w-full !py-1.5 !text-xs font-bold" />
-                            </div>
-                            <label class="flex items-center gap-2 px-2 py-2 hover:bg-slate-50 cursor-pointer rounded-lg text-[10px] uppercase font-black tracking-widest text-brand border-b border-slate-100 mb-1 shrink-0">
-                                <input type="checkbox" onchange="window.setPcbProjects([])" ${pcbState.projects.length===0?'checked':''} class="accent-brand rounded border-slate-300 w-3.5 h-3.5" /> Clear / Select All
-                            </label>
-                            <div class="overflow-y-auto custom-scrollbar flex-1 max-h-48 my-1 pr-1">
-                                <div id="pcb-proj-no-res" class="p-3 text-center text-xs text-slate-400 font-medium hidden">No projects found</div>
-                                ${d.projectRows.map(p=>`
-                                <label class="flex items-start gap-2 px-2 py-1.5 hover:bg-slate-50 cursor-pointer rounded-lg text-xs break-words whitespace-normal leading-tight">
-                                    <input type="checkbox" onchange="window.togglePcbProject('${esc(p.name)}')" ${pcbState.projects.includes(p.name)?'checked':''} class="accent-brand rounded border-slate-300 w-3.5 h-3.5 shrink-0 mt-0.5" />
-                                    <span>${esc(p.name)}</span>
-                                </label>`).join('')}
-                            </div>
-                            <div class="pt-2 mt-1 border-t border-slate-100 shrink-0 bg-white sticky bottom-0 z-20">
-                                <button type="button" onclick="window.pcbProjectDropdownOpen = false; const dd=document.getElementById('pcb-proj-dd'); if(dd) dd.classList.add('hidden'); softRender();" class="w-full bg-[#181a4a] text-white font-bold py-2 rounded-xl text-xs hover:bg-[#282b64] active:scale-95 transition-all flex items-center justify-center gap-2 shadow-md cursor-pointer">
-                                    <i data-lucide="check-circle" class="w-4 h-4 text-emerald-400"></i> Save & Reflect Dashboard
-                                </button>
-                            </div>
-                        </div>
-                    </div>
-                    <select onchange="window.setPcbFilter('status', this.value)" class="glass-input !w-36 !py-1.5 !text-xs">
-                        <option value="">All Statuses</option>
-                        ${['Pending Planning','In Procurement','Completed','No BOM / MR'].map(s=>`<option value="${esc(s)}" ${pcbState.status===s?'selected':''}>${esc(s)}</option>`).join('')}
-                    </select>
-                </div>
-            </div>
-            <div class="overflow-auto max-h-[380px] custom-scrollbar">
-                <table class="w-full text-left whitespace-nowrap">
-                    <thead class="sticky top-0 z-10"><tr class="bg-slate-50 text-[9px] font-black text-slate-400 uppercase tracking-widest border-b border-rule">
-                        <th class="px-3 py-2 text-center w-[48px] sticky left-0 bg-slate-50 z-20">Pri</th>
-                        <th class="px-3 py-2 min-w-[180px] sticky left-[48px] bg-slate-50 z-20">Project</th>
-                        <th class="px-3 py-2 text-right">BOM</th>
-                        <th class="px-3 py-2 text-right">MR Rcvd</th>
-                        <th class="px-3 py-2 text-right">PR Gen</th>
-                        <th class="px-3 py-2 text-right">Pending PR</th>
-                        <th class="px-3 py-2">Completion</th>
-                        <th class="px-3 py-2">Status</th>
-                        <th class="px-3 py-2 text-right">Delay %</th>
-                        <th class="px-3 py-2">Remarks</th>
-                    </tr></thead>
-                    <tbody class="divide-y divide-rule text-xs">
-                        ${rows.length === 0 ? '<tr><td colspan="10" class="p-8 text-center text-slate-400">No projects match this filter.</td></tr>' : ''}
-                        ${rows.map(p => {
-                            const sc = pcbStatusColor(p.planningStatus);
-                            return `<tr class="hover:bg-indigo-50/30 transition-colors">
-                                <td class="px-3 py-1.5 text-center font-bold sticky left-0 bg-white z-10">${p.priority}</td>
-                                <td class="px-3 py-1.5 font-bold text-ink text-[12px] sticky left-[48px] bg-white z-10 truncate max-w-[220px]" title="${esc(p.name)}">${esc(p.name)}</td>
-                                <td class="px-3 py-1.5 text-right font-mono">${p.bom}</td>
-                                <td class="px-3 py-1.5 text-right font-mono">${p.mrReceived}</td>
-                                <td class="px-3 py-1.5 text-right font-mono">${p.prGenerated}</td>
-                                <td class="px-3 py-1.5 text-right font-mono ${p.pendingPR>0?'text-amber-600 font-bold':''}">${p.pendingPR}</td>
-                                <td class="px-3 py-1.5 w-28">
-                                    <div class="flex items-center gap-2">
-                                        <div class="flex-1 h-1.5 rounded-full bg-slate-100 overflow-hidden"><div class="h-full rounded-full" style="width:${p.matPct}%;background:${p.matPct>=100?'#047857':p.matPct>50?'#3B82F6':'#F59E0B'}"></div></div>
-                                        <span class="text-[10px] font-bold w-8 text-right">${p.matPct}%</span>
-                                    </div>
-                                </td>
-                                <td class="px-3 py-1.5"><span class="status-chip" style="background:${sc.bg};color:${sc.c};border-color:${sc.c}33"><span class="dot" style="background:${sc.c}"></span>${esc(p.planningStatus)}</span></td>
-                                <td class="px-3 py-1.5 text-right font-mono ${p.delayPct>0?'text-rose-600 font-bold':'text-slate-300'}">${p.delayPct}%</td>
-                                <td class="px-3 py-1.5 text-slate-500 max-w-[140px] truncate" title="${esc(p.remarks)}">${esc(p.remarks)||'—'}</td>
-                            </tr>`;
-                        }).join('')}
-                    </tbody>
-                </table>
             </div>
         </div>
 
