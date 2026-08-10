@@ -6090,8 +6090,8 @@ function renderMrRow(item, idx, xlInputCss) {
             return;
         }
         const mrs = mergePrSelected.map(id => appData.mrs.find(m => m.id === id)).filter(Boolean);
-        if (mrs.length < 2) {
-            alert('Select at least 2 Authorized MRs to merge into a single PR.');
+        if (mrs.length < 1) {
+            alert('Select at least 1 Authorized MR to generate a PR.');
             return;
         }
         if (mrs.some(m => !isMergeEligibleMr(m))) {
@@ -6629,14 +6629,14 @@ function renderMrRow(item, idx, xlInputCss) {
 
                 <div class="space-y-4">
                     <div class="bg-white rounded-2xl border border-rule shadow-panel p-5">
-                        <h3 class="text-[11px] font-black text-slate-500 uppercase tracking-widest mb-3">Combined PR Preview</h3>
-                        ${selected.length < 2 ? `
-                        <p class="text-xs text-slate-400 italic py-6 text-center">Select at least 2 MRs to preview the combined PR</p>` : `
+                        <h3 class="text-[11px] font-black text-slate-500 uppercase tracking-widest mb-3">${selected.length > 1 ? 'Combined PR Preview' : 'PR Preview'}</h3>
+                        ${selected.length < 1 ? `
+                        <p class="text-xs text-slate-400 italic py-6 text-center">Select at least 1 MR to preview and generate PR</p>` : `
                         <div class="space-y-2 mb-4">
-                            <div class="flex justify-between text-xs"><span class="text-slate-500">MRs to combine</span><span class="font-mono font-bold text-brand">${selected.map(m => esc(m.mrNumber)).join(', ')}</span></div>
+                            <div class="flex justify-between text-xs"><span class="text-slate-500">${selected.length > 1 ? 'MRs to combine' : 'Source MR'}</span><span class="font-mono font-bold text-brand">${selected.map(m => esc(m.mrNumber)).join(', ')}</span></div>
                             <div class="flex justify-between text-xs"><span class="text-slate-500">Departments</span><span class="font-bold">${esc(depts.join(', '))}</span></div>
                             <div class="flex justify-between text-xs"><span class="text-slate-500">Total line items</span><span class="font-bold">${previewItems.length}</span></div>
-                            <div class="flex justify-between text-xs"><span class="text-slate-500">Next PR number</span><span class="font-mono font-bold text-[#0E7490]">${esc(peekNextPrNumber())}</span></div>
+                            <div class="flex justify-between text-xs"><span class="text-slate-500">Generated PR number</span><span class="font-mono font-bold text-[#0E7490]">${esc(peekNextPrNumber())}</span></div>
                         </div>
                         <div class="border border-rule rounded-xl overflow-hidden overflow-x-auto max-h-48 overflow-y-auto custom-scrollbar">
                             <table class="w-full text-left text-[10px]">
@@ -6655,10 +6655,10 @@ function renderMrRow(item, idx, xlInputCss) {
                     </div>
                     <div class="bg-white rounded-2xl border border-rule shadow-panel p-5">
                         <label class="field-label">Planning remarks (optional)</label>
-                        <textarea id="merge-pr-note" class="glass-input min-h-[80px]" placeholder="Reason for combining these MRs into one PR…"></textarea>
-                        <button onclick="window.executeMergeMrsToPr()" ${selected.length < 2 ? 'disabled' : ''}
+                        <textarea id="merge-pr-note" class="glass-input min-h-[80px]" placeholder="${selected.length > 1 ? 'Reason for combining these MRs into one PR…' : 'Add planning remarks for this PR…'}"></textarea>
+                        <button onclick="window.executeMergeMrsToPr()" ${selected.length < 1 ? 'disabled' : ''}
                             class="w-full mt-4 bg-violet-700 hover:bg-violet-800 disabled:opacity-40 disabled:cursor-not-allowed text-white font-black py-4 rounded-xl uppercase tracking-widest shadow-xl active:scale-95 transition-all flex items-center justify-center gap-2">
-                            <i data-lucide="check-circle" class="w-4 h-4"></i> Submit Combined PR &amp; Open Print Sheet
+                            <i data-lucide="check-circle" class="w-4 h-4"></i> Submit ${selected.length > 1 ? 'Combined PR' : 'PR'} &amp; Open Print Sheet
                         </button>
                     </div>
                 </div>
