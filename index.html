@@ -5097,8 +5097,6 @@
         const card = (val, label, color, preset) => dcCard(val, label, color, `window.dcApplyPreset('${preset}')`);
         return `
         <div class="space-y-8">
-            ${(user.role === 'planner' || user.role === 'admin') ? renderPlanningControlBoard() : ''}
-
             <div class="flex items-end justify-between flex-wrap gap-3">
                 <div>
                     <h2 class="text-2xl font-display font-bold tracking-tight">Data Centre Summary</h2>
@@ -5123,6 +5121,7 @@
                 ${card(s.overdueDeliveries,'Overdue Deliveries','#7F1D1D','overdue_delivery')}
             </div>
 
+            ${(user.role === 'planner' || user.role === 'admin') ? renderPlanningControlBoard() : ''}
             ${(user.role === 'planner' || user.role === 'admin') ? renderApprovalPerformanceKPIs() : ''}
             ${(user.role === 'admin' || user.role === 'procurement') ? renderProcTeamSnapshot() : ''}
         </div>`;
@@ -7239,41 +7238,6 @@ function renderMrRow(item, idx, xlInputCss) {
 
         return `
         <div class="pt-3 mt-2 border-t-2 border-dashed border-rule">
-
-        <!-- TOP HEADER -->
-        <div class="bg-[#181a4a] rounded-2xl px-6 py-4 mb-4 flex flex-wrap lg:flex-nowrap items-center justify-between gap-4 shadow-xl border border-[#2a2d6c]">
-            <div class="flex items-center gap-3.5 min-w-0">
-                <div class="w-10 h-10 rounded-xl bg-[#282b64] flex items-center justify-center shrink-0 border border-[#3c3f7e]">
-                    <i data-lucide="layout-grid" class="w-5 h-5 text-white"></i>
-                </div>
-                <div class="min-w-0">
-                    <h2 class="text-2xl font-display font-bold text-white tracking-tight leading-none mb-1.5">Planning Dashboard</h2>
-                    <div class="flex items-center gap-2 text-xs text-[#a3a8e0] flex-wrap font-medium">
-                        <span>Welcome back, <strong class="text-white font-bold">${esc(plannerName)}</strong></span>
-                        <span>•</span>
-                        <span>${dateStr}</span>
-                        <span>•</span>
-                        <span class="font-mono">${timeStr}</span>
-                        <span>•</span>
-                        <span class="inline-flex items-center gap-1.5 bg-[#0c4331] text-[#10B981] font-black px-2.5 py-0.5 rounded-full text-[10px] uppercase tracking-wider">
-                            <span class="w-1.5 h-1.5 rounded-full bg-[#10B981] animate-pulse"></span>
-                            CYCLE ON TRACK
-                        </span>
-                    </div>
-                </div>
-            </div>
-            <div class="flex items-center gap-2.5 shrink-0 ml-auto">
-                <button onclick="window.setPlannerSection('queue'); window.navigate('planner')" class="flex items-center gap-2 bg-[#282b64] hover:bg-[#34387a] active:bg-[#3d428e] border border-[#3c3f7e] text-white text-xs font-bold px-4 py-2 rounded-xl transition-all shadow-2xs whitespace-nowrap">
-                    <i data-lucide="plus-circle" class="w-4 h-4 text-indigo-200"></i> <span>Create Planning</span>
-                </button>
-                <button onclick="window.navigate('planner')" class="flex items-center gap-2 bg-[#282b64] hover:bg-[#34387a] active:bg-[#3d428e] border border-[#3c3f7e] text-white text-xs font-bold px-4 py-2 rounded-xl transition-all shadow-2xs whitespace-nowrap">
-                    <i data-lucide="calendar-days" class="w-4 h-4 text-indigo-200"></i> <span>Planning Calendar</span>
-                </button>
-                <button onclick="window.dcExportPdf && window.dcExportPdf()" class="flex items-center gap-2 bg-[#5046e5] hover:bg-[#4338ca] active:bg-[#3730a3] text-white text-xs font-bold px-4 py-2 rounded-xl transition-all shadow-md whitespace-nowrap">
-                    <i data-lucide="download" class="w-4 h-4"></i> <span>Export Report</span>
-                </button>
-            </div>
-        </div>
 
         <!-- ROW 1: 8 KPI CARDS -->
         <div class="grid grid-cols-2 sm:grid-cols-4 lg:grid-cols-8 gap-3 mb-4">
