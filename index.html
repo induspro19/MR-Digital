@@ -5114,8 +5114,8 @@
                 ${card(s.received,'Received','#047857','received')}
                 ${card(s.hold,'Hold','#78716C','hold')}
                 ${card(s.cancel,'Cancel','#B91C1C','cancel')}
-                ${card(s.reqDelayDays,'Requirement Delay (Days)','#DC2626','req_delay')}
-                ${card(s.deliveryDelayDays,'Delivery Delay (Days)','#DC2626','delivery_delay')}
+                ${card(s.reqDelayItems,'Requirement Delay (Items)','#DC2626','req_delay')}
+                ${card(s.deliveryDelayItems,'Delivery Delay (Items)','#DC2626','delivery_delay')}
                 ${card(s.poPending,'Pending Procurement','#B45309','pending_proc')}
                 ${card(s.todayDel,"Today's Deliveries",'#6D28D9','today_delivery')}
                 ${card(s.overdueDeliveries,'Overdue Deliveries','#7F1D1D','overdue_delivery')}
@@ -9087,8 +9087,8 @@ function renderMrRow(item, idx, xlInputCss) {
                 ${dcCard(summary.hold,'Hold','#78716C')}
                 ${dcCard(summary.cancel,'Cancel','#B91C1C')}
                 ${dcCard(summary.poPending,'Pending Procurement','#B45309')}
-                ${dcCard(summary.reqDelayDays,'Requirement Delay','#DC2626')}
-                ${dcCard(summary.deliveryDelayDays,'Delivery Delay','#DC2626')}
+                ${dcCard(summary.reqDelayItems,'Requirement Delay (Items)','#DC2626')}
+                ${dcCard(summary.deliveryDelayItems,'Delivery Delay (Items)','#DC2626')}
                 ${dcCard(summary.overdueDeliveries,'Overdue Deliveries','#7F1D1D')}
                 ${dcCard('₹'+summary.value.toLocaleString('en-IN'),'Total PR Value','#334155')}
                 ${dcCard(summary.todayDel,"Today's Deliveries",'#6D28D9')}`;
@@ -9163,6 +9163,8 @@ function renderMrRow(item, idx, xlInputCss) {
         const hold       = new Set(rows.filter(r => r.status === 'HOLD').map(r => r.prNo)).size;
         const cancel     = new Set(rows.filter(r => r.status === 'CANCELLED').map(r => r.prNo)).size;
         const poPending  = new Set(rows.filter(r => r.status === 'PLANNED' && !r.poNo).map(r => r.prNo)).size;
+        const reqDelayItems      = rows.filter(r => (r.reqDelayDays||0) > 0).length;
+        const deliveryDelayItems = rows.filter(r => (r.deliveryDelayDays||0) > 0).length;
         const reqDelayDays      = rows.reduce((s,r) => s + Math.max(0, r.reqDelayDays||0), 0);
         const deliveryDelayDays = rows.reduce((s,r) => s + Math.max(0, r.deliveryDelayDays||0), 0);
         const overdueDeliveries = new Set(rows.filter(r => r.deliveryDelayDays > 0).map(r => r.prNo)).size;
@@ -9173,7 +9175,7 @@ function renderMrRow(item, idx, xlInputCss) {
         const todayDel   = new Set(rows.filter(r => r.tentDelivery === todayStr).map(r => r.prNo)).size;
         const tmrwDel    = new Set(rows.filter(r => r.tentDelivery === tomorrow).map(r => r.prNo)).size;
         return { totalMR, totalPR, poGiven, partial, received, hold, cancel, poPending,
-                 reqDelayDays, deliveryDelayDays, overdueDeliveries, critical, value, todayDel, tmrwDel };
+                 reqDelayItems, deliveryDelayItems, reqDelayDays, deliveryDelayDays, overdueDeliveries, critical, value, todayDel, tmrwDel };
     }
 
     function dcCard(val, label, color, onclick) {
@@ -9317,8 +9319,8 @@ function renderMrRow(item, idx, xlInputCss) {
                 ${dcCard(summary.hold,'Hold','#78716C')}
                 ${dcCard(summary.cancel,'Cancel','#B91C1C')}
                 ${dcCard(summary.poPending,'Pending Procurement','#B45309')}
-                ${dcCard(summary.reqDelayDays,'Requirement Delay','#DC2626')}
-                ${dcCard(summary.deliveryDelayDays,'Delivery Delay','#DC2626')}
+                ${dcCard(summary.reqDelayItems,'Requirement Delay (Items)','#DC2626')}
+                ${dcCard(summary.deliveryDelayItems,'Delivery Delay (Items)','#DC2626')}
                 ${dcCard(summary.overdueDeliveries,'Overdue Deliveries','#7F1D1D')}
                 ${dcCard('₹'+summary.value.toLocaleString('en-IN'),'Total PR Value','#334155')}
                 ${dcCard(summary.todayDel,"Today's Deliveries",'#6D28D9')}
