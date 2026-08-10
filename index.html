@@ -7341,6 +7341,35 @@ function renderMrRow(item, idx, xlInputCss) {
         </div>
 
         
+        <!-- ROW 5: INTERACTIVE PROJECT ANALYTICS CHARTS (PIE / LINE / BAR) -->
+        <div class="grid grid-cols-1 lg:grid-cols-2 gap-4 mb-5">
+            <div class="bg-white border border-rule rounded-xl p-4 shadow-sm">
+                <div class="flex items-center justify-between mb-3">
+                    <h3 class="text-[11px] font-black uppercase tracking-widest text-slate-600 flex items-center gap-2">
+                        <i data-lucide="pie-chart" class="w-4 h-4 text-indigo-600"></i> Project Item Breakdown (Selected Projects)
+                    </h3>
+                    <div class="flex items-center gap-2">
+                        <select onchange="window.setPcbChartType('project', this.value)" class="glass-input !py-1 !px-2 !text-[10px] !w-auto min-w-[90px] font-bold">${pcbChartTypeOptions('project')}</select>
+                        <button onclick="window.downloadPcbChart('project')" title="Download PNG" class="p-1 rounded hover:bg-slate-100 text-slate-500"><i data-lucide="download" class="w-3.5 h-3.5"></i></button>
+                    </div>
+                </div>
+                <div class="pcb-chart-box" id="pcb-project-chart-box" style="height:220px"><canvas id="pcb-project-chart"></canvas></div>
+            </div>
+            <div class="bg-white border border-rule rounded-xl p-4 shadow-sm">
+                <div class="flex items-center justify-between mb-3">
+                    <h3 class="text-[11px] font-black uppercase tracking-widest text-slate-600 flex items-center gap-2">
+                        <i data-lucide="trending-up" class="w-4 h-4 text-blue-600"></i> Monthly Planning Activity
+                    </h3>
+                    <div class="flex items-center gap-2">
+                        <select onchange="window.setPcbChartType('monthly', this.value)" class="glass-input !py-1 !px-2 !text-[10px] !w-auto min-w-[90px] font-bold">${pcbChartTypeOptions('monthly')}</select>
+                        <button onclick="window.downloadPcbChart('monthly')" title="Download PNG" class="p-1 rounded hover:bg-slate-100 text-slate-500"><i data-lucide="download" class="w-3.5 h-3.5"></i></button>
+                    </div>
+                </div>
+                <div class="pcb-chart-box" id="pcb-monthly-chart-box" style="height:220px"><canvas id="pcb-monthly-chart"></canvas></div>
+            </div>
+        </div>
+
+        
         <!-- ROW 3: GANTT TIMELINE -->
         <div class="bg-white border border-rule rounded-xl p-4 mb-5 shadow-sm">
             <div class="flex items-center justify-between mb-3">
@@ -7404,34 +7433,6 @@ function renderMrRow(item, idx, xlInputCss) {
                     </div>` : '').join('')}
                     ${d.upcoming.length === 0 ? '<p class="text-xs text-slate-400 text-center py-4">No upcoming milestones</p>' : ''}
                 </div>
-            </div>
-        </div>
-
-        <!-- ROW 5: INTERACTIVE PROJECT ANALYTICS CHARTS (PIE / LINE / BAR) -->
-        <div class="grid grid-cols-1 lg:grid-cols-2 gap-4 mb-5">
-            <div class="bg-white border border-rule rounded-xl p-4 shadow-sm">
-                <div class="flex items-center justify-between mb-3">
-                    <h3 class="text-[11px] font-black uppercase tracking-widest text-slate-600 flex items-center gap-2">
-                        <i data-lucide="pie-chart" class="w-4 h-4 text-indigo-600"></i> Project Item Breakdown (Selected Projects)
-                    </h3>
-                    <div class="flex items-center gap-2">
-                        <select onchange="window.setPcbChartType('project', this.value)" class="glass-input !py-1 !px-2 !text-[10px] !w-auto min-w-[90px] font-bold">${pcbChartTypeOptions('project')}</select>
-                        <button onclick="window.downloadPcbChart('project')" title="Download PNG" class="p-1 rounded hover:bg-slate-100 text-slate-500"><i data-lucide="download" class="w-3.5 h-3.5"></i></button>
-                    </div>
-                </div>
-                <div class="pcb-chart-box" id="pcb-project-chart-box" style="height:220px"><canvas id="pcb-project-chart"></canvas></div>
-            </div>
-            <div class="bg-white border border-rule rounded-xl p-4 shadow-sm">
-                <div class="flex items-center justify-between mb-3">
-                    <h3 class="text-[11px] font-black uppercase tracking-widest text-slate-600 flex items-center gap-2">
-                        <i data-lucide="trending-up" class="w-4 h-4 text-blue-600"></i> Monthly Planning Activity
-                    </h3>
-                    <div class="flex items-center gap-2">
-                        <select onchange="window.setPcbChartType('monthly', this.value)" class="glass-input !py-1 !px-2 !text-[10px] !w-auto min-w-[90px] font-bold">${pcbChartTypeOptions('monthly')}</select>
-                        <button onclick="window.downloadPcbChart('monthly')" title="Download PNG" class="p-1 rounded hover:bg-slate-100 text-slate-500"><i data-lucide="download" class="w-3.5 h-3.5"></i></button>
-                    </div>
-                </div>
-                <div class="pcb-chart-box" id="pcb-monthly-chart-box" style="height:220px"><canvas id="pcb-monthly-chart"></canvas></div>
             </div>
         </div>
 
