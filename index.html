@@ -5118,7 +5118,7 @@
                 ${card(s.deliveryDelayItems,'Delivery Delay (Items)','#DC2626','delivery_delay')}
                 ${card(s.poPending,'Pending Procurement','#B45309','pending_proc')}
                 ${card(s.todayDel,"Today's Deliveries",'#6D28D9','today_delivery')}
-                ${card(s.overdueDeliveries,'Overdue Deliveries (Items)','#7F1D1D','overdue_delivery')}
+                ${card(s.overdueDeliveries,'Overdue Deliveries (PR)','#7F1D1D','overdue_delivery')}
             </div>
 
             ${(user.role === 'planner' || user.role === 'admin') ? renderPlanningControlBoard() : ''}
@@ -9089,7 +9089,7 @@ function renderMrRow(item, idx, xlInputCss) {
                 ${dcCard(summary.poPending,'Pending Procurement','#B45309')}
                 ${dcCard(summary.reqDelayItems,'Requirement Delay (Items)','#DC2626')}
                 ${dcCard(summary.deliveryDelayItems,'Delivery Delay (Items)','#DC2626')}
-                ${dcCard(summary.overdueDeliveries,'Overdue Deliveries (Items)','#7F1D1D')}
+                ${dcCard(summary.overdueDeliveries,'Overdue Deliveries (PR)','#7F1D1D')}
                 ${dcCard('₹'+summary.value.toLocaleString('en-IN'),'Total PR Value','#334155')}
                 ${dcCard(summary.todayDel,"Today's Deliveries",'#6D28D9')}`;
         }
@@ -9167,7 +9167,7 @@ function renderMrRow(item, idx, xlInputCss) {
         const deliveryDelayItems = rows.filter(r => (r.deliveryDelayDays||0) > 0).length;
         const reqDelayDays      = rows.reduce((s,r) => s + Math.max(0, r.reqDelayDays||0), 0);
         const deliveryDelayDays = rows.reduce((s,r) => s + Math.max(0, r.deliveryDelayDays||0), 0);
-        const overdueDeliveries = rows.filter(r => (r.deliveryDelayDays||0) > 0).length;
+        const overdueDeliveries = new Set(rows.filter(r => (r.deliveryDelayDays||0) > 0).map(r => r.prNo)).size;
         const critical   = rows.filter(r => Math.max(r.reqDelayDays||0, r.deliveryDelayDays||0) > 15).length;
         const value      = rows.reduce((s,r) => s + (Number(r.amount)||0), 0);
         const todayStr   = fmtDateInput(Date.now());
@@ -9321,7 +9321,7 @@ function renderMrRow(item, idx, xlInputCss) {
                 ${dcCard(summary.poPending,'Pending Procurement','#B45309')}
                 ${dcCard(summary.reqDelayItems,'Requirement Delay (Items)','#DC2626')}
                 ${dcCard(summary.deliveryDelayItems,'Delivery Delay (Items)','#DC2626')}
-                ${dcCard(summary.overdueDeliveries,'Overdue Deliveries (Items)','#7F1D1D')}
+                ${dcCard(summary.overdueDeliveries,'Overdue Deliveries (PR)','#7F1D1D')}
                 ${dcCard('₹'+summary.value.toLocaleString('en-IN'),'Total PR Value','#334155')}
                 ${dcCard(summary.todayDel,"Today's Deliveries",'#6D28D9')}
             </div>
