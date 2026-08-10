@@ -5097,6 +5097,8 @@
         const card = (val, label, color, preset) => dcCard(val, label, color, `window.dcApplyPreset('${preset}')`);
         return `
         <div class="space-y-8">
+            ${(user.role === 'planner' || user.role === 'admin') ? renderPlanningControlBoard() : ''}
+
             <div class="flex items-end justify-between flex-wrap gap-3">
                 <div>
                     <h2 class="text-2xl font-display font-bold tracking-tight">Data Centre Summary</h2>
@@ -5121,7 +5123,6 @@
                 ${card(s.overdueDeliveries,'Overdue Deliveries','#7F1D1D','overdue_delivery')}
             </div>
 
-            ${(user.role === 'planner' || user.role === 'admin') ? renderPlanningControlBoard() : ''}
             ${(user.role === 'planner' || user.role === 'admin') ? renderApprovalPerformanceKPIs() : ''}
             ${(user.role === 'admin' || user.role === 'procurement') ? renderProcTeamSnapshot() : ''}
         </div>`;
