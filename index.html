@@ -6821,14 +6821,21 @@ function renderMrRow(item, idx, xlInputCss) {
         softRender();
     };
     window.togglePcbDropdown = (e) => {
-        if (e) e.stopPropagation();
+        if (e) {
+            if (e.stopPropagation) e.stopPropagation();
+            if (e.preventDefault) e.preventDefault();
+        }
         const dd = document.getElementById('pcb-proj-dd');
         if (!dd) return;
-        window.pcbProjectDropdownOpen = !window.pcbProjectDropdownOpen;
-        if (window.pcbProjectDropdownOpen) {
-            dd.classList.remove('hidden');
-        } else {
+        const isOpen = !dd.classList.contains('hidden');
+        if (isOpen) {
             dd.classList.add('hidden');
+            window.pcbProjectDropdownOpen = false;
+        } else {
+            dd.classList.remove('hidden');
+            window.pcbProjectDropdownOpen = true;
+            const searchInput = dd.querySelector('input[type="text"]');
+            if (searchInput) setTimeout(() => searchInput.focus(), 50);
         }
     };
 
@@ -6841,7 +6848,19 @@ function renderMrRow(item, idx, xlInputCss) {
         if (!appData.settings) appData.settings = {};
         appData.settings.pcbProjects = pcbState.projects.slice();
         saveDB();
-        softRender();
+
+        // Update selector button text live
+        const btnSpan = document.querySelector('#pcb-proj-btn span');
+        if (btnSpan) {
+            btnSpan.textContent = pcbState.projects.length ? pcbState.projects.length + ' Selected' : 'All Projects';
+        }
+
+        // Update Clear / Select All checkbox state
+        const dd = document.getElementById('pcb-proj-dd');
+        if (dd) {
+            const clearCb = dd.querySelector('input[type="checkbox"][onchange*="setPcbProjects"]');
+            if (clearCb) clearCb.checked = (pcbState.projects.length === 0);
+        }
     };
 
     window.setPcbProjects = (arr) => {
@@ -6849,7 +6868,19 @@ function renderMrRow(item, idx, xlInputCss) {
         if (!appData.settings) appData.settings = {};
         appData.settings.pcbProjects = arr.slice();
         saveDB();
-        softRender();
+
+        // Update selector button text live
+        const btnSpan = document.querySelector('#pcb-proj-btn span');
+        if (btnSpan) {
+            btnSpan.textContent = pcbState.projects.length ? pcbState.projects.length + ' Selected' : 'All Projects';
+        }
+
+        const dd = document.getElementById('pcb-proj-dd');
+        if (dd) {
+            dd.querySelectorAll('input[type="checkbox"]').forEach(cb => cb.checked = false);
+            const clearCb = dd.querySelector('input[type="checkbox"][onchange*="setPcbProjects"]');
+            if (clearCb && arr.length === 0) clearCb.checked = true;
+        }
     };
 
     if (!window._pcbClickOutsideRegistered) {
@@ -6857,18 +6888,22 @@ function renderMrRow(item, idx, xlInputCss) {
         document.addEventListener('click', (e) => {
             const btn = document.getElementById('pcb-proj-btn');
             const dd = document.getElementById('pcb-proj-dd');
-            if (btn && dd && window.pcbProjectDropdownOpen) {
+            if (btn && dd && !dd.classList.contains('hidden')) {
                 if (!btn.contains(e.target) && !dd.contains(e.target)) {
-                    window.pcbProjectDropdownOpen = false;
                     dd.classList.add('hidden');
+                    window.pcbProjectDropdownOpen = false;
+                    softRender();
                 }
             }
         });
         document.addEventListener('keydown', (e) => {
-            if (e.key === 'Escape' && window.pcbProjectDropdownOpen) {
+            if (e.key === 'Escape') {
                 const dd = document.getElementById('pcb-proj-dd');
-                window.pcbProjectDropdownOpen = false;
-                if (dd) dd.classList.add('hidden');
+                if (dd && !dd.classList.contains('hidden')) {
+                    dd.classList.add('hidden');
+                    window.pcbProjectDropdownOpen = false;
+                    softRender();
+                }
             }
         });
     }
