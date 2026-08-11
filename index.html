@@ -2976,7 +2976,15 @@
             if (newStatus === 'AUTHORIZED') {
                 mr.finalAuthUser = user.name;
                 mr.authorizationDate = Date.now();
-                pushNotification({ level: 'PLANNING' }, `MR ${mr.mrNumber} authorized — pending Planning.`, mr.id);
+                if (mr.prNumber && mr.source !== 'DIRECT_PR') {
+                    mr.status = 'PLANNED';
+                    (mr.items || []).forEach(it => {
+                        if (!it.status || !['PROCUREMENT','PARTIAL','CLOSED','HOLD','CANCELLED'].includes(it.status)) it.status = 'PLANNED';
+                    });
+                    pushNotification({ level: 'PROCUREMENT' }, `PR ${mr.prNumber} authorized — pending Procurement.`, mr.id);
+                } else if (mr.source !== 'DIRECT_PR') {
+                    pushNotification({ level: 'PLANNING' }, `MR ${mr.mrNumber} authorized — pending Planning.`, mr.id);
+                }
             }
 
             // Planning Approval is the moment an MR is converted into a PR — generate the
@@ -4524,7 +4532,7 @@
                 ${(user.role==='admin'||user.role==='procurement') ? `
                     <div class="pt-4 mt-4 border-t border-white/10 space-y-1">
                         <div class="${window.sidebarCollapsed ? 'hidden' : 'px-3 pb-1 text-[9px] font-black text-slate-500 uppercase tracking-widest'}">Procurement Team</div>
-                        ${navBtn('proc_inbox','Procurement Inbox','inbox', mrs.filter(m=>m.status==='PLANNED' && (!m.procQueryOriginApprover || m.procQueryOriginApprover === user.name || user.role === 'admin')).length)}
+                        ${navBtn('proc_inbox','Procurement Inbox','inbox', mrs.filter(m=>m.status==='PLANNED' && m.prNumber && (!m.procQueryOriginApprover || m.procQueryOriginApprover === user.name || user.role === 'admin')).length)}
                         ${navBtn('proc_team','Team Performance','users-round')}
                         ${navBtn('proc_performance','Performance Report','file-bar-chart')}
                     </div>` : ''}
@@ -4797,7 +4805,7 @@
         const prRows = buildPrRows();
 
         // 1. KPI Counts
-        const newPrs = mrs.filter(m => m.status === 'PLANNED').length;
+        const newPrs = mrs.filter(m => m.status === 'PLANNED' && m.prNumber).length;
         const acceptedPrCount = new Set(prRows.map(r => r.prNo)).size;
         const acceptedItemCount = prRows.length;
         const poGivenCount = prRows.filter(r => r.poNo || r.poDate || r.status === 'PO_GIVEN' || r.status === 'PROCUREMENT').length;
@@ -6571,26 +6579,28 @@ function renderMrRow(item, idx, xlInputCss) {
         const summary = `${mrs.length} MRs · ${deptList} · ${totalItems} line item(s)`;
 
         mrs.forEach(mr => {
+            const oldStat = mr.status;
             mr.prNumber = prNumber;
-            mr.status = 'PLANNED';
+            mr.status = 'RAISED';
             mr.plannedBy = user.name;
             mr.planningDate = Date.now();
-            mr.combinedPr = true;
+            mr.combinedPr = mrs.length > 1;
             mr.prGroupMrs = mrNumbers.slice();
             (mr.items || []).forEach(it => {
                 it.refMrNumber = mr.mrNumber;
-                if (!it.status || !['PROCUREMENT','PARTIAL','CLOSED','HOLD','CANCELLED'].includes(it.status)) it.status = 'PLANNED';
+                if (!it.status || !['PROCUREMENT','PARTIAL','CLOSED','HOLD','CANCELLED'].includes(it.status)) it.status = 'RAISED';
             });
             mr.history = mr.history || [];
             mr.history.push({
-                action: 'Combined PR Generated (Multi-Dept Merge)', actor: user.name, role: user.role, dept: user.dept, ts: Date.now(),
-                field: 'status', oldValue: STATUS_META.AUTHORIZED.label, newValue: STATUS_META.PLANNED.label,
-                note: `PR ${prNumber} shared across [${mrNumbers.join(', ')}]${note ? ' — ' + note : ''}`
+                action: mrs.length > 1 ? 'Combined PR Generated (Multi-Dept Merge)' : 'PR Generated',
+                actor: user.name, role: user.role, dept: user.dept, ts: Date.now(),
+                field: 'status', oldValue: STATUS_META[oldStat]?.label || oldStat, newValue: STATUS_META.RAISED.label,
+                note: `PR ${prNumber} generated from ${mrs.length > 1 ? '[' + mrNumbers.join(', ') + ']' : mr.mrNumber} — pending Final Authorization.${note ? ' — ' + note : ''}`
             });
         });
 
-        pushNotification({ level: 'PROCUREMENT' },
-            `Combined PR ${prNumber} from ${mrs.length} MRs (${deptList}) — ${totalItems} items pending Procurement.`, mrs[0].id);
+        pushNotification({ level: 'FINAL_AUTH' },
+            `PR ${prNumber} generated from ${mrs.length} MR(s) (${deptList}) — pending Final Authorization.`, mrs[0].id);
 
         mergePrSelected = [];
         printPrNumber = prNumber;
@@ -9410,7 +9420,7 @@ function renderMrRow(item, idx, xlInputCss) {
 
     // ── PROCUREMENT INBOX ─────────────────────────────────────────────────────────────
     function renderProcInbox() {
-        const inboxMrs = appData.mrs.filter(m => m.status === 'PLANNED' && (!m.procQueryOriginApprover || m.procQueryOriginApprover === user.name || user.role === 'admin'));
+        const inboxMrs = appData.mrs.filter(m => m.status === 'PLANNED' && m.prNumber && (!m.procQueryOriginApprover || m.procQueryOriginApprover === user.name || user.role === 'admin'));
 
         if (inboxMrs.length === 0) {
             return `
