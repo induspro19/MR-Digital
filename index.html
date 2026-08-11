@@ -3820,41 +3820,41 @@
         if (amountEl) amountEl.value = (qty * rate).toFixed(2);
     };
 
-    window.addEditReviewItemRow = () => {
-        const container = document.getElementById("review-edit-items-container");
-        if (!container) return;
-        const idx = container.children.length;
-        const tr = document.createElement("tr");
-        tr.className = "review-edit-item-row";
-        tr.style.fontSize = "10.5px";
-        tr.innerHTML = `
-            <td style="text-align:center; color:#64748b; font-weight:700;">${idx + 1}</td>
-            <td><input class="edit-item-name" value="" placeholder="Item Name" style="width:100%; font-weight:700; border:1px solid #cbd5e1; border-radius:3px; padding:2px 4px; font-size:11px;" /></td>
-            <td><input class="edit-item-spec" value="" placeholder="Specification" style="width:100%; border:1px solid #cbd5e1; border-radius:3px; padding:2px 4px; font-size:10.5px;" /></td>
-            <td><input class="edit-item-make" value="" placeholder="Make" style="width:100%; border:1px solid #cbd5e1; border-radius:3px; padding:2px 4px; font-size:10.5px;" /></td>
-            <td>
-                <select class="edit-item-sample" style="width:100%; border:1px solid #cbd5e1; border-radius:3px; padding:2px; font-size:10px;">
-                    <option value="No">No</option>
-                    <option value="Yes">Yes</option>
-                </select>
-            </td>
-            <td><input type="number" step="any" oninput="window.calcEditRowAmount(this)" class="edit-item-qty" value="1" style="width:100%; text-align:center; font-weight:700; border:1px solid #cbd5e1; border-radius:3px; padding:2px 4px; font-size:11px;" /></td>
-            <td><input class="edit-item-unit" value="NOS" style="width:100%; text-align:center; border:1px solid #cbd5e1; border-radius:3px; padding:2px 4px; font-size:10.5px;" /></td>
-            <td><input type="number" step="any" oninput="window.calcEditRowAmount(this)" class="edit-item-rate" value="0" style="width:100%; text-align:right; border:1px solid #cbd5e1; border-radius:3px; padding:2px 4px; font-size:10.5px;" /></td>
-            <td><input type="number" readonly class="edit-item-amount" value="0.00" style="width:100%; text-align:right; font-weight:700; background:#f1f5f9; border:1px solid #cbd5e1; border-radius:3px; padding:2px 4px; font-size:11px;" /></td>
-            <td><input type="date" class="edit-item-reqdate" value="" style="width:100%; text-align:center; border:1px solid #cbd5e1; border-radius:3px; padding:2px 2px; font-size:9.5px;" /></td>
-            <td>
-                <select class="edit-item-project" style="width:100%; border:1px solid #cbd5e1; border-radius:3px; padding:2px; font-size:10px;">
-                    <option value="">Select Project</option>
-                    ${appData.projects.map(p => `<option value="${esc(p.name)}">${esc(p.name)}</option>`).join('')}
-                </select>
-            </td>
-            <td><input class="edit-item-remarks" value="" placeholder="Remarks" style="width:100%; border:1px solid #cbd5e1; border-radius:3px; padding:2px 4px; font-size:10.5px;" /></td>
-            <td style="text-align:center;"><button type="button" onclick="this.closest('tr').remove()" style="color:#ef4444; font-weight:bold; font-size:13px; background:none; border:none; cursor:pointer;" title="Remove Item">&times;</button></td>
-        `;
-        container.appendChild(tr);
-    };
-
+    window.addEditReviewItemRow = () => {
+        const container = document.getElementById("review-edit-items-container");
+        if (!container) return;
+        const idx = container.children.length;
+        const tr = document.createElement("tr");
+        tr.className = "review-edit-item-row";
+        tr.style.fontSize = "10.5px";
+        tr.innerHTML = `
+            <td style="text-align:center; color:#64748b; font-weight:700;">${idx + 1}</td>
+            <td><input class="edit-item-name" value="" placeholder="Item Name" style="width:100%; font-weight:700; border:1px solid #cbd5e1; border-radius:3px; padding:2px 4px; font-size:11px;" /></td>
+            <td><input class="edit-item-spec" value="" placeholder="Specification" style="width:100%; border:1px solid #cbd5e1; border-radius:3px; padding:2px 4px; font-size:10.5px;" /></td>
+            <td><input class="edit-item-make" value="" placeholder="Make" style="width:100%; border:1px solid #cbd5e1; border-radius:3px; padding:2px 4px; font-size:10.5px;" /></td>
+            <td>
+                <select class="edit-item-sample" style="width:100%; border:1px solid #cbd5e1; border-radius:3px; padding:2px; font-size:10px;">
+                    <option value="No">No</option>
+                    <option value="Yes">Yes</option>
+                </select>
+            </td>
+            <td><input type="number" step="any" oninput="window.calcEditRowAmount(this)" class="edit-item-qty" value="1" style="width:100%; text-align:center; font-weight:700; border:1px solid #cbd5e1; border-radius:3px; padding:2px 4px; font-size:11px;" /></td>
+            <td><input class="edit-item-unit" value="NOS" style="width:100%; text-align:center; border:1px solid #cbd5e1; border-radius:3px; padding:2px 4px; font-size:10.5px;" /></td>
+            <td><input type="number" step="any" oninput="window.calcEditRowAmount(this)" class="edit-item-rate" value="0" style="width:100%; text-align:right; border:1px solid #cbd5e1; border-radius:3px; padding:2px 4px; font-size:10.5px;" /></td>
+            <td><input type="number" readonly class="edit-item-amount" value="0.00" style="width:100%; text-align:right; font-weight:700; background:#f1f5f9; border:1px solid #cbd5e1; border-radius:3px; padding:2px 4px; font-size:11px;" /></td>
+            <td><input type="date" class="edit-item-reqdate" value="" style="width:100%; text-align:center; border:1px solid #cbd5e1; border-radius:3px; padding:2px 2px; font-size:9.5px;" /></td>
+            <td>
+                <select class="edit-item-project" style="width:100%; border:1px solid #cbd5e1; border-radius:3px; padding:2px; font-size:10px;">
+                    <option value="">Select Project</option>
+                    ${appData.projects.map(p => `<option value="${esc(p.name)}">${esc(p.name)}</option>`).join('')}
+                </select>
+            </td>
+            <td><input class="edit-item-remarks" value="" placeholder="Remarks" style="width:100%; border:1px solid #cbd5e1; border-radius:3px; padding:2px 4px; font-size:10.5px;" /></td>
+            <td style="text-align:center;"><button type="button" onclick="this.closest('tr').remove()" style="color:#ef4444; font-weight:bold; font-size:13px; background:none; border:none; cursor:pointer;" title="Remove Item">&times;</button></td>
+        `;
+        container.appendChild(tr);
+    };
+
     window.saveAndResubmitDocument = (id) => {
         const mr = appData.mrs.find(m => m.id === id);
         if (!mr) return;
@@ -3942,139 +3942,140 @@
         alert((mr.prNumber ? 'PR ' + mr.prNumber : 'MR ' + mr.mrNumber) + ' revised and resubmitted successfully!');
     };
 
-    window.calcEditRowAmount = (inputEl) => {
-        const row = inputEl.closest(".review-edit-item-row");
-        if (!row) return;
-        const qty = Number(row.querySelector(".edit-item-qty")?.value) || 0;
-        const rate = Number(row.querySelector(".edit-item-rate")?.value) || 0;
-        const amountEl = row.querySelector(".edit-item-amount");
-        if (amountEl) amountEl.value = (qty * rate).toFixed(2);
-    };
-
-    window.addEditReviewItemRow = () => {
-        const container = document.getElementById("review-edit-items-tbody");
-        if (!container) return;
-        const idx = container.children.length;
-        const tr = document.createElement("tr");
-        tr.className = "review-edit-item-row";
-        tr.style.fontSize = "10.5px";
-        tr.innerHTML = `
-            <td style="text-align:center; color:#64748b; font-weight:700;">${idx + 1}</td>
-            <td><input class="edit-item-name" value="" placeholder="Item Name" style="width:100%; font-weight:700; border:none; background:transparent; font-size:11px; outline:none;" /></td>
-            <td><input class="edit-item-spec" value="" placeholder="Specification" style="width:100%; border:none; background:transparent; font-size:10.5px; outline:none;" /></td>
-            <td><input class="edit-item-make" value="" placeholder="Make" style="width:100%; border:none; background:transparent; font-size:10.5px; outline:none;" /></td>
-            <td>
-                <select class="edit-item-sample" style="width:100%; border:none; background:transparent; font-size:10px; outline:none;">
-                    <option value="No">No</option>
-                    <option value="Yes">Yes</option>
-                </select>
-            </td>
-            <td><input type="number" step="any" oninput="window.calcEditRowAmount(this)" class="edit-item-qty" value="1" style="width:100%; text-align:center; font-weight:700; border:none; background:transparent; font-size:11px; outline:none;" /></td>
-            <td><input class="edit-item-unit" value="NOS" style="width:100%; text-align:center; border:none; background:transparent; font-size:10.5px; outline:none;" /></td>
-            <td><input type="number" step="any" oninput="window.calcEditRowAmount(this)" class="edit-item-rate" value="0" style="width:100%; text-align:right; border:none; background:transparent; font-size:10.5px; outline:none;" /></td>
-            <td><input type="number" readonly class="edit-item-amount" value="0.00" style="width:100%; text-align:right; font-weight:700; border:none; background:transparent; font-size:11px; outline:none;" /></td>
-            <td><input type="date" class="edit-item-reqdate" value="" style="width:100%; text-align:center; border:none; background:transparent; font-size:9.5px; outline:none;" /></td>
-            <td>
-                <select class="edit-item-project" style="width:100%; border:none; background:transparent; font-size:10px; outline:none;">
-                    <option value="">Select Project</option>
-                    ${appData.projects.map(p => `<option value="${esc(p.name)}">${esc(p.name)}</option>`).join("")}
-                </select>
-            </td>
-            <td><input class="edit-item-remarks" value="" placeholder="Remarks" style="width:100%; border:none; background:transparent; font-size:10.5px; outline:none;" /></td>
-            <td style="text-align:center;"><button type="button" onclick="this.closest('tr').remove()" style="color:#ef4444; font-weight:bold; font-size:13px; background:none; border:none; cursor:pointer;" title="Remove Item">&times;</button></td>
-        `;
-        container.appendChild(tr);
-    };
-
-    window.saveAndResubmitDocument = (id) => {
-        const mr = appData.mrs.find(m => m.id === id);
-        if (!mr) return;
-        if (typeof canReviseDocument === "function" && !canReviseDocument(mr)) {
-            alert("You do not have permission to resubmit this document.");
-            return;
-        }
-
-        const locEl = document.getElementById("review-edit-location");
-        const notesEl = document.getElementById("review-edit-notes");
-        const resubmitNoteEl = document.getElementById("wf-note-modal-edit");
-        const resubmitNote = resubmitNoteEl ? resubmitNoteEl.value : "";
-
-        if (locEl) mr.deliveryLocation = locEl.value;
-        if (notesEl) mr.notes = notesEl.value;
-
-        const itemRows = document.querySelectorAll(".review-edit-item-row");
-        const updatedItems = [];
-        itemRows.forEach((row, idx) => {
-            const name = row.querySelector(".edit-item-name")?.value || "";
-            const spec = row.querySelector(".edit-item-spec")?.value || "";
-            const make = row.querySelector(".edit-item-make")?.value || "";
-            const sampleProvided = row.querySelector(".edit-item-sample")?.value || "No";
-            const qty = Number(row.querySelector(".edit-item-qty")?.value) || 1;
-            const unit = row.querySelector(".edit-item-unit")?.value || "NOS";
-            const rate = Number(row.querySelector(".edit-item-rate")?.value) || 0;
-            const project = row.querySelector(".edit-item-project")?.value || "";
-            const reqDate = row.querySelector(".edit-item-reqdate")?.value || "";
-            const remarks = row.querySelector(".edit-item-remarks")?.value || "";
-
-            if (name.trim()) {
-                updatedItems.push({
-                    ...(mr.items[idx] || {}),
-                    name: name.trim(), spec, make, sampleProvided, qty, unit, rate, amount: +(qty * rate).toFixed(2),
-                    project, requiredDate: reqDate, remarks, refMrNumber: mr.mrNumber
-                });
-            }
-        });
-
-        if (updatedItems.length === 0) {
-            alert("Document must contain at least 1 valid line item.");
-            return;
-        }
-
-        mr.items = updatedItems;
-        mr.revNo = (mr.revNo || 0) + 1;
-
-        const oldStatus = mr.status;
-        let newStatus = mr.queryOriginStatus || "AUTHORIZED";
-        if (oldStatus === "RETURNED_TO_CREATOR" || oldStatus === "QUERY_RAISED") {
-            const l2 = findDeptL2(mr.dept);
-            newStatus = l2 ? "DEPT_APPROVAL_PENDING" : "RAISED";
-        } else if (oldStatus === "RETURNED_TO_L2") {
-            newStatus = "AUTHORIZED";
-        } else if (oldStatus === "RETURNED_TO_FINAL_AUTH") {
-            newStatus = "AUTHORIZED";
-        } else if (oldStatus === "RETURNED_TO_PLANNING") {
-            newStatus = "PLANNED";
-        } else if (oldStatus === "PROCUREMENT_QUERY") {
-            newStatus = "PLANNED";
-        }
-
-        mr.status = newStatus;
-        (mr.items || []).forEach(it => { it.status = newStatus; });
-
-        delete mr.queryOriginStatus;
-        delete mr.queryOriginApprover;
-
-        mr.history = mr.history || [];
-        mr.history.push({
-            action: "Revised & Resubmitted",
-            actor: user.name,
-            role: user.role,
-            dept: user.dept,
-            ts: Date.now(),
-            field: "status",
-            oldValue: STATUS_META[oldStatus]?.label || oldStatus,
-            newValue: STATUS_META[newStatus]?.label || newStatus,
-            note: resubmitNote ? (resubmitNote + " — Resubmitted after query") : "Document revised and resubmitted for workflow approval."
-        });
-
-        saveDB();
-        window.closeReviewModal();
-        alert((mr.prNumber ? "PR " + mr.prNumber : "MR " + mr.mrNumber) + " revised and resubmitted successfully!");
-    };
-
+    window.calcEditRowAmount = (inputEl) => {
+        const row = inputEl.closest(".review-edit-item-row");
+        if (!row) return;
+        const qty = Number(row.querySelector(".edit-item-qty")?.value) || 0;
+        const rate = Number(row.querySelector(".edit-item-rate")?.value) || 0;
+        const amountEl = row.querySelector(".edit-item-amount");
+        if (amountEl) amountEl.value = (qty * rate).toFixed(2);
+    };
+
+    window.addEditReviewItemRow = () => {
+        const container = document.getElementById("review-edit-items-tbody");
+        if (!container) return;
+        const idx = container.children.length;
+        const tr = document.createElement("tr");
+        tr.className = "review-edit-item-row";
+        tr.style.fontSize = "10.5px";
+        tr.innerHTML = `
+            <td style="text-align:center; color:#64748b; font-weight:700;">${idx + 1}</td>
+            <td><input class="edit-item-name" value="" placeholder="Item Name" style="width:100%; font-weight:700; border:none; background:transparent; font-size:11px; outline:none;" /></td>
+            <td><input class="edit-item-spec" value="" placeholder="Specification" style="width:100%; border:none; background:transparent; font-size:10.5px; outline:none;" /></td>
+            <td><input class="edit-item-make" value="" placeholder="Make" style="width:100%; border:none; background:transparent; font-size:10.5px; outline:none;" /></td>
+            <td>
+                <select class="edit-item-sample" style="width:100%; border:none; background:transparent; font-size:10px; outline:none;">
+                    <option value="No">No</option>
+                    <option value="Yes">Yes</option>
+                </select>
+            </td>
+            <td><input type="number" step="any" oninput="window.calcEditRowAmount(this)" class="edit-item-qty" value="1" style="width:100%; text-align:center; font-weight:700; border:none; background:transparent; font-size:11px; outline:none;" /></td>
+            <td><input class="edit-item-unit" value="NOS" style="width:100%; text-align:center; border:none; background:transparent; font-size:10.5px; outline:none;" /></td>
+            <td><input type="number" step="any" oninput="window.calcEditRowAmount(this)" class="edit-item-rate" value="0" style="width:100%; text-align:right; border:none; background:transparent; font-size:10.5px; outline:none;" /></td>
+            <td><input type="number" readonly class="edit-item-amount" value="0.00" style="width:100%; text-align:right; font-weight:700; border:none; background:transparent; font-size:11px; outline:none;" /></td>
+            <td><input type="date" class="edit-item-reqdate" value="" style="width:100%; text-align:center; border:none; background:transparent; font-size:9.5px; outline:none;" /></td>
+            <td>
+                <select class="edit-item-project" style="width:100%; border:none; background:transparent; font-size:10px; outline:none;">
+                    <option value="">Select Project</option>
+                    ${appData.projects.map(p => `<option value="${esc(p.name)}">${esc(p.name)}</option>`).join("")}
+                </select>
+            </td>
+            <td><input class="edit-item-remarks" value="" placeholder="Remarks" style="width:100%; border:none; background:transparent; font-size:10.5px; outline:none;" /></td>
+            <td style="text-align:center;"><button type="button" onclick="this.closest('tr').remove()" style="color:#ef4444; font-weight:bold; font-size:13px; background:none; border:none; cursor:pointer;" title="Remove Item">&times;</button></td>
+        `;
+        container.appendChild(tr);
+    };
+
+    window.saveAndResubmitDocument = (id) => {
+        const mr = appData.mrs.find(m => m.id === id);
+        if (!mr) return;
+        if (typeof canReviseDocument === "function" && !canReviseDocument(mr)) {
+            alert("You do not have permission to resubmit this document.");
+            return;
+        }
+
+        const locEl = document.getElementById("review-edit-location");
+        const notesEl = document.getElementById("review-edit-notes");
+        const resubmitNoteEl = document.getElementById("wf-note-modal-edit");
+        const resubmitNote = resubmitNoteEl ? resubmitNoteEl.value : "";
+
+        if (locEl) mr.deliveryLocation = locEl.value;
+        if (notesEl) mr.notes = notesEl.value;
+
+        const itemRows = document.querySelectorAll(".review-edit-item-row");
+        const updatedItems = [];
+        itemRows.forEach((row, idx) => {
+            const name = row.querySelector(".edit-item-name")?.value || "";
+            const spec = row.querySelector(".edit-item-spec")?.value || "";
+            const make = row.querySelector(".edit-item-make")?.value || "";
+            const sampleProvided = row.querySelector(".edit-item-sample")?.value || "No";
+            const qty = Number(row.querySelector(".edit-item-qty")?.value) || 1;
+            const unit = row.querySelector(".edit-item-unit")?.value || "NOS";
+            const rate = Number(row.querySelector(".edit-item-rate")?.value) || 0;
+            const project = row.querySelector(".edit-item-project")?.value || "";
+            const reqDate = row.querySelector(".edit-item-reqdate")?.value || "";
+            const remarks = row.querySelector(".edit-item-remarks")?.value || "";
+
+            if (name.trim()) {
+                updatedItems.push({
+                    ...(mr.items[idx] || {}),
+                    name: name.trim(), spec, make, sampleProvided, qty, unit, rate, amount: +(qty * rate).toFixed(2),
+                    project, requiredDate: reqDate, remarks, refMrNumber: mr.mrNumber
+                });
+            }
+        });
+
+        if (updatedItems.length === 0) {
+            alert("Document must contain at least 1 valid line item.");
+            return;
+        }
+
+        mr.items = updatedItems;
+        mr.revNo = (mr.revNo || 0) + 1;
+
+        const oldStatus = mr.status;
+        let newStatus = mr.queryOriginStatus || "AUTHORIZED";
+        if (oldStatus === "RETURNED_TO_CREATOR" || oldStatus === "QUERY_RAISED") {
+            const l2 = findDeptL2(mr.dept);
+            newStatus = l2 ? "DEPT_APPROVAL_PENDING" : "RAISED";
+        } else if (oldStatus === "RETURNED_TO_L2") {
+            newStatus = "AUTHORIZED";
+        } else if (oldStatus === "RETURNED_TO_FINAL_AUTH") {
+            newStatus = "AUTHORIZED";
+        } else if (oldStatus === "RETURNED_TO_PLANNING") {
+            newStatus = "PLANNED";
+        } else if (oldStatus === "PROCUREMENT_QUERY") {
+            newStatus = "PLANNED";
+        }
+
+        mr.status = newStatus;
+        (mr.items || []).forEach(it => { it.status = newStatus; });
+
+        delete mr.queryOriginStatus;
+        delete mr.queryOriginApprover;
+
+        mr.history = mr.history || [];
+        mr.history.push({
+            action: "Revised & Resubmitted",
+            actor: user.name,
+            role: user.role,
+            dept: user.dept,
+            ts: Date.now(),
+            field: "status",
+            oldValue: STATUS_META[oldStatus]?.label || oldStatus,
+            newValue: STATUS_META[newStatus]?.label || newStatus,
+            note: resubmitNote ? (resubmitNote + " — Resubmitted after query") : "Document revised and resubmitted for workflow approval."
+        });
+
+        saveDB();
+        window.closeReviewModal();
+        alert((mr.prNumber ? "PR " + mr.prNumber : "MR " + mr.mrNumber) + " revised and resubmitted successfully!");
+    };
+
     function renderFullScreenReview() {
         const m = appData.mrs.find(x => x.id === _reviewMrId);
         if (!m) return '';
+        const isEditable = typeof canReviseDocument === "function" && canReviseDocument(m);
         
         let approveBtn = '';
         let queryBtn = '';
@@ -4116,10 +4117,16 @@
                     <textarea id="wf-note-modal" class="glass-input w-full min-h-[60px]" placeholder="Add remarks or reason for query..."></textarea>
                 </div>
                 <div class="flex gap-4 shrink-0 min-w-[320px] flex-wrap justify-end">
-                    
+                    ${isEditable ? `
+                    <button onclick="window.closeReviewModal()" class="py-4 px-6 border-2 border-slate-300 text-slate-600 rounded-xl font-black text-[11px] uppercase hover:bg-slate-50 transition-all flex-1">Cancel Edit</button>
+                    <button onclick="window.saveAndResubmitDocument('${m.id}')" class="py-4 px-8 bg-amberx hover:bg-amberx-dark text-white rounded-xl font-black text-[11px] uppercase shadow-lg active:scale-95 transition-all flex-1 flex items-center justify-center gap-2">
+                        <i data-lucide="check-circle" class="w-4 h-4"></i> Save &amp; Resubmit
+                    </button>
+                    ` : `
                     ${m.status !== 'CANCELLED' ? `<button onclick="window.cancelFullMR('${m.id}')" class="py-4 px-8 border-2 border-red-500 text-red-500 rounded-xl font-black text-[11px] uppercase hover:bg-red-50 transition-all flex-1 md:flex-none">Cancel Request</button>` : ''}
                     ${queryBtn}
                     ${approveBtn}
+                    `}
                 </div>
             </div>
         </div>`;
