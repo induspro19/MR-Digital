@@ -4072,26 +4072,123 @@
         alert((mr.prNumber ? "PR " + mr.prNumber : "MR " + mr.mrNumber) + " revised and resubmitted successfully!");
     };
 
+    // ── PLANNING SAVE (MR-ONLY — does NOT generate PR) ─────────────────────────
+    // Reads the inline-editable fields from renderPrint, validates commercial info,
+    // saves the MR with Planner's price/rate/amount data, sets status to PLANNED,
+    // and makes the MR available in the existing Merge MRs → PR conversion section.
+    // NO PR number is generated here. The existing MR → PR conversion creates the PR.
+    window.savePlanningEdits = (id) => {
+        const mr = appData.mrs.find(m => m.id === id);
+        if (!mr) return;
+        if (mr.prNumber) {
+            alert("This MR already has a PR number. Planning cannot be saved again.");
+            return;
+        }
+        if (user.role !== 'planner' && user.role !== 'admin') {
+            alert("Only Planner or Admin can complete Planning.");
+            return;
+        }
+
+        // Read editable fields from the inline-edit renderPrint DOM
+        const locEl = document.getElementById("review-edit-location");
+        const notesEl = document.getElementById("review-edit-notes");
+        const remarkEl = document.getElementById("wf-note-modal");
+        const plannerNote = remarkEl ? remarkEl.value.trim() : "";
+
+        if (locEl) mr.deliveryLocation = locEl.value.trim();
+        if (notesEl) mr.notes = notesEl.value.trim();
+
+        // Read all item rows from the editable print document
+        const itemRows = document.querySelectorAll(".review-edit-item-row");
+        const updatedItems = [];
+        const validationErrors = [];
+
+        itemRows.forEach((row, idx) => {
+            const name = (row.querySelector(".edit-item-name")?.value || "").trim();
+            const spec = row.querySelector(".edit-item-spec")?.value || "";
+            const make = row.querySelector(".edit-item-make")?.value || "";
+            const sampleProvided = row.querySelector(".edit-item-sample")?.value || "No";
+            const qty = Number(row.querySelector(".edit-item-qty")?.value) || 0;
+            const unit = (row.querySelector(".edit-item-unit")?.value || "").trim();
+            const rate = Number(row.querySelector(".edit-item-rate")?.value) || 0;
+            const project = row.querySelector(".edit-item-project")?.value || "";
+            const reqDate = row.querySelector(".edit-item-reqdate")?.value || "";
+            const remarks = row.querySelector(".edit-item-remarks")?.value || "";
+
+            if (!name) return; // skip empty rows
+
+            // Validation
+            if (qty <= 0) validationErrors.push(`Item ${idx + 1} (${name}): Quantity must be greater than 0.`);
+            if (!unit) validationErrors.push(`Item ${idx + 1} (${name}): Unit is required.`);
+            if (rate <= 0) validationErrors.push(`Item ${idx + 1} (${name}): Rate/Price must be greater than 0.`);
+
+            updatedItems.push({
+                ...(mr.items[idx] || {}),
+                name, spec, make, sampleProvided, qty, unit, rate,
+                amount: +(qty * rate).toFixed(2),
+                project, requiredDate: reqDate, remarks,
+                refMrNumber: mr.mrNumber,
+                status: 'PLANNED'
+            });
+        });
+
+        if (updatedItems.length === 0) {
+            alert("MR must contain at least 1 valid line item.");
+            return;
+        }
+
+        if (validationErrors.length > 0) {
+            alert("Please fix the following before completing Planning:\\n\\n" + validationErrors.join("\\n"));
+            return;
+        }
+
+        // Save updated items
+        mr.items = updatedItems;
+
+        // Set Planning metadata — NO PR number generated
+        const oldStatus = mr.status;
+        mr.status = 'PLANNED';
+        mr.plannedBy = user.name;
+        mr.planningDate = Date.now();
+        // Do NOT set mr.prNumber — existing MR → PR conversion handles that
+
+        // Append Planning Completed to audit history
+        mr.history = mr.history || [];
+        mr.history.push({
+            action: 'Planning Completed',
+            actor: user.name,
+            role: user.role,
+            dept: user.dept,
+            ts: Date.now(),
+            field: 'status',
+            oldValue: STATUS_META[oldStatus]?.label || oldStatus,
+            newValue: STATUS_META.PLANNED?.label || 'PLANNED',
+            note: plannerNote || 'Planning completed — commercial information filled. MR ready for PR conversion.'
+        });
+
+        saveDB();
+        window.closeReviewModal();
+        alert("Planning completed for " + mr.mrNumber + ".\\n\\nRate/Price saved. MR is now available in the Merge MRs → PR section for PR conversion.");
+    };
     function renderFullScreenReview() {
         const m = appData.mrs.find(x => x.id === _reviewMrId);
         if (!m) return '';
-        const isEditable = typeof canReviseDocument === "function" && canReviseDocument(m);
+        // Planning Edit Mode: Planner opens AUTHORIZED MR → document is editable for price/commercial info
+        const isPlanningEdit = _reviewMrActionType && _reviewMrActionType.type === 'PLANNING'
+            && m.status === 'AUTHORIZED' && !m.prNumber
+            && (user.role === 'planner' || user.role === 'admin');
+        const isEditable = isPlanningEdit || (typeof canReviseDocument === "function" && canReviseDocument(m));
         
         let approveBtn = '';
         let queryBtn = '';
         
         if (_reviewMrActionType && _reviewMrActionType.type === 'DEPT_L2') {
-            // L2's immediate previous stage is the Creator — query goes there.
             approveBtn = `<button onclick="window.approveDeptLevel('${m.id}','wf-note-modal'); window.closeReviewModal();" class="py-4 px-8 bg-brand text-white rounded-xl font-black text-[11px] uppercase shadow-lg active:scale-95 transition-all hover:bg-brand-600 flex-1">Approve</button>`;
             queryBtn = `<button onclick="window.updateMrStatus('${m.id}','RETURNED_TO_CREATOR','Query Raised','wf-note-modal'); window.closeReviewModal();" class="py-4 px-8 border-2 border-brand text-brand rounded-xl font-black text-[11px] uppercase hover:bg-brand-50 transition-all flex-1">Raise Query</button>`;
         } else if (_reviewMrActionType && _reviewMrActionType.type === 'PLANNING') {
-            // Planning's immediate previous stage is Final Authorization — query goes there, not to the Creator.
-            const toStatus = 'PLANNED';
-            approveBtn = `<button onclick="window.updateMrStatus('${m.id}','${toStatus}','Planning Approved','wf-note-modal'); window.closeReviewModal();" class="py-4 px-8 bg-brand text-white rounded-xl font-black text-[11px] uppercase shadow-lg active:scale-95 transition-all hover:bg-brand-600 flex-1">Approve</button>`;
+            // Planning stage: query goes back to Final Authorization
             queryBtn = `<button onclick="window.updateMrStatus('${m.id}','RETURNED_TO_FINAL_AUTH','Query Raised','wf-note-modal'); window.closeReviewModal();" class="py-4 px-8 border-2 border-brand text-brand rounded-xl font-black text-[11px] uppercase hover:bg-brand-50 transition-all flex-1">Raise Query</button>`;
         } else if (_reviewMrActionType && _reviewMrActionType.type === 'GENERIC') {
-            // GENERIC currently only backs the Final Authorization ("authorize") queue, whose
-            // immediate previous stage is L2 — query goes there, not to the Creator.
             approveBtn = `<button onclick="window.updateMrStatus('${m.id}','${_reviewMrActionType.toStatus}','${_reviewMrActionType.actionLabel}','wf-note-modal'); window.closeReviewModal();" class="py-4 px-8 bg-brand text-white rounded-xl font-black text-[11px] uppercase shadow-lg active:scale-95 transition-all hover:bg-brand-600 flex-1">${_reviewMrActionType.actionLabel || 'Approve'}</button>`;
             queryBtn = `<button onclick="window.updateMrStatus('${m.id}','RETURNED_TO_L2','Query Raised','wf-note-modal'); window.closeReviewModal();" class="py-4 px-8 border-2 border-brand text-brand rounded-xl font-black text-[11px] uppercase hover:bg-brand-50 transition-all flex-1">Raise Query</button>`;
         }
@@ -4117,7 +4214,13 @@
                     <textarea id="wf-note-modal" class="glass-input w-full min-h-[60px]" placeholder="Add remarks or reason for query..."></textarea>
                 </div>
                 <div class="flex gap-4 shrink-0 min-w-[320px] flex-wrap justify-end">
-                    ${isEditable ? `
+                    ${isPlanningEdit ? `
+                    <button onclick="window.closeReviewModal()" class="py-4 px-6 border-2 border-slate-300 text-slate-600 rounded-xl font-black text-[11px] uppercase hover:bg-slate-50 transition-all flex-1">Cancel</button>
+                    ${queryBtn}
+                    <button onclick="window.savePlanningEdits('${m.id}')" class="py-4 px-8 bg-brand hover:bg-brand-600 text-white rounded-xl font-black text-[11px] uppercase shadow-lg active:scale-95 transition-all flex-1 flex items-center justify-center gap-2">
+                        <i data-lucide="clipboard-check" class="w-4 h-4"></i> Save Planning
+                    </button>
+                    ` : isEditable ? `
                     <button onclick="window.closeReviewModal()" class="py-4 px-6 border-2 border-slate-300 text-slate-600 rounded-xl font-black text-[11px] uppercase hover:bg-slate-50 transition-all flex-1">Cancel Edit</button>
                     <button onclick="window.saveAndResubmitDocument('${m.id}')" class="py-4 px-8 bg-amberx hover:bg-amberx-dark text-white rounded-xl font-black text-[11px] uppercase shadow-lg active:scale-95 transition-all flex-1 flex items-center justify-center gap-2">
                         <i data-lucide="check-circle" class="w-4 h-4"></i> Save &amp; Resubmit
