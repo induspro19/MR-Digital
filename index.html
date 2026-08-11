@@ -12065,34 +12065,36 @@ function renderMrRow(item, idx, xlInputCss) {
                 </td></tr>
                 </tfoot>
 
-                <tbody>
+                <tbody id="${isEditMode ? 'review-edit-items-tbody' : ''}">
                 ${items.map((it, i) => {
                     const cc = projectCc[it.project] || '';
                     const amount = (it.amount != null ? it.amount : (Number(it.qty)||0) * (Number(it.rate)||0));
                     return `
-                    <tr style="font-size:10.5px; break-inside:avoid; page-break-inside:avoid;">
+                    <tr class="${isEditMode ? 'review-edit-item-row' : ''}" style="font-size:10.5px; break-inside:avoid; page-break-inside:avoid;">
                         <td style="text-align:center; color:#64748b; font-weight:700;">${i+1}</td>
-                        <td style="font-weight:700;">${esc(it.name)}</td>
-                        <td>${esc(it.spec || '—')}</td>
-                        <td>${esc(it.make || '—')}</td>
-                        <td>${esc(it.sampleProvided || '—')}</td>
-                        <td style="text-align:center; font-weight:700;">${it.qty}</td>
-                        <td style="text-align:center;">${esc(it.unit)}</td>
-                        <td style="text-align:right;">${(Number(it.rate)||0).toFixed(2)}</td>
-                        <td style="text-align:right; font-weight:700;">${amount.toFixed(2)}</td>
-                        <td style="text-align:center; white-space:nowrap;">${fmtDate(it.requiredDate)}</td>
-                        <td>${esc(it.project || '—')}${cc ? ` <span style="color:#64748b;">(${esc(cc)})</span>` : ''}</td>
-                        <td>${esc(it.remarks || '—')}</td>
+                        <td style="font-weight:700;">${isEditMode ? `<input class="edit-item-name" value="${esc(it.name || '')}" style="width:100%;border:none;background:transparent;font-weight:700;font-size:10.5px;outline:none;font-family:inherit;" />` : esc(it.name)}</td>
+                        <td>${isEditMode ? `<input class="edit-item-spec" value="${esc(it.spec || '')}" style="width:100%;border:none;background:transparent;font-size:10.5px;outline:none;font-family:inherit;" />` : esc(it.spec || '—')}</td>
+                        <td>${isEditMode ? `<input class="edit-item-make" value="${esc(it.make || '')}" style="width:100%;border:none;background:transparent;font-size:10.5px;outline:none;font-family:inherit;" />` : esc(it.make || '—')}</td>
+                        <td>${isEditMode ? `<select class="edit-item-sample" style="width:100%;border:none;background:transparent;font-size:10px;outline:none;font-family:inherit;"><option value="No" ${it.sampleProvided!=='Yes'?'selected':''}>No</option><option value="Yes" ${it.sampleProvided==='Yes'?'selected':''}>Yes</option></select>` : esc(it.sampleProvided || '—')}</td>
+                        <td style="text-align:center; font-weight:700;">${isEditMode ? `<input type="number" step="any" oninput="window.calcEditRowAmount(this)" class="edit-item-qty" value="${it.qty||1}" style="width:100%;text-align:center;border:none;background:transparent;font-weight:700;font-size:10.5px;outline:none;font-family:inherit;" />` : it.qty}</td>
+                        <td style="text-align:center;">${isEditMode ? `<input class="edit-item-unit" value="${esc(it.unit||'NOS')}" style="width:100%;text-align:center;border:none;background:transparent;font-size:10.5px;outline:none;font-family:inherit;" />` : esc(it.unit)}</td>
+                        <td style="text-align:right;">${isEditMode ? `<input type="number" step="any" oninput="window.calcEditRowAmount(this)" class="edit-item-rate" value="${it.rate||0}" style="width:100%;text-align:right;border:none;background:transparent;font-size:10.5px;outline:none;font-family:inherit;" />` : (Number(it.rate)||0).toFixed(2)}</td>
+                        <td style="text-align:right; font-weight:700;">${isEditMode ? `<input type="number" readonly class="edit-item-amount" value="${amount.toFixed(2)}" style="width:100%;text-align:right;border:none;background:transparent;font-weight:700;font-size:10.5px;outline:none;font-family:inherit;" />` : amount.toFixed(2)}</td>
+                        <td style="text-align:center; white-space:nowrap;">${isEditMode ? `<input type="date" class="edit-item-reqdate" value="${it.requiredDate||''}" style="width:100%;text-align:center;border:none;background:transparent;font-size:9.5px;outline:none;font-family:inherit;" />` : fmtDate(it.requiredDate)}</td>
+                        <td>${isEditMode ? `<select class="edit-item-project" style="width:100%;border:none;background:transparent;font-size:10px;outline:none;font-family:inherit;"><option value="">Select</option>${appData.projects.map(p => `<option value="${esc(p.name)}" ${it.project===p.name?'selected':''}>${esc(p.name)}</option>`).join('')}</select>` : (esc(it.project || '—') + (cc ? ` <span style="color:#64748b;">(${esc(cc)})</span>` : ''))}</td>
+                        <td>${isEditMode ? `<input class="edit-item-remarks" value="${esc(it.remarks || '')}" style="width:100%;border:none;background:transparent;font-size:10.5px;outline:none;font-family:inherit;" />` : esc(it.remarks || '—')}</td>
+                        ${isEditMode ? '<td style="text-align:center;border:1px solid #000;"><button type="button" onclick="this.closest(\'tr\').remove()" style="color:#ef4444;font-weight:bold;font-size:14px;background:none;border:none;cursor:pointer;" title="Remove">×</button></td>' : ''}
                     </tr>`;
                 }).join('')}
+                ${isEditMode ? `<tr><td colspan="13" style="border:1px solid #000;padding:6px;text-align:center;"><button type="button" onclick="window.addEditReviewItemRow()" style="background:#0f766e;color:#fff;border:none;padding:5px 14px;border-radius:4px;font-size:10px;font-weight:700;cursor:pointer;">+ Add Line Item</button></td></tr>` : ''}
                 <tr style="font-size:11px; font-weight:700;">
                     <td colspan="8" style="text-align:center;">Total</td>
                     <td style="text-align:right;">${grandTotal.toFixed(2)}</td>
-                    <td colspan="3"></td>
+                    <td colspan="${isEditMode ? 4 : 3}"></td>
                 </tr>
                 <tr style="font-size:11px;">
                     <td style="font-weight:700; vertical-align:top;">Remarks</td>
-                    <td colspan="11" style="vertical-align:top; min-height:36px;">${esc(mr.notes || '—')}</td>
+                    <td colspan="${isEditMode ? 12 : 11}" style="vertical-align:top; min-height:36px;">${isEditMode ? `<textarea id="review-edit-notes" style="width:100%;border:none;background:transparent;font-family:inherit;font-size:11px;min-height:40px;outline:none;">${esc(mr.notes || '')}</textarea>` : esc(mr.notes || '—')}</td>
                 </tr>
                 ${attachments.length ? `
                 <tr style="font-size:11px;">
