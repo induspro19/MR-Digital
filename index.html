@@ -3986,10 +3986,7 @@
                     <textarea id="wf-note-modal" class="glass-input w-full min-h-[60px]" placeholder="Add remarks or reason for query..."></textarea>
                 </div>
                 <div class="flex gap-4 shrink-0 min-w-[320px] flex-wrap justify-end">
-                    ${canEditReturnedDocument(m) ? `
-                    <button onclick="window.startReviewEditMode('${m.id}');" class="py-4 px-8 bg-amberx text-white rounded-xl font-black text-[11px] uppercase shadow-lg hover:bg-amberx-dark transition-all flex-1 flex items-center justify-center gap-2">
-                        <i data-lucide="edit-3" class="w-4 h-4"></i> Revise &amp; Edit Document
-                    </button` : ''}
+                    
                     ${m.status !== 'CANCELLED' ? `<button onclick="window.cancelFullMR('${m.id}')" class="py-4 px-8 border-2 border-red-500 text-red-500 rounded-xl font-black text-[11px] uppercase hover:bg-red-50 transition-all flex-1 md:flex-none">Cancel Request</button>` : ''}
                     ${queryBtn}
                     ${approveBtn}
