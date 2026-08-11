@@ -773,6 +773,12 @@
         _reviewMrId = id;
         _reviewMrActionType = type;
         _lastRenderedTab = activeTab;
+        const m = appData.mrs.find(x => x.id === id);
+        if (m && typeof canReviseDocument === "function" && canReviseDocument(m)) {
+            _isReviewEditMode = true;
+        } else {
+            _isReviewEditMode = false;
+        }
         window.navigate('review_document');
     };
     window.closeReviewModal = () => {
@@ -2844,18 +2850,7 @@
     };
 
     window.resolveQuery = (id) => {
-        const mr = appData.mrs.find(m => m.id === id);
-        if (!mr) return;
-        if (!userCanAccessMr(mr)) { alert('This MR belongs to another department.'); return; }
-        currentEditRevisionId = id;
-        mrDeliveryLocation = mr.deliveryLocation || "Indus House";
-        currentMrItems = mr.items.map((it, idx) => ({
-            id: Date.now() + idx, assetName: it.name, assetId: "", spec: it.spec || "", make: it.make || "",
-            sampleProvided: it.sampleProvided || "", qty: it.qty || 1, uom: it.unit || "NOS", rate: it.rate || 0,
-            project: it.project || "", requiredDate: it.requiredDate || "", remarks: it.remarks || ""
-        }));
-        activeTab = 'new_mr';
-        render();
+        window.openReviewModal(id);
     };
 
     // Once both PO Number and PO Date exist on an item, that item's status auto-advances to
@@ -4104,6 +4099,9 @@
     function renderFullScreenReview() {
         const m = appData.mrs.find(x => x.id === _reviewMrId);
         if (!m) return '';
+        // Automatic full edit mode detection for query target user
+        if (canReviseDocument(m)) { _isReviewEditMode = true; }
+        if (_isReviewEditMode && canReviseDocument(m)) return renderFullScreenReviewEditMode(m);
         if (_isReviewEditMode) return renderFullScreenReviewEditMode(m);
         
         let approveBtn = '';
