@@ -3773,9 +3773,338 @@
             XLSX.writeFile(wb, `${mr.prNumber}-${mr.dept}-${Date.now()}.xlsx`);
         } catch(e) { alert('PR Excel export failed: ' + e.message); }
     };
+
+    // ── REVISION EDITOR ENGINE ──────────────────────────────────────────────────
+    let _isReviewEditMode = false;
+
+    function canReviseDocument(mr) {
+        if (!mr || !user) return false;
+        const QUERY_STATUSES = ['QUERY_RAISED', 'RETURNED_TO_CREATOR', 'RETURNED_TO_L2', 'RETURNED_TO_FINAL_AUTH', 'RETURNED_TO_PLANNING', 'PROCUREMENT_QUERY'];
+        if (!QUERY_STATUSES.includes(mr.status)) return false;
+
+        const userDept = (user.dept || '').trim().toLowerCase();
+        const mrDept = (mr.dept || '').trim().toLowerCase();
+
+        if (mr.status === 'RETURNED_TO_CREATOR' || mr.status === 'QUERY_RAISED') {
+            return mr.raisedBy === user.name || mr.l1User === user.name || (user.role === 'creator' && userDept === mrDept) || user.role === 'admin';
+        }
+        if (mr.status === 'RETURNED_TO_L2') {
+            return (user.approvalLevel === 'L2' || user.role === 'authorizer' || user.role === 'dept_head') && userDept === mrDept;
+        }
+        if (mr.status === 'RETURNED_TO_FINAL_AUTH') {
+            return user.role === 'authorizer' || user.role === 'admin';
+        }
+        if (mr.status === 'RETURNED_TO_PLANNING' || mr.status === 'PROCUREMENT_QUERY') {
+            return user.role === 'planner' || user.role === 'procurement' || user.role === 'admin';
+        }
+        return false;
+    }
+
+    window.startReviewEditMode = (id) => {
+        const mr = appData.mrs.find(m => m.id === id);
+        if (!mr) return;
+        if (!canReviseDocument(mr)) {
+            alert('Only the authorized target user for this query return can edit and resubmit this document.');
+            return;
+        }
+        _isReviewEditMode = true;
+        render();
+    };
+
+    window.cancelReviewEditMode = () => {
+        _isReviewEditMode = false;
+        render();
+    };
+
+    window.calcEditRowAmount = (inputEl) => {
+        const row = inputEl.closest('.review-edit-item-row');
+        if (!row) return;
+        const qty = Number(row.querySelector('.edit-item-qty')?.value) || 0;
+        const rate = Number(row.querySelector('.edit-item-rate')?.value) || 0;
+        const amountEl = row.querySelector('.edit-item-amount');
+        if (amountEl) amountEl.value = (qty * rate).toFixed(2);
+    };
+
+    window.addEditReviewItemRow = () => {
+        const container = document.getElementById('review-edit-items-container');
+        if (!container) return;
+        const idx = container.children.length;
+        const div = document.createElement('div');
+        div.className = 'review-edit-item-row bg-paper/60 p-4 rounded-xl border border-rule space-y-3';
+        div.innerHTML = `
+            <div class="flex justify-between items-center border-b border-rule pb-2">
+                <span class="text-[10px] font-black uppercase text-brand">Line Item #${idx + 1}</span>
+                <button type="button" onclick="this.closest('.review-edit-item-row').remove();" class="text-xs text-red-500 font-bold hover:underline">Remove Item</button>
+            </div>
+            <div class="grid grid-cols-1 md:grid-cols-12 gap-3">
+                <div class="md:col-span-4">
+                    <label class="text-[9px] font-bold text-slate-400 uppercase">Item Name</label>
+                    <input class="edit-item-name glass-input !py-1.5 !text-xs font-bold" placeholder="Item Name" />
+                </div>
+                <div class="md:col-span-4">
+                    <label class="text-[9px] font-bold text-slate-400 uppercase">Specification</label>
+                    <input class="edit-item-spec glass-input !py-1.5 !text-xs" placeholder="Detailed Specifications" />
+                </div>
+                <div class="md:col-span-4">
+                    <label class="text-[9px] font-bold text-slate-400 uppercase">Make / Brand</label>
+                    <input class="edit-item-make glass-input !py-1.5 !text-xs" placeholder="Make/Brand" />
+                </div>
+            </div>
+            <div class="grid grid-cols-1 md:grid-cols-12 gap-3">
+                <div class="md:col-span-2">
+                    <label class="text-[9px] font-bold text-slate-400 uppercase">Qty</label>
+                    <input type="number" step="any" oninput="window.calcEditRowAmount(this)" class="edit-item-qty glass-input !py-1.5 !text-xs font-bold" value="1" />
+                </div>
+                <div class="md:col-span-2">
+                    <label class="text-[9px] font-bold text-slate-400 uppercase">Unit</label>
+                    <input class="edit-item-unit glass-input !py-1.5 !text-xs" value="NOS" />
+                </div>
+                <div class="md:col-span-2">
+                    <label class="text-[9px] font-bold text-slate-400 uppercase">Est Rate</label>
+                    <input type="number" step="any" oninput="window.calcEditRowAmount(this)" class="edit-item-rate glass-input !py-1.5 !text-xs" value="0" />
+                </div>
+                <div class="md:col-span-2">
+                    <label class="text-[9px] font-bold text-slate-400 uppercase">Amount</label>
+                    <input type="number" readonly class="edit-item-amount glass-input !py-1.5 !text-xs font-mono font-bold bg-slate-100" value="0.00" />
+                </div>
+                <div class="md:col-span-2">
+                    <label class="text-[9px] font-bold text-slate-400 uppercase">Project</label>
+                    <select class="edit-item-project glass-input !py-1.5 !text-xs">
+                        <option value="">Select Project</option>
+                        ${appData.projects.map(p => `<option value="${esc(p.name)}">${esc(p.name)}</option>`).join('')}
+                    </select>
+                </div>
+                <div class="md:col-span-2">
+                    <label class="text-[9px] font-bold text-slate-400 uppercase">Req Date</label>
+                    <input type="date" class="edit-item-reqdate glass-input !py-1.5 !text-xs" />
+                </div>
+            </div>
+            <div>
+                <label class="text-[9px] font-bold text-slate-400 uppercase">Line Item Remarks / Comments</label>
+                <input class="edit-item-remarks glass-input !py-1.5 !text-xs" placeholder="Add specific remarks for this line item" />
+            </div>`;
+        container.appendChild(div);
+    };
+
+    window.saveAndResubmitDocument = (id) => {
+        const mr = appData.mrs.find(m => m.id === id);
+        if (!mr) return;
+        if (!canReviseDocument(mr)) {
+            alert('You do not have permission to resubmit this document.');
+            return;
+        }
+
+        const locEl = document.getElementById('review-edit-location');
+        const notesEl = document.getElementById('review-edit-notes');
+        const resubmitNoteEl = document.getElementById('wf-note-modal-edit');
+        const resubmitNote = resubmitNoteEl ? resubmitNoteEl.value : '';
+
+        if (locEl) mr.deliveryLocation = locEl.value;
+        if (notesEl) mr.notes = notesEl.value;
+
+        const itemRows = document.querySelectorAll('.review-edit-item-row');
+        const updatedItems = [];
+        itemRows.forEach((row, idx) => {
+            const name = row.querySelector('.edit-item-name')?.value || '';
+            const spec = row.querySelector('.edit-item-spec')?.value || '';
+            const make = row.querySelector('.edit-item-make')?.value || '';
+            const sampleProvided = row.querySelector('.edit-item-sample')?.value || '';
+            const qty = Number(row.querySelector('.edit-item-qty')?.value) || 1;
+            const unit = row.querySelector('.edit-item-unit')?.value || 'NOS';
+            const rate = Number(row.querySelector('.edit-item-rate')?.value) || 0;
+            const project = row.querySelector('.edit-item-project')?.value || '';
+            const reqDate = row.querySelector('.edit-item-reqdate')?.value || '';
+            const remarks = row.querySelector('.edit-item-remarks')?.value || '';
+
+            if (name.trim()) {
+                updatedItems.push({
+                    ...(mr.items[idx] || {}),
+                    name: name.trim(), spec, make, sampleProvided, qty, unit, rate, amount: +(qty * rate).toFixed(2),
+                    project, requiredDate: reqDate, remarks, refMrNumber: mr.mrNumber
+                });
+            }
+        });
+
+        if (updatedItems.length === 0) {
+            alert('Document must contain at least 1 valid line item.');
+            return;
+        }
+
+        mr.items = updatedItems;
+        mr.revNo = (mr.revNo || 0) + 1;
+
+        const oldStatus = mr.status;
+        let newStatus = mr.queryOriginStatus || 'AUTHORIZED';
+        if (oldStatus === 'RETURNED_TO_CREATOR' || oldStatus === 'QUERY_RAISED') {
+            const l2 = findDeptL2(mr.dept);
+            newStatus = l2 ? 'DEPT_APPROVAL_PENDING' : 'RAISED';
+        } else if (oldStatus === 'RETURNED_TO_L2') {
+            newStatus = 'AUTHORIZED';
+        } else if (oldStatus === 'RETURNED_TO_FINAL_AUTH') {
+            newStatus = 'AUTHORIZED';
+        } else if (oldStatus === 'RETURNED_TO_PLANNING') {
+            newStatus = 'PLANNED';
+        } else if (oldStatus === 'PROCUREMENT_QUERY') {
+            newStatus = 'PLANNED';
+        }
+
+        mr.status = newStatus;
+        (mr.items || []).forEach(it => { it.status = newStatus; });
+
+        delete mr.queryOriginStatus;
+        delete mr.queryOriginApprover;
+
+        mr.history = mr.history || [];
+        mr.history.push({
+            action: 'Revised & Resubmitted',
+            actor: user.name,
+            role: user.role,
+            dept: user.dept,
+            ts: Date.now(),
+            field: 'status',
+            oldValue: STATUS_META[oldStatus]?.label || oldStatus,
+            newValue: STATUS_META[newStatus]?.label || newStatus,
+            note: resubmitNote ? (resubmitNote + ' — Resubmitted after query') : 'Document revised and resubmitted for workflow approval.'
+        });
+
+        _isReviewEditMode = false;
+        saveDB();
+        render();
+        alert((mr.prNumber ? 'PR ' + mr.prNumber : 'MR ' + mr.mrNumber) + ' revised and resubmitted successfully!');
+    };
+
+    function renderFullScreenReviewEditMode(m) {
+        const items = m.items || [];
+        return `
+        <div class="h-screen w-screen flex flex-col bg-[#F1F2F4] overflow-hidden">
+            <div class="flex justify-between items-center px-8 py-5 border-b border-rule bg-white shadow-sm shrink-0 z-10">
+                <div>
+                    <div class="flex items-center gap-2">
+                        <span class="px-2.5 py-0.5 bg-amberx text-white text-[10px] font-black uppercase rounded">Edit Mode Active</span>
+                        <span class="text-xs font-mono font-bold text-slate-500">REV NO: ${m.revNo || 0}</span>
+                    </div>
+                    <h3 class="font-display font-bold text-xl text-ink tracking-tight mt-1">
+                        Revising ${m.source === 'DIRECT_PR' ? 'Direct PR' : 'Material Request'} — 
+                        <span class="font-mono text-brand">${m.prNumber ? 'PR: ' + m.prNumber + ' (MR: ' + m.mrNumber + ')' : m.mrNumber}</span>
+                    </h3>
+                </div>
+                <button onclick="window.cancelReviewEditMode()" class="text-slate-500 hover:text-red-600 transition-colors bg-white px-4 py-2 rounded-xl border border-rule shadow-sm font-bold text-xs flex items-center gap-1.5">
+                    <i data-lucide="x" class="w-4 h-4"></i> Cancel Edit
+                </button>
+            </div>
+
+            <div class="flex-1 overflow-y-auto p-4 md:p-8 relative">
+                <div class="bg-white shadow-md border border-rule rounded-2xl p-6 md:p-8 mx-auto space-y-6" style="max-width: 1100px;">
+                    <div class="bg-amberx-50 border border-amberx-200 p-4 rounded-xl flex items-center justify-between">
+                        <div class="flex items-center gap-3">
+                            <i data-lucide="edit-3" class="w-5 h-5 text-amberx-dark shrink-0"></i>
+                            <div>
+                                <h4 class="text-xs font-bold text-amberx-dark uppercase tracking-wider">Document Revision Mode</h4>
+                                <p class="text-xs text-amberx-dark/80 mt-0.5">Edit fields or line items below. Your changes will update ${m.prNumber || m.mrNumber} in place and resubmit it to the workflow.</p>
+                            </div>
+                        </div>
+                    </div>
+
+                    <div class="grid grid-cols-1 md:grid-cols-2 gap-4">
+                        <div>
+                            <label class="field-label">Delivery Location</label>
+                            <input id="review-edit-location" value="${esc(m.deliveryLocation || '')}" class="glass-input font-bold" />
+                        </div>
+                        <div>
+                            <label class="field-label">General Notes / Remarks</label>
+                            <textarea id="review-edit-notes" class="glass-input min-h-[42px]">${esc(m.notes || '')}</textarea>
+                        </div>
+                    </div>
+
+                    <div class="border border-rule rounded-2xl overflow-hidden">
+                        <div class="bg-paper px-5 py-3 border-b border-rule flex justify-between items-center">
+                            <span class="text-xs font-black uppercase tracking-widest text-slate-600">Line Items (${items.length})</span>
+                            <button type="button" onclick="window.addEditReviewItemRow()" class="px-3 py-1.5 bg-brand text-white rounded-lg text-xs font-bold uppercase tracking-wider hover:bg-brand-600 flex items-center gap-1 shadow-xs">
+                                <i data-lucide="plus" class="w-3.5 h-3.5"></i> Add Line Item
+                            </button>
+                        </div>
+                        <div id="review-edit-items-container" class="p-4 space-y-4">
+                            ${items.map((it, idx) => {
+                                const rate = Number(it.rate) || 0, qty = Number(it.qty) || 1;
+                                const amount = (qty * rate).toFixed(2);
+                                return `
+                            <div class="review-edit-item-row bg-paper/60 p-4 rounded-xl border border-rule space-y-3">
+                                <div class="flex justify-between items-center border-b border-rule pb-2">
+                                    <span class="text-[10px] font-black uppercase text-brand">Line Item #${idx + 1}</span>
+                                    <button type="button" onclick="this.closest('.review-edit-item-row').remove();" class="text-xs text-red-500 font-bold hover:underline">Remove Item</button>
+                                </div>
+                                <div class="grid grid-cols-1 md:grid-cols-12 gap-3">
+                                    <div class="md:col-span-4">
+                                        <label class="text-[9px] font-bold text-slate-400 uppercase">Item Name</label>
+                                        <input class="edit-item-name glass-input !py-1.5 !text-xs font-bold" value="${esc(it.name || '')}" />
+                                    </div>
+                                    <div class="md:col-span-4">
+                                        <label class="text-[9px] font-bold text-slate-400 uppercase">Specification</label>
+                                        <input class="edit-item-spec glass-input !py-1.5 !text-xs" value="${esc(it.spec || '')}" />
+                                    </div>
+                                    <div class="md:col-span-4">
+                                        <label class="text-[9px] font-bold text-slate-400 uppercase">Make / Brand</label>
+                                        <input class="edit-item-make glass-input !py-1.5 !text-xs" value="${esc(it.make || '')}" />
+                                    </div>
+                                </div>
+                                <div class="grid grid-cols-1 md:grid-cols-12 gap-3">
+                                    <div class="md:col-span-2">
+                                        <label class="text-[9px] font-bold text-slate-400 uppercase">Qty</label>
+                                        <input type="number" step="any" oninput="window.calcEditRowAmount(this)" class="edit-item-qty glass-input !py-1.5 !text-xs font-bold" value="${qty}" />
+                                    </div>
+                                    <div class="md:col-span-2">
+                                        <label class="text-[9px] font-bold text-slate-400 uppercase">Unit</label>
+                                        <input class="edit-item-unit glass-input !py-1.5 !text-xs" value="${esc(it.unit || 'NOS')}" />
+                                    </div>
+                                    <div class="md:col-span-2">
+                                        <label class="text-[9px] font-bold text-slate-400 uppercase">Est Rate</label>
+                                        <input type="number" step="any" oninput="window.calcEditRowAmount(this)" class="edit-item-rate glass-input !py-1.5 !text-xs" value="${rate}" />
+                                    </div>
+                                    <div class="md:col-span-2">
+                                        <label class="text-[9px] font-bold text-slate-400 uppercase">Amount</label>
+                                        <input type="number" readonly class="edit-item-amount glass-input !py-1.5 !text-xs font-mono font-bold bg-slate-100" value="${amount}" />
+                                    </div>
+                                    <div class="md:col-span-2">
+                                        <label class="text-[9px] font-bold text-slate-400 uppercase">Project</label>
+                                        <select class="edit-item-project glass-input !py-1.5 !text-xs">
+                                            <option value="">Select Project</option>
+                                            ${appData.projects.map(p => `<option value="${esc(p.name)}" ${it.project===p.name?'selected':''}>${esc(p.name)}</option>`).join('')}
+                                        </select>
+                                    </div>
+                                    <div class="md:col-span-2">
+                                        <label class="text-[9px] font-bold text-slate-400 uppercase">Req Date</label>
+                                        <input type="date" class="edit-item-reqdate glass-input !py-1.5 !text-xs" value="${esc(it.requiredDate || '')}" />
+                                    </div>
+                                </div>
+                                <div>
+                                    <label class="text-[9px] font-bold text-slate-400 uppercase">Line Item Remarks / Comments</label>
+                                    <input class="edit-item-remarks glass-input !py-1.5 !text-xs" value="${esc(it.remarks || '')}" />
+                                </div>
+                            </div>`;
+                            }).join('')}
+                        </div>
+                    </div>
+                </div>
+            </div>
+
+            <div class="p-6 border-t border-rule bg-white flex flex-col md:flex-row gap-4 items-center shrink-0 shadow-[0_-10px_40px_rgba(0,0,0,0.05)] z-20">
+                <div class="flex-1 w-full">
+                    <textarea id="wf-note-modal-edit" class="glass-input w-full min-h-[50px]" placeholder="Add resubmission remarks or notes explaining what was revised..."></textarea>
+                </div>
+                <div class="flex gap-3 shrink-0 min-w-[300px]">
+                    <button onclick="window.cancelReviewEditMode()" class="py-4 px-6 border border-rule text-slate-600 rounded-xl font-bold text-xs uppercase hover:bg-paper transition-all">Cancel Edit</button>
+                    <button onclick="window.saveAndResubmitDocument('${m.id}')" class="py-4 px-8 bg-amberx hover:bg-amberx-dark text-white rounded-xl font-black text-xs uppercase tracking-wider shadow-lg active:scale-95 transition-all flex items-center justify-center gap-2 flex-1">
+                        <i data-lucide="check-circle" class="w-4 h-4"></i> Save &amp; Resubmit
+                    </button>
+                </div>
+            </div>
+        </div>`;
+    }
+
     function renderFullScreenReview() {
         const m = appData.mrs.find(x => x.id === _reviewMrId);
         if (!m) return '';
+        if (_isReviewEditMode) return renderFullScreenReviewEditMode(m);
         
         let approveBtn = '';
         let queryBtn = '';
@@ -3818,7 +4147,7 @@
                 </div>
                 <div class="flex gap-4 shrink-0 min-w-[320px] flex-wrap justify-end">
                     ${canEditReturnedDocument(m) ? `
-                    <button onclick="window.resolveQuery('${m.id}'); window.closeReviewModal();" class="py-4 px-8 bg-amberx text-white rounded-xl font-black text-[11px] uppercase shadow-lg hover:bg-amberx-dark transition-all flex-1 flex items-center justify-center gap-2">
+                    <button onclick="window.startReviewEditMode('${m.id}');" class="py-4 px-8 bg-amberx text-white rounded-xl font-black text-[11px] uppercase shadow-lg hover:bg-amberx-dark transition-all flex-1 flex items-center justify-center gap-2">
                         <i data-lucide="edit-3" class="w-4 h-4"></i> Revise &amp; Edit Document
                     </button` : ''}
                     ${m.status !== 'CANCELLED' ? `<button onclick="window.cancelFullMR('${m.id}')" class="py-4 px-8 border-2 border-red-500 text-red-500 rounded-xl font-black text-[11px] uppercase hover:bg-red-50 transition-all flex-1 md:flex-none">Cancel Request</button>` : ''}
