@@ -3880,12 +3880,8 @@
             <td><input class="edit-item-remarks" value="" placeholder="Remarks" style="width:100%; border:none; background:transparent; font-size:10.5px; outline:none;" /></td>
             <td style="text-align:center;"><button type="button" onclick="this.closest('tr').remove(); window.updateEditRowNumbers();" style="color:#ef4444; font-weight:bold; font-size:14px; background:none; border:none; cursor:pointer;" title="Remove Item">×</button></td>
         `;
-        const addBtnRow = container.querySelector("tr:last-child");
-        if (addBtnRow) {
-            container.insertBefore(tr, addBtnRow);
-        } else {
-            container.appendChild(tr);
-        }
+        container.appendChild(tr);
+        window.updateEditRowNumbers();
     };
 
     window.saveAndResubmitDocument = (id) => {
@@ -12092,13 +12088,16 @@ function renderMrRow(item, idx, xlInputCss) {
                         <td style="text-align:center; white-space:nowrap;">${isEditMode ? `<input type="date" class="edit-item-reqdate" value="${it.requiredDate||''}" style="width:100%;text-align:center;border:none;background:transparent;font-size:9.5px;outline:none;font-family:inherit;" />` : fmtDate(it.requiredDate)}</td>
                         <td>${isEditMode ? `<select class="edit-item-project" style="width:100%;border:none;background:transparent;font-size:10px;outline:none;font-family:inherit;"><option value="">Select</option>${appData.projects.map(p => `<option value="${esc(p.name)}" ${it.project===p.name?'selected':''}>${esc(p.name)}</option>`).join('')}</select>` : (esc(it.project || '—') + (cc ? ` <span style="color:#64748b;">(${esc(cc)})</span>` : ''))}</td>
                         <td>${isEditMode ? `<input class="edit-item-remarks" value="${esc(it.remarks || '')}" style="width:100%;border:none;background:transparent;font-size:10.5px;outline:none;font-family:inherit;" />` : esc(it.remarks || '—')}</td>
-                        ${isEditMode ? '<td style="text-align:center;border:1px solid #000;"><button type="button" onclick="this.closest(\'tr\').remove()" style="color:#ef4444;font-weight:bold;font-size:14px;background:none;border:none;cursor:pointer;" title="Remove">×</button></td>' : ''}
+                        ${isEditMode ? '<td style="text-align:center;border:1px solid #000;"><button type="button" onclick="this.closest(\'tr\').remove(); window.updateEditRowNumbers();" style="color:#ef4444;font-weight:bold;font-size:14px;background:none;border:none;cursor:pointer;" title="Remove">×</button></td>' : ''}
                     </tr>`;
                 }).join('')}
+                </tbody>
+
+                <tbody id="review-edit-footer-tbody">
                 ${isEditMode ? `<tr><td colspan="13" style="border:1px solid #000;padding:6px;text-align:center;"><button type="button" onclick="window.addEditReviewItemRow()" style="background:#0f766e;color:#fff;border:none;padding:5px 14px;border-radius:4px;font-size:10px;font-weight:700;cursor:pointer;">+ Add Line Item</button></td></tr>` : ''}
                 <tr style="font-size:11px; font-weight:700;">
                     <td colspan="8" style="text-align:center;">Total</td>
-                    <td style="text-align:right;">${grandTotal.toFixed(2)}</td>
+                    <td style="text-align:right;" id="review-edit-grand-total">${grandTotal.toFixed(2)}</td>
                     <td colspan="${isEditMode ? 4 : 3}"></td>
                 </tr>
                 <tr style="font-size:11px;">
@@ -12110,6 +12109,7 @@ function renderMrRow(item, idx, xlInputCss) {
                     <td style="font-weight:700; vertical-align:top;">Attachments</td>
                     <td colspan="11" style="vertical-align:top;">${attachments.map(a => esc(typeof a === 'string' ? a : (a.name || 'Attachment'))).join(', ')}</td>
                 </tr>` : ''}
+                </tbody>
 
                 <tr><td colspan="12" class="mrp-section-title" style="padding-top:16px;">APPROVAL &amp; AUTHORIZATION HISTORY</td></tr>
                 <tr>
