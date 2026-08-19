@@ -4515,8 +4515,8 @@
 
                 return `
             <div class="bg-white rounded-2xl border border-rule shadow-panel overflow-hidden border-l-4 border-l-amberx">
-                <div class="flex flex-col md:flex-row">
-                    <div class="flex-1 p-6">
+                <div class="flex flex-col md:flex-row w-full min-w-0">
+                    <div class="flex-1 min-w-0 p-6">
                         <div class="flex justify-between items-start mb-4">
                             <div>
                                 <p class="text-2xl font-display font-bold text-brand tracking-tight font-mono">${esc(m.prNumber || m.mrNumber)}</p>
@@ -4534,14 +4534,14 @@
                             <div class="p-3.5 bg-slate-50 rounded-xl border border-rule flex items-start gap-3">
                                 <div class="w-2 h-2 rounded-full bg-brand mt-1.5 shrink-0"></div>
                                 <div class="flex-1 min-w-0">
-                                    <div class="font-bold text-ink text-sm truncate">${esc(firstItem.name)} <span class="text-slate-400 font-normal text-xs ml-1">(${firstItem.qty} ${esc(firstItem.unit)})</span></div>
+                                    <div class="font-bold text-ink text-sm break-words line-clamp-2" title="${esc(firstItem.name)}">${esc(firstItem.name)} <span class="text-slate-400 font-normal text-xs ml-1">(${firstItem.qty} ${esc(firstItem.unit)})</span></div>
                                     ${firstItem.project ? `<div class="text-xs text-slate-500 mt-0.5">Project: ${esc(firstItem.project)}</div>` : ''}
                                     ${items.length > 1 ? `<div class="text-xs font-bold text-brand mt-1.5">+ ${items.length - 1} more item(s) in this document</div>` : ''}
                                 </div>
                             </div>` : ''}
                         </div>
                     </div>
-                    <div class="w-full md:w-[280px] bg-amberx/5 p-6 border-l border-rule flex flex-col justify-center">
+                    <div class="w-full md:w-[280px] shrink-0 bg-amberx/5 p-6 border-l border-rule flex flex-col justify-center">
                         <div class="text-xs text-amberx-dark font-bold mb-1 uppercase tracking-widest">Queried By ${esc(querier)}</div>
                         <div class="text-sm text-slate-600 italic bg-white p-3 border border-rule rounded-lg mb-4 break-words">"${esc(queryNote)}"</div>
                         <button onclick="window.resolveQuery('${m.id}')" class="w-full py-3 bg-brand text-white rounded-xl font-black text-xs uppercase shadow-xl active:scale-95 transition-all hover:bg-brand-600 flex items-center justify-center gap-2">
@@ -6390,8 +6390,8 @@ function renderMrRow(item, idx, xlInputCss) {
                 No MRs pending in this stage
             </div>` : queue.map(m => `
             <div class="bg-white rounded-2xl border border-rule shadow-panel overflow-hidden overflow-x-auto">
-                <div class="flex flex-col md:flex-row">
-                    <div class="flex-1 p-8">
+                <div class="flex flex-col md:flex-row w-full min-w-0">
+                    <div class="flex-1 min-w-0 p-6 md:p-8">
                         <div class="flex justify-between items-start mb-6">
                             <div>
                                 <p class="text-2xl font-display font-bold text-brand tracking-tight font-mono">
@@ -6405,13 +6405,13 @@ function renderMrRow(item, idx, xlInputCss) {
                         <div class="space-y-2">
                             ${(m.items||[]).map(it => `
                             <div class="text-xs flex justify-between border-b border-rule py-2">
-                                <span class="font-bold">${esc(it.name)} <span class="text-slate-400">× ${it.qty} ${esc(it.unit)}</span></span>
+                                <span class="font-bold break-words min-w-0 flex-1">${esc(it.name)} <span class="text-slate-400 font-normal">× ${it.qty} ${esc(it.unit)}</span></span>
                                 <span class="text-[9px] text-brand uppercase font-black">${esc(it.project)}</span>
                             </div>`).join('')}
                         </div>
                         ${m.notes ? `<p class="mt-4 text-xs italic text-slate-500 bg-paper p-3 rounded-xl">"${esc(m.notes)}"</p>` : ''}
                     </div>
-                    <div class="w-full md:w-[280px] bg-paper/60 p-8 border-l border-rule flex items-center justify-center">
+                    <div class="w-full md:w-[280px] shrink-0 bg-paper/60 p-6 md:p-8 border-l border-rule flex items-center justify-center">
                         <button onclick="window.openReviewModal('${m.id}', { type: 'DEPT_L2' })" class="w-full py-5 bg-brand text-white rounded-xl font-black text-xs uppercase shadow-xl active:scale-95 transition-all hover:bg-brand-600 flex flex-col items-center justify-center gap-3"><i data-lucide="file-search" class="w-8 h-8 opacity-80"></i> Review<br/>Document</button>
                     </div>
                 </div>
@@ -7219,8 +7219,8 @@ function renderMrRow(item, idx, xlInputCss) {
                 No MRs pending Planning Approval
             </div>` : queue.map(m => `
             <div class="bg-white rounded-2xl border border-rule shadow-panel overflow-hidden overflow-x-auto">
-                <div class="flex flex-col md:flex-row">
-                    <div class="flex-1 p-8">
+                <div class="flex flex-col md:flex-row w-full min-w-0">
+                    <div class="flex-1 min-w-0 p-6 md:p-8">
                         <div class="flex justify-between items-start mb-6">
                             <div>
                                 <p class="text-2xl font-display font-bold text-brand tracking-tight font-mono">
@@ -7234,13 +7234,13 @@ function renderMrRow(item, idx, xlInputCss) {
                         <div class="space-y-2">
                             ${(m.items||[]).map(it => `
                             <div class="text-xs flex justify-between border-b border-rule py-2">
-                                <span class="font-bold">${esc(it.name)} <span class="text-slate-400">× ${it.qty} ${esc(it.unit)}</span></span>
+                                <span class="font-bold break-words min-w-0 flex-1">${esc(it.name)} <span class="text-slate-400 font-normal">× ${it.qty} ${esc(it.unit)}</span></span>
                                 <span class="text-[9px] text-brand uppercase font-black">${esc(it.project)}</span>
                             </div>`).join('')}
                         </div>
                         ${m.notes ? `<p class="mt-4 text-xs italic text-slate-500 bg-paper p-3 rounded-xl">"${esc(m.notes)}"</p>` : ''}
                     </div>
-                    <div class="w-full md:w-[280px] bg-paper/60 p-8 border-l border-rule flex items-center justify-center">
+                    <div class="w-full md:w-[280px] shrink-0 bg-paper/60 p-6 md:p-8 border-l border-rule flex items-center justify-center">
                         <button onclick="window.openReviewModal('${m.id}', { type: 'PLANNING' })" class="w-full py-5 bg-brand text-white rounded-xl font-black text-xs uppercase shadow-xl active:scale-95 transition-all hover:bg-brand-600 flex flex-col items-center justify-center gap-3"><i data-lucide="file-search" class="w-8 h-8 opacity-80"></i> Review<br/>Document</button>
                     </div>
                 </div>
