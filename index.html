@@ -1413,6 +1413,11 @@
             <span class="dot" style="background:${m.color}"></span>${m.label}
         </span>`;
     }
+    function normalizeDepartment(val) {
+        return String(val || '').trim().toLowerCase();
+    }
+    window.normalizeDepartment = normalizeDepartment;
+
     function esc(s) {
         return String(s || '').replace(/&/g,'&amp;').replace(/"/g,'&quot;').replace(/</g,'&lt;').replace(/>/g,'&gt;');
     }
