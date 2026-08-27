@@ -2112,6 +2112,57 @@
     
     window.hideAssetAutocomplete = () => { const dd = document.getElementById('autocomplete-dropdown'); if (dd) { dd.classList.add('hidden'); dd.style.display = 'none'; } };
 
+    
+    window._activeAssetInput = null;
+    window._activeAssetRow = null;
+
+    window.onReviewAssetFocus = (inputEl, rid) => {
+        window._activeAssetInput = inputEl;
+        window._activeAssetRow = inputEl ? inputEl.closest('tr') : null;
+        window.onReviewAssetInput(inputEl, rid);
+    };
+
+    window.onReviewAssetInput = (inputEl, rid) => {
+        if (!inputEl) return;
+        window._activeAssetInput = inputEl;
+        window._activeAssetRow = inputEl.closest('tr');
+        const q = (inputEl.value || '').trim().toLowerCase();
+        const dd = document.getElementById('autocomplete-dropdown');
+        if (!dd) return;
+        
+        if (q.length < 1) {
+            dd.classList.add('hidden');
+            dd.style.display = 'none';
+            return;
+        }
+
+        const qTokens = q.split(/\s+/).filter(Boolean);
+        _acItems = (appData.assets || []).filter(a => {
+            const searchStr = ((a.name || '') + ' ' + (a.specification || '') + ' ' + (a.id || '')).toLowerCase();
+            return qTokens.every(t => searchStr.includes(t));
+        }).slice(0, 50);
+
+        if (!_acItems.length) {
+            dd.classList.add('hidden');
+            dd.style.display = 'none';
+            return;
+        }
+
+        _acHoverIdx = 0;
+        const rect = inputEl.getBoundingClientRect();
+        dd.style.position = 'fixed';
+        dd.style.top = rect.bottom + 'px';
+        dd.style.left = rect.left + 'px';
+        dd.style.width = Math.max(rect.width, 350) + 'px';
+        dd.style.zIndex = '999999';
+        
+        if (typeof renderAutocompleteList === 'function') {
+            renderAutocompleteList(rid || 0, inputEl);
+        }
+        dd.classList.remove('hidden');
+        dd.style.display = 'flex';
+    };
+
     window.onAssetAutocompleteInput = (rid, inputEl) => {
         const item = currentMrItems.find(i => i.id == rid);
         if (item) item.assetName = inputEl.value; // Store state without softRender
@@ -2163,10 +2214,23 @@
     }
 
     window.selectAssetAutocomplete = (rid, assetName) => {
-        const inputEl = document.getElementById(`asset-${rid}`);
-        if (inputEl) inputEl.value = assetName;
+        if (window._activeAssetInput) {
+            window._activeAssetInput.value = assetName;
+        } else {
+            const inputEl = document.getElementById(`asset-${rid}`);
+            if (inputEl) inputEl.value = assetName;
+        }
+        const asset = (appData.assets || []).find(a => (a.name || "").trim().toLowerCase() === (assetName || "").trim().toLowerCase());
+        if (asset && window._activeAssetRow) {
+            const specEl = window._activeAssetRow.querySelector('.edit-item-spec') || window._activeAssetRow.querySelector('[id^="spec-"]');
+            const unitEl = window._activeAssetRow.querySelector('.edit-item-unit') || window._activeAssetRow.querySelector('[id^="unit-"]');
+            if (specEl && asset.specification && !specEl.value) specEl.value = asset.specification;
+            if (unitEl && asset.unit) unitEl.value = asset.unit;
+        }
         window.hideAssetAutocomplete();
-        window.onAssetChange(rid, assetName); 
+        if (typeof window.onAssetChange === 'function' && rid && document.getElementById(`asset-${rid}`)) {
+            window.onAssetChange(rid, assetName);
+        }
     };
 
     window.onAssetAutocompleteKeydown = (e, rid, inputEl) => {
@@ -3890,7 +3954,7 @@
         tr.style.fontSize = "10.5px";
         tr.innerHTML = `
             <td style="text-align:center; color:#64748b; font-weight:700;">${idx + 1}</td>
-            <td style="font-weight:700; min-width:170px;"><input class="edit-item-name" value="" placeholder="Item Name" style="width:100%; font-weight:700; border:none; background:transparent; font-size:11px; outline:none;" /></td>
+            <td style="font-weight:700; min-width:170px;"><input class="edit-item-name" value="" onfocus="window.onReviewAssetFocus(this)" oninput="window.onReviewAssetInput(this)" placeholder="Type item name..." style="width:100%; font-weight:700; border:none; background:transparent; font-size:11px; outline:none;" autocomplete="off" /></td>
             <td><input class="edit-item-spec" value="" placeholder="Specification" style="width:100%; border:none; background:transparent; font-size:10.5px; outline:none;" /></td>
             <td><input class="edit-item-make" value="" placeholder="Make" style="width:100%; border:none; background:transparent; font-size:10.5px; outline:none;" /></td>
             <td>
@@ -3904,7 +3968,7 @@
             <td><input type="number" step="any" oninput="window.calcEditRowAmount(this)" class="edit-item-rate" value="0" style="width:100%; text-align:right; border:none; background:transparent; font-size:10.5px; outline:none;" /></td>
             <td><input type="number" readonly class="edit-item-amount" value="0.00" style="width:100%; text-align:right; font-weight:700; border:none; background:transparent; font-size:11px; outline:none;" /></td>
             <td><input type="date" class="edit-item-reqdate" value="" style="width:100%; text-align:center; border:none; background:transparent; font-size:9.5px; outline:none;" /></td>
-            <td><input list="cost-center-datalist" class="edit-item-project" value="" placeholder="Search Cost Center / CC No..." style="width:100%; border:none; background:transparent; font-size:10.5px; outline:none;" /></td>
+            <td><input list="cost-center-datalist" class="edit-item-project" value="" onfocus="window.onCcFocus(null, this)" oninput="window.onCcInput(null, this)" placeholder="Search Cost Center / CC No..." style="width:100%; border:none; background:transparent; font-size:10.5px; outline:none;" autocomplete="off" /></td>
             <td><input class="edit-item-remarks" value="" placeholder="Remarks" style="width:100%; border:none; background:transparent; font-size:10.5px; outline:none;" /></td>
             <td style="text-align:center;"><button type="button" onclick="this.closest('tr').remove(); window.updateEditRowNumbers();" style="color:#ef4444; font-weight:bold; font-size:14px; background:none; border:none; cursor:pointer;" title="Remove Item">×</button></td>
         `;
@@ -5954,9 +6018,11 @@
         }
     };
     window.selectCcItem = (name) => {
-        if (window._activeCcInput && window._activeCcRid !== null) {
+        if (window._activeCcInput) {
             window._activeCcInput.value = name;
-            window.onFieldChange(window._activeCcRid, 'project', name);
+            if (typeof window.onFieldChange === 'function' && window._activeCcRid !== null && window._activeCcRid !== undefined) {
+                window.onFieldChange(window._activeCcRid, 'project', name);
+            }
         }
         window.hideCcDropdown();
     };
@@ -12128,7 +12194,7 @@ function renderMrRow(item, idx, xlInputCss) {
                     return `
                     <tr class="${isEditMode ? 'review-edit-item-row' : ''}" style="font-size:10.5px; break-inside:avoid; page-break-inside:avoid;">
                         <td style="text-align:center; color:#64748b; font-weight:700;">${i+1}</td>
-                        <td style="font-weight:700; min-width:170px;">${isEditMode ? `<input class="edit-item-name" value="${esc(it.name || '')}" style="width:100%;border:none;background:transparent;font-weight:700;font-size:10.5px;outline:none;font-family:inherit;" />` : esc(it.name)}</td>
+                        <td style="font-weight:700; min-width:170px;">${isEditMode ? `<input class="edit-item-name" value="${esc(it.name || '')}" onfocus="window.onReviewAssetFocus(this, ${i})" oninput="window.onReviewAssetInput(this, ${i})" placeholder="Type item name..." style="width:100%;border:none;background:transparent;font-weight:700;font-size:10.5px;outline:none;font-family:inherit;" autocomplete="off" />` : esc(it.name)}</td>
                         <td>${isEditMode ? `<input class="edit-item-spec" value="${esc(it.spec || '')}" style="width:100%;border:none;background:transparent;font-size:10.5px;outline:none;font-family:inherit;" />` : esc(it.spec || '—')}</td>
                         <td>${isEditMode ? `<input class="edit-item-make" value="${esc(it.make || '')}" style="width:100%;border:none;background:transparent;font-size:10.5px;outline:none;font-family:inherit;" />` : esc(it.make || '—')}</td>
                         <td>${isEditMode ? `<select class="edit-item-sample" style="width:100%;border:none;background:transparent;font-size:10px;outline:none;font-family:inherit;"><option value="No" ${it.sampleProvided!=='Yes'?'selected':''}>No</option><option value="Yes" ${it.sampleProvided==='Yes'?'selected':''}>Yes</option></select>` : esc(it.sampleProvided || '—')}</td>
@@ -12137,7 +12203,7 @@ function renderMrRow(item, idx, xlInputCss) {
                         <td style="text-align:right;">${isEditMode ? `<input type="number" step="any" oninput="window.calcEditRowAmount(this)" class="edit-item-rate" value="${it.rate||0}" style="width:100%;text-align:right;border:none;background:transparent;font-size:10.5px;outline:none;font-family:inherit;" />` : (Number(it.rate)||0).toFixed(2)}</td>
                         <td style="text-align:right; font-weight:700;">${isEditMode ? `<input type="number" readonly class="edit-item-amount" value="${amount.toFixed(2)}" style="width:100%;text-align:right;border:none;background:transparent;font-weight:700;font-size:10.5px;outline:none;font-family:inherit;" />` : amount.toFixed(2)}</td>
                         <td style="text-align:center; white-space:nowrap;">${isEditMode ? `<input type="date" class="edit-item-reqdate" value="${it.requiredDate||''}" style="width:100%;text-align:center;border:none;background:transparent;font-size:9.5px;outline:none;font-family:inherit;" />` : fmtDate(it.requiredDate)}</td>
-                        <td>${isEditMode ? `<input list="cost-center-datalist" class="edit-item-project" value="${esc(it.project || '')}" placeholder="Search Cost Center / CC No..." style="width:100%;border:none;background:transparent;font-size:10px;outline:none;font-family:inherit;" />` : (esc(it.project || '—') + (cc ? ` <span style="color:#64748b;">(${esc(cc)})</span>` : ''))}</td>
+                        <td>${isEditMode ? `<input list="cost-center-datalist" class="edit-item-project" value="${esc(it.project || '')}" onfocus="window.onCcFocus(${i}, this)" oninput="window.onCcInput(${i}, this)" placeholder="Search Cost Center / CC No..." style="width:100%;border:none;background:transparent;font-size:10px;outline:none;font-family:inherit;" autocomplete="off" />` : (esc(it.project || '—') + (cc ? ` <span style="color:#64748b;">(${esc(cc)})</span>` : ''))}</td>
                         <td>${isEditMode ? `<input class="edit-item-remarks" value="${esc(it.remarks || '')}" style="width:100%;border:none;background:transparent;font-size:10.5px;outline:none;font-family:inherit;" />` : esc(it.remarks || '—')}</td>
                         ${isEditMode ? '<td style="text-align:center;border:1px solid #000;"><button type="button" onclick="this.closest(\'tr\').remove(); window.updateEditRowNumbers();" style="color:#ef4444;font-weight:bold;font-size:14px;background:none;border:none;cursor:pointer;" title="Remove">×</button></td>' : ''}
                     </tr>`;
