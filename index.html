@@ -1534,7 +1534,7 @@
         }
         // L2 / Dept Head return stage
         if (mr.status === 'RETURNED_TO_L2') {
-            return user.approvalLevel === 'L2' || user.role === 'authorizer' || user.role === 'dept_head' || user.role === 'admin';
+            return (user.approvalLevel === 'L2' || user.role === 'authorizer' || user.role === 'dept_head') && (userDept === mrDept || user.role === 'admin' || user.role === 'authorizer');
         }
         // Final Authorization return stage
         if (mr.status === 'RETURNED_TO_FINAL_AUTH') {
@@ -3048,7 +3048,7 @@
         if (!mr) return;
         const wasReturnedFromFinalAuth = mr.status === 'RETURNED_TO_L2';
         if (!['DEPT_APPROVAL_PENDING', 'RETURNED_TO_L2'].includes(mr.status)) { alert('This MR is no longer pending Department Approval.'); return; }
-        // Department check removed — all PR/MR can be approved in Department Approval
+        if (mr.dept && user.dept && (mr.dept || '').trim().toLowerCase() !== (user.dept || '').trim().toLowerCase() && user.role !== 'admin' && user.role !== 'authorizer') { alert('You can only approve Material Requests from your own department.'); return; }
 
         mr.l2User = user.name;
         mr.deptApprovalDate = Date.now();
