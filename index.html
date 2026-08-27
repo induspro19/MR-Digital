@@ -1530,11 +1530,11 @@
 
         // Creator return stage
         if (mr.status === 'RETURNED_TO_CREATOR' || mr.status === 'QUERY_RAISED') {
-            return mr.raisedBy === user.name || mr.l1User === user.name || (user.role === 'creator' && userDept === mrDept) || user.role === 'admin';
+            return mr.raisedBy === user.name || mr.l1User === user.name || user.role === 'creator' || user.role === 'dept_head' || user.role === 'admin' || (userDept === mrDept);
         }
         // L2 / Dept Head return stage
         if (mr.status === 'RETURNED_TO_L2') {
-            return (user.approvalLevel === 'L2' || user.role === 'authorizer' || user.role === 'dept_head') && (userDept === mrDept || user.role === 'admin' || user.role === 'authorizer');
+            return user.approvalLevel === 'L2' || user.role === 'authorizer' || user.role === 'dept_head' || user.role === 'admin';
         }
         // Final Authorization return stage
         if (mr.status === 'RETURNED_TO_FINAL_AUTH') {
@@ -3792,10 +3792,10 @@
         const mrDept = (mr.dept || '').trim().toLowerCase();
 
         if (mr.status === 'RETURNED_TO_CREATOR' || mr.status === 'QUERY_RAISED') {
-            return mr.raisedBy === user.name || mr.l1User === user.name || (user.role === 'creator' && userDept === mrDept) || user.role === 'admin';
+            return mr.raisedBy === user.name || mr.l1User === user.name || user.role === 'creator' || user.role === 'dept_head' || user.role === 'admin' || (userDept === mrDept);
         }
         if (mr.status === 'RETURNED_TO_L2') {
-            return (user.approvalLevel === 'L2' || user.role === 'authorizer' || user.role === 'dept_head') && userDept === mrDept;
+            return user.approvalLevel === 'L2' || user.role === 'authorizer' || user.role === 'dept_head' || user.role === 'admin';
         }
         if (mr.status === 'RETURNED_TO_FINAL_AUTH') {
             return user.role === 'authorizer' || user.role === 'admin';
