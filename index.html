@@ -1534,7 +1534,7 @@
         }
         // L2 / Dept Head return stage
         if (mr.status === 'RETURNED_TO_L2') {
-            return (user.approvalLevel === 'L2' || user.role === 'authorizer' || user.role === 'dept_head') && userDept === mrDept;
+            return user.approvalLevel === 'L2' || user.role === 'authorizer' || user.role === 'dept_head' || user.role === 'admin';
         }
         // Final Authorization return stage
         if (mr.status === 'RETURNED_TO_FINAL_AUTH') {
@@ -3048,7 +3048,7 @@
         if (!mr) return;
         const wasReturnedFromFinalAuth = mr.status === 'RETURNED_TO_L2';
         if (!['DEPT_APPROVAL_PENDING', 'RETURNED_TO_L2'].includes(mr.status)) { alert('This MR is no longer pending Department Approval.'); return; }
-        if (mr.dept !== user.dept) { alert('You can only approve Material Requests from your own department.'); return; }
+        // Department check removed — all PR/MR can be approved in Department Approval
 
         mr.l2User = user.name;
         mr.deptApprovalDate = Date.now();
@@ -4414,7 +4414,7 @@
                 ${navBtn('reports','Reports','bar-chart-3')}
                 ${returnedQueriesCount > 0 ? navBtn('returned_queries','Returned Queries','alert-circle', returnedQueriesCount) : ''}
                 ${(user.role==='admin'||user.role==='creator') ? navBtn('new_mr','Raise MR','plus-circle') : ''}
-                ${(user.approvalLevel==='L2') ? navBtn('dept_approval','Dept Approval','users-2', mrs.filter(m=>(m.status==='DEPT_APPROVAL_PENDING'||m.status==='RETURNED_TO_L2') && (m.dept||'').trim().toLowerCase()===(user.dept||'').trim().toLowerCase()).length) : ''}
+                ${(user.approvalLevel==='L2' || user.role==='admin' || user.role==='authorizer' || user.role==='dept_head') ? navBtn('dept_approval','Dept Approval','users-2', mrs.filter(m=>m.status==='DEPT_APPROVAL_PENDING'||m.status==='RETURNED_TO_L2').length) : ''}
                 ${(user.role==='admin'||user.role==='authorizer') ? navBtn('authorize','Authorize','shield-check', mrs.filter(m=>m.status==='RAISED'||m.status==='RETURNED_TO_FINAL_AUTH').length) : ''}
                 ${(user.role==='admin'||user.role==='planner') ? navBtn('planner','Planning','file-search', mrs.filter(m=>m.status==='AUTHORIZED'||m.status==='PROCUREMENT_QUERY').length) : ''}
                 ${(user.role==='admin'||user.role==='planner') ? navBtn('direct_pr','+ Create Direct PR','zap') : ''}
@@ -6377,14 +6377,14 @@ function renderMrRow(item, idx, xlInputCss) {
     // department — "L2 users must never see requests from other departments" — and its Approve
     // button drives the two-step Department Approved → Final Authorization Pending chain.
     function renderDeptApproval() {
-        let queue = appData.mrs.filter(m => (m.status === 'DEPT_APPROVAL_PENDING' || m.status === 'RETURNED_TO_L2') && (m.dept || '').trim().toLowerCase() === (user.dept || '').trim().toLowerCase());
+        let queue = appData.mrs.filter(m => m.status === 'DEPT_APPROVAL_PENDING' || m.status === 'RETURNED_TO_L2');
         const q = queueFilters.dept_approval || '';
         if (q) queue = queue.filter(m => matchesKeyword(m, q));
         return `
         <div class="space-y-6 fade-in">
             <div>
-                <h1 class="text-2xl font-display font-bold tracking-tight">Department Approval — ${esc(user.dept)}</h1>
-                <p class="text-sm text-slate-500">MRs and Direct PRs raised within your department, pending your L2 approval</p>
+                <h1 class="text-2xl font-display font-bold tracking-tight">Department Approval</h1>
+                <p class="text-sm text-slate-500">All MRs and Direct PRs pending Department Approval</p>
             </div>
             <div class="bg-white rounded-2xl border border-rule shadow-panel p-4 flex items-center gap-3">
                 <i data-lucide="search" class="w-4 h-4 text-slate-300 shrink-0"></i>
