@@ -1528,13 +1528,21 @@
         const userDept = (user.dept || '').trim().toLowerCase();
         const mrDept = (mr.dept || '').trim().toLowerCase();
 
-        // Creator return stage
-        if (mr.status === 'RETURNED_TO_CREATOR' || mr.status === 'QUERY_RAISED') {
-            return mr.raisedBy === user.name || mr.l1User === user.name || user.role === 'creator' || user.role === 'dept_head' || user.role === 'admin' || (userDept === mrDept);
+        // Creator return stage (L1 / Initiator)
+        if (mr.status === 'RETURNED_TO_CREATOR' || mr.status === 'RETURNED_TO_L1' || mr.status === 'QUERY_RAISED') {
+            const isInitiator = (user.id && mr.creatorId && user.id === mr.creatorId) ||
+                                (user.name && mr.raisedBy && user.name === mr.raisedBy) ||
+                                (user.name && mr.l1User && user.name === mr.l1User);
+            if (isInitiator) return true;
+            if (user.role === 'creator' && normalizeDepartment(user.dept) === normalizeDepartment(mr.dept)) return true;
+            if (user.role === 'admin') return true;
+            return false;
         }
-        // L2 / Dept Head return stage
+        // L2 / Dept Head return stage (Department-safe L2)
         if (mr.status === 'RETURNED_TO_L2') {
-            return user.approvalLevel === 'L2' || user.role === 'authorizer' || user.role === 'dept_head' || user.role === 'admin';
+            const sameDept = normalizeDepartment(user.dept) === normalizeDepartment(mr.dept);
+            const isL2Role = user.approvalLevel === 'L2' || user.role === 'dept_head' || user.role === 'authorizer' || user.role === 'admin';
+            return sameDept && isL2Role;
         }
         // Final Authorization return stage
         if (mr.status === 'RETURNED_TO_FINAL_AUTH') {
@@ -2962,8 +2970,17 @@
             // Each specific status routes the MR to the stage immediately before the one that
             // raised the query (Creator, L2, or Final Authorization), per the mandatory
             // "return to immediate previous working stage" rule.
-            const QUERY_STATUSES = ['QUERY_RAISED', 'RETURNED_TO_CREATOR', 'RETURNED_TO_L2', 'RETURNED_TO_FINAL_AUTH'];
+            const QUERY_STATUSES = ['QUERY_RAISED', 'RETURNED_TO_CREATOR', 'RETURNED_TO_L1', 'RETURNED_TO_L2', 'RETURNED_TO_FINAL_AUTH', 'RETURNED_TO_PLANNING', 'PROCUREMENT_QUERY'];
             if (QUERY_STATUSES.includes(newStatus)) {
+                mr.queryOrigin = {
+                    stage: oldStatus,
+                    status: oldStatus,
+                    raisedBy: user.name,
+                    raisedById: user.id || user.name,
+                    raisedByRole: user.role,
+                    raisedByDept: user.dept,
+                    raisedAt: Date.now()
+                };
                 mr.queryOriginStatus = oldStatus;
                 mr.queryOriginApprover = user.name;
             } else if (QUERY_STATUSES.includes(oldStatus) && newStatus !== 'CANCELLED') {
@@ -3048,7 +3065,7 @@
         if (!mr) return;
         const wasReturnedFromFinalAuth = mr.status === 'RETURNED_TO_L2';
         if (!['DEPT_APPROVAL_PENDING', 'RETURNED_TO_L2'].includes(mr.status)) { alert('This MR is no longer pending Department Approval.'); return; }
-        if (mr.dept && user.dept && (mr.dept || '').trim().toLowerCase() !== (user.dept || '').trim().toLowerCase() && user.role !== 'admin' && user.role !== 'authorizer') { alert('You can only approve Material Requests from your own department.'); return; }
+        if (normalizeDepartment(mr.dept) !== normalizeDepartment(user.dept) && user.role !== 'admin') { alert('Security Alert: You can only approve requests for your assigned department.'); return; }
 
         mr.l2User = user.name;
         mr.deptApprovalDate = Date.now();
@@ -3791,11 +3808,19 @@
         const userDept = (user.dept || '').trim().toLowerCase();
         const mrDept = (mr.dept || '').trim().toLowerCase();
 
-        if (mr.status === 'RETURNED_TO_CREATOR' || mr.status === 'QUERY_RAISED') {
-            return mr.raisedBy === user.name || mr.l1User === user.name || user.role === 'creator' || user.role === 'dept_head' || user.role === 'admin' || (userDept === mrDept);
+        if (mr.status === 'RETURNED_TO_CREATOR' || mr.status === 'RETURNED_TO_L1' || mr.status === 'QUERY_RAISED') {
+            const isInitiator = (user.id && mr.creatorId && user.id === mr.creatorId) ||
+                                (user.name && mr.raisedBy && user.name === mr.raisedBy) ||
+                                (user.name && mr.l1User && user.name === mr.l1User);
+            if (isInitiator) return true;
+            if (user.role === 'creator' && normalizeDepartment(user.dept) === normalizeDepartment(mr.dept)) return true;
+            if (user.role === 'admin') return true;
+            return false;
         }
         if (mr.status === 'RETURNED_TO_L2') {
-            return user.approvalLevel === 'L2' || user.role === 'authorizer' || user.role === 'dept_head' || user.role === 'admin';
+            const sameDept = normalizeDepartment(user.dept) === normalizeDepartment(mr.dept);
+            const isL2Role = user.approvalLevel === 'L2' || user.role === 'dept_head' || user.role === 'authorizer' || user.role === 'admin';
+            return sameDept && isL2Role;
         }
         if (mr.status === 'RETURNED_TO_FINAL_AUTH') {
             return user.role === 'authorizer' || user.role === 'admin';
@@ -4390,7 +4415,7 @@
 
     function renderSidebar() {
         const mrs = appData.mrs || [];
-        const returnedQueriesCount = mrs.filter(m => m.status === 'RETURNED_TO_CREATOR' && m.raisedBy === user.name).length;
+        const returnedQueriesCount = mrs.filter(m => (m.status === 'RETURNED_TO_CREATOR' || m.status === 'RETURNED_TO_L1' || m.status === 'QUERY_RAISED') && (m.raisedBy === user.name || m.creatorId === user.id || m.l1User === user.name || (user.role === 'creator' && normalizeDepartment(user.dept) === normalizeDepartment(m.dept)))).length;
         
         return `
         <div id="app-sidebar" class="${window.sidebarCollapsed ? 'w-64 md:w-[80px]' : 'w-64'} bg-ink h-screen fixed top-0 left-0 text-slate-300 flex flex-col no-print border-r border-black/20 z-50 transition-[transform,width] duration-300 ${mobileMenuOpen ? 'translate-x-0' : '-translate-x-full'} md:translate-x-0">
@@ -4414,7 +4439,7 @@
                 ${navBtn('reports','Reports','bar-chart-3')}
                 ${returnedQueriesCount > 0 ? navBtn('returned_queries','Returned Queries','alert-circle', returnedQueriesCount) : ''}
                 ${(user.role==='admin'||user.role==='creator') ? navBtn('new_mr','Raise MR','plus-circle') : ''}
-                ${(user.approvalLevel==='L2' || user.role==='admin' || user.role==='authorizer' || user.role==='dept_head') ? navBtn('dept_approval','Dept Approval','users-2', mrs.filter(m=>m.status==='DEPT_APPROVAL_PENDING'||m.status==='RETURNED_TO_L2').length) : ''}
+                ${(user.approvalLevel==='L2' || user.role==='dept_head' || user.role==='admin') ? navBtn('dept_approval','Dept Approval','users-2', mrs.filter(m=>(m.status==='DEPT_APPROVAL_PENDING'||m.status==='RETURNED_TO_L2') && (normalizeDepartment(m.dept)===normalizeDepartment(user.dept) || user.role==='admin')).length) : ''}
                 ${(user.role==='admin'||user.role==='authorizer') ? navBtn('authorize','Authorize','shield-check', mrs.filter(m=>m.status==='RAISED'||m.status==='RETURNED_TO_FINAL_AUTH').length) : ''}
                 ${(user.role==='admin'||user.role==='planner') ? navBtn('planner','Planning','file-search', mrs.filter(m=>m.status==='AUTHORIZED'||m.status==='PROCUREMENT_QUERY').length) : ''}
                 ${(user.role==='admin'||user.role==='planner') ? navBtn('direct_pr','+ Create Direct PR','zap') : ''}
@@ -4489,7 +4514,7 @@
 
     // ── CONTENT ROUTER ──────────────────────────────────────────────────────
     function renderReturnedQueries() {
-        let queue = appData.mrs.filter(m => m.status === 'RETURNED_TO_CREATOR' && m.raisedBy === user.name);
+        let queue = appData.mrs.filter(m => (m.status === 'RETURNED_TO_CREATOR' || m.status === 'RETURNED_TO_L1' || m.status === 'QUERY_RAISED') && (m.raisedBy === user.name || m.creatorId === user.id || m.l1User === user.name || (user.role === 'creator' && normalizeDepartment(user.dept) === normalizeDepartment(m.dept))));
         const q = queueFilters.returned_queries || '';
         if (q) queue = queue.filter(m => matchesKeyword(m, q));
         return `
@@ -6377,7 +6402,11 @@ function renderMrRow(item, idx, xlInputCss) {
     // department — "L2 users must never see requests from other departments" — and its Approve
     // button drives the two-step Department Approved → Final Authorization Pending chain.
     function renderDeptApproval() {
-        let queue = appData.mrs.filter(m => m.status === 'DEPT_APPROVAL_PENDING' || m.status === 'RETURNED_TO_L2');
+        let queue = appData.mrs.filter(m => {
+            if (m.status !== 'DEPT_APPROVAL_PENDING' && m.status !== 'RETURNED_TO_L2') return false;
+            if (user.role === 'admin') return true;
+            return normalizeDepartment(user.dept) === normalizeDepartment(m.dept);
+        });
         const q = queueFilters.dept_approval || '';
         if (q) queue = queue.filter(m => matchesKeyword(m, q));
         return `
