@@ -859,10 +859,10 @@
         { key:'poDate',      label:'PO Date',                  w:110, editable:'date' },
         { key:'status',      label:'Status',                   w:130, editable:'status' },
         { key:'prHandleBy',  label:'PR Handle By',             w:120, editable:'handler' },
-        { key:'vendor',      label:'Vendor Name',              w:140, editable:'text', procOnly:true },
-        { key:'firstQuoteBudget', label:'First Quote/Budget', w:140, editable:'number', num:true, currency:true, procOnly:true },
-        { key:'poValue',     label:'PO Value',                 w:120, editable:'number', num:true, currency:true, procOnly:true },
-        { key:'saving',      label:'Saving',                   w:110, num:true, currency:true, procOnly:true },
+        { key:'vendor',      label:'Vendor Name',              w:140, editable:'text' },
+        { key:'firstQuoteBudget', label:'First Quote/Budget', w:140, editable:'number', num:true, currency:true },
+        { key:'poValue',     label:'PO Value',                 w:120, editable:'number', num:true, currency:true },
+        { key:'saving',      label:'Saving',                   w:110, num:true, currency:true },
         { key:'tentDelivery',label:'Tentative Delivery Date',  w:135, editable:'date' },
         { key:'reqDelayDays',     label:'Requirement Delay (Days)', w:120, num:true },
         { key:'deliveryDelayDays',label:'Delivery Delay (Days)',    w:110, num:true },
@@ -2608,28 +2608,39 @@
                         const rowData = rawMatrix[i];
                         if (!rowData || !Array.isArray(rowData) || !rowData.some(cell => String(cell || '').trim())) continue;
 
-                        let rowObj = {};
+                        let rawName = '', rawSpec = '', rawMake = '', rawSample = '', rawQty = '', rawUom = '', rawRate = '', rawDate = '', rawCc = '', rawRem = '';
+
                         if (headers.length > 0) {
+                            const rowObj = {};
                             headers.forEach((h, colIdx) => {
                                 if (h) rowObj[h] = rowData[colIdx] !== undefined ? rowData[colIdx] : '';
                             });
+                            const n = norm(rowObj);
+                            rawName = String(pick(n, EXCEL_COLUMN_MAPPING.assetName)).trim();
+                            rawSpec = String(pick(n, EXCEL_COLUMN_MAPPING.spec)).trim();
+                            rawMake = String(pick(n, EXCEL_COLUMN_MAPPING.make)).trim();
+                            rawSample = String(pick(n, EXCEL_COLUMN_MAPPING.sampleProvided)).trim();
+                            rawUom  = String(pick(n, EXCEL_COLUMN_MAPPING.uom)).trim();
+                            rawQty  = pick(n, EXCEL_COLUMN_MAPPING.qty);
+                            rawRate = pick(n, EXCEL_COLUMN_MAPPING.rate);
+                            rawDate = pick(n, EXCEL_COLUMN_MAPPING.requiredDate);
+                            rawCc   = pick(n, EXCEL_COLUMN_MAPPING.project);
+                            rawRem  = String(pick(n, EXCEL_COLUMN_MAPPING.remarks)).trim();
+                        } else if (rowData.length >= 10) {
+                            // Standard 12-column PR Export Format: [SrNo, Item, Spec, Make, Sample, Qty, Unit, Rate, Amount, Date, CostCenter, Remarks]
+                            rawName = String(rowData[1] || rowData[0] || '').trim();
+                            rawSpec = String(rowData[2] || '').trim();
+                            rawMake = String(rowData[3] || '').trim();
+                            rawSample = String(rowData[4] || '').trim();
+                            rawQty  = rowData[5];
+                            rawUom  = String(rowData[6] || '').trim();
+                            rawRate = rowData[7];
+                            rawDate = rowData[9] || rowData[8];
+                            rawCc   = String(rowData[10] || '').trim();
+                            rawRem  = String(rowData[11] || '').trim();
                         } else {
-                            rowObj = rowData;
-                        }
-
-                        const n = norm(rowObj);
-                        let rawName = String(pick(n, EXCEL_COLUMN_MAPPING.assetName)).trim();
-                        let rawSpec = String(pick(n, EXCEL_COLUMN_MAPPING.spec)).trim();
-                        let rawUom  = String(pick(n, EXCEL_COLUMN_MAPPING.uom)).trim();
-                        let rawQty  = pick(n, EXCEL_COLUMN_MAPPING.qty);
-                        let rawRate = pick(n, EXCEL_COLUMN_MAPPING.rate);
-                        let rawDate = pick(n, EXCEL_COLUMN_MAPPING.requiredDate);
-                        let rawCc   = pick(n, EXCEL_COLUMN_MAPPING.project);
-                        let rawRem  = String(pick(n, EXCEL_COLUMN_MAPPING.remarks)).trim();
-
-                        // Position/Type Fallback for raw row array
-                        const strCells = rowData.map(c => String(c !== undefined && c !== null ? c : '').trim());
-                        if (!rawName) {
+                            // Simple array without headers: [Item, Spec, Qty, Unit, Rate, Date, CostCenter, Remarks]
+                            const strCells = rowData.map(c => String(c !== undefined && c !== null ? c : '').trim());
                             for (let j = 0; j < strCells.length; j++) {
                                 const val = strCells[j];
                                 if (!val) continue;
@@ -2638,7 +2649,7 @@
                                 if (/^\d{4}[-/.]\d{2}[-/.]\d{2}$/.test(val) || /^\d{1,2}[-/.]\d{1,2}[-/.]\d{4}$/.test(val)) continue;
                                 if (isNaN(Number(val))) {
                                     rawName = val;
-                                    if (!rawSpec && strCells[j + 1] && isNaN(Number(strCells[j + 1])) && !KNOWN_UNITS.includes(strCells[j + 1].toUpperCase())) {
+                                    if (!rawSpec && strCells[j + 1] && isNaN(Number(strCells[j + 1]))) {
                                         rawSpec = strCells[j + 1];
                                     }
                                     break;
@@ -2646,39 +2657,21 @@
                             }
                         }
 
-                        if (!rawName) continue; // Skip purely empty lines
+                        if (!rawName) continue; // Skip empty rows
 
-                        if (!rawUom) {
-                            for (const val of strCells) {
-                                if (KNOWN_UNITS.includes(val.toUpperCase())) {
-                                    rawUom = val;
-                                    break;
-                                }
+                        // Quantity parsing: Default to 1 if empty or <= 0
+                        const parsedQty = parseFloat(rawQty);
+                        const qtyNum = (!isNaN(parsedQty) && parsedQty > 0) ? parsedQty : 1;
+
+                        // STRICT Rate parsing: If rate is 0, empty, or missing, keep rate EXACTLY 0 (NO dummy rates)
+                        let rateNum = 0;
+                        if (rawRate !== '' && rawRate !== null && rawRate !== undefined) {
+                            const parsedRate = parseFloat(rawRate);
+                            if (!isNaN(parsedRate) && parsedRate >= 0) {
+                                rateNum = parsedRate;
                             }
                         }
 
-                        if (!rawQty) {
-                            for (const val of strCells) {
-                                const num = parseFloat(val);
-                                if (!isNaN(num) && num > 0 && num <= 100000 && !val.includes('.')) {
-                                    rawQty = num;
-                                    break;
-                                }
-                            }
-                        }
-
-                        if (!rawRate) {
-                            for (const val of strCells) {
-                                const num = parseFloat(val);
-                                if (!isNaN(num) && num >= 0 && val !== String(rawQty)) {
-                                    rawRate = num;
-                                    break;
-                                }
-                            }
-                        }
-
-                        const qtyNum = (parseFloat(rawQty) > 0) ? parseFloat(rawQty) : 1;
-                        const rateNum = (parseFloat(rawRate) >= 0) ? parseFloat(rawRate) : 0;
                         const validDate = parseStrictExcelDate(rawDate) || defaultTodayDate;
                         const validProject = validateCostCenterMatch(rawCc) || rawCc || defaultProjName;
 
@@ -2687,8 +2680,8 @@
                             assetId: '',
                             assetName: rawName,
                             spec: rawSpec,
-                            make: '',
-                            sampleProvided: 'No',
+                            make: rawMake,
+                            sampleProvided: rawSample || 'No',
                             qty: qtyNum,
                             uom: rawUom || 'NOS',
                             unit: rawUom || 'NOS',
@@ -9206,7 +9199,9 @@ function renderMrRow(item, idx, xlInputCss) {
         });
         dcHoldCancelModal = null;
         dcMarkDirty();
-        showToast('Marked — click Save to write changes');
+        saveDB(appData);
+        window.appData = appData;
+        showToast('Saved to Database');
     };
 
     // Once every line item on a PR has its Received Qty filled in to match its ordered Qty, that
@@ -9274,7 +9269,9 @@ function renderMrRow(item, idx, xlInputCss) {
             });
         }
         dcMarkDirty();
-        showToast('Marked — click Save to write changes');
+        saveDB(appData, true);
+        window.appData = appData;
+        showToast('Saved to Database & Cloud');
     };
 
     // Writes every staged Data Centre edit to localStorage in one go. This is the ONLY place
@@ -9648,7 +9645,7 @@ function renderMrRow(item, idx, xlInputCss) {
             return;
         }
 
-        const canEdit = (user.role === 'admin' || user.role === 'procurement');
+        const canEdit = (user.role === 'admin' || user.role === 'procurement' || user.role === 'planner');
         const allRows = dcFilteredRows();
         const summary = dcSummary(allRows);
         
@@ -9663,7 +9660,7 @@ function renderMrRow(item, idx, xlInputCss) {
             }
         });
 
-        const cols = dcOrderedColumns(DC_COLUMNS.filter(c => !dcHidden.has(c.key) && (!c.procOnly || user.role === 'procurement')));
+        const cols = dcOrderedColumns(DC_COLUMNS.filter(c => !dcHidden.has(c.key)));
         const handlerNames = activeProcHandlers().map(h => h.name);
 
         const holdCancelTooltip = (r) => {
@@ -9889,7 +9886,7 @@ function renderMrRow(item, idx, xlInputCss) {
     }
 
     function renderDataCentre() {
-        const canEdit = (user.role === 'admin' || user.role === 'procurement');
+        const canEdit = (user.role === 'admin' || user.role === 'procurement' || user.role === 'planner');
         const allRows = dcFilteredRows();
         const summary = dcSummary(allRows);
         
@@ -9904,7 +9901,7 @@ function renderMrRow(item, idx, xlInputCss) {
             }
         });
 
-        const cols = dcOrderedColumns(DC_COLUMNS.filter(c => !dcHidden.has(c.key) && (!c.procOnly || user.role === 'procurement')));
+        const cols = dcOrderedColumns(DC_COLUMNS.filter(c => !dcHidden.has(c.key)));
         const handlerNames = activeProcHandlers().map(h => h.name);
 
         const holdCancelTooltip = (r) => {
@@ -13316,7 +13313,7 @@ function renderMrRow(item, idx, xlInputCss) {
      * Fire-and-forget for cloud — the UI updates immediately from the in-memory object.
      * @param {object} [dataToSave] — defaults to appData if not provided
      */
-    async function saveDB(dataToSave) {
+    async function saveDB(dataToSave, skipRender = false) {
         const payload = dataToSave !== undefined ? dataToSave : appData;
 
         // OCC: Increment version before saving
@@ -13333,8 +13330,10 @@ function renderMrRow(item, idx, xlInputCss) {
         // 2. Expose on window for any direct access from console
         window.appData = payload;
 
-        // 3. Re-render immediately so the user sees updated state without waiting for cloud
-        render();
+        // 3. Re-render only if skipRender is false (prevents input blur and scroll jumping on live cell edits)
+        if (!skipRender) {
+            render();
+        }
 
         // 4. Async cloud conditional update (OCC)
         _lastSaveTs = Date.now();
