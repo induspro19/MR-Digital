@@ -2466,14 +2466,14 @@
 
     // ── MR: EXCEL IMPORT OF LINE ITEMS (ENTERPRISE ENGINE v2.1) ───────────
     const EXCEL_COLUMN_MAPPING = {
-        assetName: ['item name', 'item', 'asset name', 'asset', 'material name', 'material', 'item/asset'],
-        spec:      ['description', 'item description', 'specification', 'spec', 'desc', 'details'],
-        uom:       ['unit', 'uom', 'unit of measure', 'uom/unit', 'unit type'],
-        qty:       ['quantity', 'qty', 'quantity required', 'req qty', 'pr qty', 'qty req'],
-        rate:      ['unit price', 'unit rate', 'rate', 'price', 'estimated rate', 'est rate', 'cost', 'price/unit'],
-        requiredDate: ['required date', 'req date', 'requireddate', 'date required', 'need date', 'delivery date', 'tentative require date'],
-        project:   ['cost center', 'cost centre', 'cost center / project', 'project', 'project name', 'cc', 'cc no', 'cc number'],
-        remarks:   ['remarks', 'comments', 'note', 'notes', 'remark']
+        assetName: ['item name', 'item', 'asset name', 'asset', 'material name', 'material', 'item/asset', 'items', 'itemdescription', 'product', 'material description', 'item name/description'],
+        spec:      ['description', 'item description', 'specification', 'spec', 'desc', 'details', 'specifications', 'item spec', 'particulars'],
+        uom:       ['unit', 'uom', 'unit of measure', 'uom/unit', 'unit type', 'units', 'measure'],
+        qty:       ['quantity', 'qty', 'quantity required', 'req qty', 'pr qty', 'qty req', 'req quantity', 'required qty', 'count', 'nos'],
+        rate:      ['unit price', 'unit rate', 'rate', 'price', 'estimated rate', 'est rate', 'cost', 'price/unit', 'unit cost', 'amount', 'unitprice', 'unitrate'],
+        requiredDate: ['required date', 'req date', 'requireddate', 'date required', 'need date', 'delivery date', 'tentative require date', 'date', 'target date', 'reqdate', 'tentative date'],
+        project:   ['cost center', 'cost centre', 'cost center / project', 'project', 'project name', 'cc', 'cc no', 'cc number', 'cost-center', 'cost_center', 'costcenter', 'costcentre', 'dept', 'department'],
+        remarks:   ['remarks', 'comments', 'note', 'notes', 'remark', 'comment', 'specification/remarks']
     };
 
     function parseStrictExcelDate(val) {
@@ -2487,17 +2487,14 @@
             if (!isNaN(dateObj.getTime())) return dateObj.toISOString().slice(0, 10);
         }
         const str = String(val).trim();
-        if (/^\d{4}-\d{2}-\d{2}$/.test(str)) return str;
-        const dmy = str.match(/^(\d{1,2})[\/\-](\d{1,2})[\/\-](\d{4})$/);
+        if (/^\d{4}[\/\-\.]\d{2}[\/\-\.]\d{2}$/.test(str)) return str.replace(/[\/\.]/g, '-');
+        const dmy = str.match(/^(\d{1,2})[\/\-\.](\d{1,2})[\/\-\.](\d{4})$/);
         if (dmy) {
             const day = parseInt(dmy[1], 10);
             const month = parseInt(dmy[2], 10);
             const year = parseInt(dmy[3], 10);
             if (month >= 1 && month <= 12 && day >= 1 && day <= 31) {
-                const testDate = new Date(year, month - 1, day);
-                if (testDate.getFullYear() === year && testDate.getMonth() === month - 1 && testDate.getDate() === day) {
-                    return `${year}-${String(month).padStart(2, '0')}-${String(day).padStart(2, '0')}`;
-                }
+                return `${year}-${String(month).padStart(2, '0')}-${String(day).padStart(2, '0')}`;
             }
         }
         const t = Date.parse(str);
@@ -2530,7 +2527,7 @@
             return;
         }
         // Draft Lock check
-        if (activeTab !== 'new_mr') {
+        if (!['new_mr', 'direct_pr'].includes(activeTab)) {
             alert('Import is available only while creating or editing a Draft document.');
             return;
         }
@@ -2558,113 +2555,173 @@
             const reader = new FileReader();
             reader.onload = (ev) => {
                 try {
-                    const wb = XLSX.read(ev.target.result, { type: 'binary' });
+                    const data = new Uint8Array(ev.target.result);
+                    const wb = XLSX.read(data, { type: 'array' });
                     const ws = wb.Sheets[wb.SheetNames[0]];
-                    const rows = XLSX.utils.sheet_to_json(ws, { defval: '' });
+                    const rawMatrix = XLSX.utils.sheet_to_json(ws, { header: 1, defval: '' });
 
-                    if (!rows.length) {
+                    if (!rawMatrix || !rawMatrix.length) {
                         alert('No rows found in the uploaded spreadsheet.');
                         return;
                     }
 
+                    // Auto-detect header row index (searches first 15 rows)
+                    let headerRowIdx = -1;
+                    for (let i = 0; i < Math.min(rawMatrix.length, 15); i++) {
+                        const rowCells = (rawMatrix[i] || []).map(c => String(c || '').trim().toLowerCase());
+                        const hasItemName = rowCells.some(c => EXCEL_COLUMN_MAPPING.assetName.some(k => c.includes(k)));
+                        const hasQtyOrCc = rowCells.some(c => EXCEL_COLUMN_MAPPING.qty.some(k => c.includes(k)) || EXCEL_COLUMN_MAPPING.project.some(k => c.includes(k)));
+                        if (hasItemName || hasQtyOrCc) {
+                            headerRowIdx = i;
+                            break;
+                        }
+                    }
+
+                    let headers = [];
+                    let startDataIdx = 0;
+                    if (headerRowIdx >= 0) {
+                        headers = (rawMatrix[headerRowIdx] || []).map(c => String(c || '').trim());
+                        startDataIdx = headerRowIdx + 1;
+                    } else {
+                        startDataIdx = 0;
+                    }
+
+                    const extractedItems = [];
+                    const defaultTodayDate = new Date().toISOString().slice(0, 10);
+                    const defaultProjName = (appData.projects && appData.projects.find(p => !p.archived)) ? appData.projects.find(p => !p.archived).name : 'General';
+                    const KNOWN_UNITS = ['NOS', 'PCS', 'SET', 'KG', 'MTR', 'LTR', 'BOX', 'PKT', 'ROLL', 'NO', 'NUM', 'BAG', 'PAIRS', 'LOT', 'MM', 'METER', 'METERS', 'FEET'];
+
                     const norm = (r) => {
                         const out = {};
-                        Object.keys(r).forEach(k => out[k.trim().toLowerCase()] = r[k]);
+                        if (!Array.isArray(r) && typeof r === 'object' && r !== null) {
+                            Object.keys(r).forEach(k => {
+                                const cleanK = String(k || '').trim().toLowerCase().replace(/[:\.\(\)]/g, '').replace(/\s+/g, ' ');
+                                out[cleanK] = r[k];
+                                out[k.trim().toLowerCase()] = r[k];
+                            });
+                        }
                         return out;
                     };
                     const pick = (n, keys) => { for (const k of keys) if (n[k] !== undefined && n[k] !== '') return n[k]; return ''; };
 
-                    const previewRows = [];
-                    let skippedCount = 0;
-                    let validCount = 0;
-                    let warningCount = 0;
+                    for (let i = startDataIdx; i < rawMatrix.length; i++) {
+                        const rowData = rawMatrix[i];
+                        if (!rowData || !Array.isArray(rowData) || !rowData.some(cell => String(cell || '').trim())) continue;
 
-                    rows.forEach((r, idx) => {
-                        const excelRowNo = idx + 2;
-                        const n = norm(r);
+                        let rowObj = {};
+                        if (headers.length > 0) {
+                            headers.forEach((h, colIdx) => {
+                                if (h) rowObj[h] = rowData[colIdx] !== undefined ? rowData[colIdx] : '';
+                            });
+                        } else {
+                            rowObj = rowData;
+                        }
 
-                        const rawName = String(pick(n, EXCEL_COLUMN_MAPPING.assetName)).trim();
-                        const rawSpec = String(pick(n, EXCEL_COLUMN_MAPPING.spec)).trim();
-                        const rawUom  = String(pick(n, EXCEL_COLUMN_MAPPING.uom)).trim();
-                        const rawQty  = pick(n, EXCEL_COLUMN_MAPPING.qty);
-                        const rawRate = pick(n, EXCEL_COLUMN_MAPPING.rate);
-                        const rawDate = pick(n, EXCEL_COLUMN_MAPPING.requiredDate);
-                        const rawCc   = pick(n, EXCEL_COLUMN_MAPPING.project);
-                        const rawRem  = String(pick(n, EXCEL_COLUMN_MAPPING.remarks)).trim();
+                        const n = norm(rowObj);
+                        let rawName = String(pick(n, EXCEL_COLUMN_MAPPING.assetName)).trim();
+                        let rawSpec = String(pick(n, EXCEL_COLUMN_MAPPING.spec)).trim();
+                        let rawUom  = String(pick(n, EXCEL_COLUMN_MAPPING.uom)).trim();
+                        let rawQty  = pick(n, EXCEL_COLUMN_MAPPING.qty);
+                        let rawRate = pick(n, EXCEL_COLUMN_MAPPING.rate);
+                        let rawDate = pick(n, EXCEL_COLUMN_MAPPING.requiredDate);
+                        let rawCc   = pick(n, EXCEL_COLUMN_MAPPING.project);
+                        let rawRem  = String(pick(n, EXCEL_COLUMN_MAPPING.remarks)).trim();
 
-                        const reasons = [];
+                        // Position/Type Fallback for raw row array
+                        const strCells = rowData.map(c => String(c !== undefined && c !== null ? c : '').trim());
+                        if (!rawName) {
+                            for (let j = 0; j < strCells.length; j++) {
+                                const val = strCells[j];
+                                if (!val) continue;
+                                if (/^\d+$/.test(val) && val.length <= 3 && j === 0) continue; // Skip Sr No
+                                if (KNOWN_UNITS.includes(val.toUpperCase())) continue;
+                                if (/^\d{4}[-/.]\d{2}[-/.]\d{2}$/.test(val) || /^\d{1,2}[-/.]\d{1,2}[-/.]\d{4}$/.test(val)) continue;
+                                if (isNaN(Number(val))) {
+                                    rawName = val;
+                                    if (!rawSpec && strCells[j + 1] && isNaN(Number(strCells[j + 1])) && !KNOWN_UNITS.includes(strCells[j + 1].toUpperCase())) {
+                                        rawSpec = strCells[j + 1];
+                                    }
+                                    break;
+                                }
+                            }
+                        }
 
-                        // 1. Mandatory Item Name
-                        if (!rawName) reasons.push('Missing Item Name');
+                        if (!rawName) continue; // Skip purely empty lines
 
-                        // 2. Mandatory & Valid Quantity (> 0)
-                        const qtyNum = parseFloat(rawQty);
-                        if (isNaN(qtyNum) || qtyNum <= 0) reasons.push(`Invalid Quantity ('${rawQty}' must be > 0)`);
+                        if (!rawUom) {
+                            for (const val of strCells) {
+                                if (KNOWN_UNITS.includes(val.toUpperCase())) {
+                                    rawUom = val;
+                                    break;
+                                }
+                            }
+                        }
 
-                        // 3. Valid Unit Price (>= 0)
-                        const rateNum = (rawRate === '' || rawRate === null || rawRate === undefined) ? 0 : parseFloat(rawRate);
-                        if (isNaN(rateNum) || rateNum < 0) reasons.push(`Invalid Unit Price ('${rawRate}' cannot be negative)`);
+                        if (!rawQty) {
+                            for (const val of strCells) {
+                                const num = parseFloat(val);
+                                if (!isNaN(num) && num > 0 && num <= 100000 && !val.includes('.')) {
+                                    rawQty = num;
+                                    break;
+                                }
+                            }
+                        }
 
-                        // 4. Mandatory & Valid Calendar Date
-                        const validDate = parseStrictExcelDate(rawDate);
-                        if (!validDate) reasons.push(`Invalid or missing Required Date ('${rawDate}')`);
+                        if (!rawRate) {
+                            for (const val of strCells) {
+                                const num = parseFloat(val);
+                                if (!isNaN(num) && num >= 0 && val !== String(rawQty)) {
+                                    rawRate = num;
+                                    break;
+                                }
+                            }
+                        }
 
-                        // 5. Mandatory & Valid Cost Center (Exact Match after trim)
-                        const validProject = validateCostCenterMatch(rawCc);
-                        if (!validProject) reasons.push(`Invalid or missing Cost Center ('${rawCc}')`);
+                        const qtyNum = (parseFloat(rawQty) > 0) ? parseFloat(rawQty) : 1;
+                        const rateNum = (parseFloat(rawRate) >= 0) ? parseFloat(rawRate) : 0;
+                        const validDate = parseStrictExcelDate(rawDate) || defaultTodayDate;
+                        const validProject = validateCostCenterMatch(rawCc) || rawCc || defaultProjName;
 
-                        // Asset master lookup (read-only for existing)
-                        const asset = rawName ? appData.assets.find(a => (a.name || '').trim().toLowerCase() === rawName.toLowerCase()) : null;
-                        const finalUom = rawUom || (asset ? asset.unit : 'NOS') || 'NOS';
-                        const finalSpec = rawSpec || (asset ? asset.specification : '') || '';
-
-                        const isInvalid = reasons.length > 0;
-                        const isWarning = !isInvalid && (!rawSpec || !rawRate);
-
-                        if (isInvalid) skippedCount++;
-                        else validCount++;
-                        if (isWarning) warningCount++;
-
-                        previewRows.push({
-                            excelRow: excelRowNo,
-                            assetId: asset ? asset.id : '',
+                        extractedItems.push({
+                            id: Date.now() + Math.random() + i,
+                            assetId: '',
                             assetName: rawName,
-                            spec: finalSpec,
-                            uom: finalUom,
-                            qty: isNaN(qtyNum) ? 0 : qtyNum,
-                            rate: isNaN(rateNum) ? 0 : rateNum,
+                            spec: rawSpec,
+                            make: '',
+                            sampleProvided: 'No',
+                            qty: qtyNum,
+                            uom: rawUom || 'NOS',
+                            unit: rawUom || 'NOS',
+                            rate: rateNum,
+                            amount: +(qtyNum * rateNum).toFixed(2),
+                            project: validProject,
                             requiredDate: validDate,
-                            project: validProject || '',
-                            rawCc: String(rawCc || ''),
-                            remarks: rawRem,
-                            status: isInvalid ? 'invalid' : (isWarning ? 'warning' : 'valid'),
-                            reasons: reasons.join('; ')
+                            remarks: rawRem
                         });
-                    });
+                    }
 
-                    excelImportPreviewState = {
-                        file,
-                        fileName: file.name,
-                        fileSize: file.size,
-                        startTime,
-                        totalRows: rows.length,
-                        previewRows,
-                        validCount,
-                        skippedCount,
-                        warningCount,
-                        dupAction: 'separate'
-                    };
+                    if (!extractedItems.length) {
+                        alert('No valid item names could be extracted from the uploaded spreadsheet. Please check the Excel file formatting.');
+                        return;
+                    }
 
+                    // Directly populate currentMrItems and force re-render
+                    const wasBlank = currentMrItems.length === 1 && (!currentMrItems[0].assetName || !String(currentMrItems[0].assetName).trim());
+                    currentMrItems = wasBlank ? extractedItems : [...currentMrItems, ...extractedItems];
+
+                    saveDB();
+                    excelImportPreviewState = null;
+                    _lastRenderedTab = null;
                     render();
+                    showToast(`✅ Successfully imported ${extractedItems.length} item(s) directly into PR form.`);
                 } catch(err) {
                     alert('Import Error: Spreadsheet parsing failed. ' + err.message);
                 }
             };
-            reader.readAsBinaryString(file);
+            reader.readAsArrayBuffer(file);
         };
         input.click();
     };
-
     window.closeExcelImportPreview = () => {
         excelImportPreviewState = null;
         render();
@@ -2716,22 +2773,24 @@
             finalItemsToCommit = validCandidates.map(r => ({ ...r }));
         }
 
-        const formattedLineItems = finalItemsToCommit.map(r => ({
-            id: Date.now() + Math.random(),
+        const formattedLineItems = finalItemsToCommit.map((r, idx) => ({
+            id: Date.now() + Math.random() + idx,
             assetId: r.assetId || '',
-            assetName: r.assetName,
+            assetName: r.assetName || '',
             spec: r.spec || '',
-            make: '',
-            sampleProvided: '',
-            qty: r.qty,
-            uom: r.uom || 'NOS',
-            rate: r.rate || 0,
-            project: r.project,
-            requiredDate: r.requiredDate,
+            make: r.make || '',
+            sampleProvided: r.sampleProvided || 'No',
+            qty: Number(r.qty) || 1,
+            uom: r.uom || r.unit || 'NOS',
+            unit: r.uom || r.unit || 'NOS',
+            rate: Number(r.rate) || 0,
+            amount: +((Number(r.qty) || 1) * (Number(r.rate) || 0)).toFixed(2),
+            project: r.project || '',
+            requiredDate: r.requiredDate || '',
             remarks: r.remarks || ''
         }));
 
-        const wasBlank = currentMrItems.length === 1 && !currentMrItems[0].assetName;
+        const wasBlank = currentMrItems.length === 1 && (!currentMrItems[0].assetName || !currentMrItems[0].assetName.trim());
         currentMrItems = wasBlank ? formattedLineItems : [...currentMrItems, ...formattedLineItems];
 
         // Audit Trail Entry in appData.importLogs
@@ -2770,6 +2829,7 @@
 
         saveDB();
         excelImportPreviewState = null;
+        _lastRenderedTab = null;
         render();
         showToast(`✅ Successfully imported ${formattedLineItems.length} item(s) to draft.`);
     };
