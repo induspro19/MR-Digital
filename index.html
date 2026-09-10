@@ -2468,6 +2468,8 @@
     const EXCEL_COLUMN_MAPPING = {
         assetName: ['item name', 'item', 'asset name', 'asset', 'material name', 'material', 'item/asset', 'items', 'itemdescription', 'product', 'material description', 'item name/description'],
         spec:      ['description', 'item description', 'specification', 'spec', 'desc', 'details', 'specifications', 'item spec', 'particulars'],
+        make:      ['make', 'brand', 'make / brand', 'sample make', 'sample make if any', 'manufacturer'],
+        sampleProvided: ['sample provided', 'sample provided if any', 'sample'],
         uom:       ['unit', 'uom', 'unit of measure', 'uom/unit', 'unit type', 'units', 'measure'],
         qty:       ['quantity', 'qty', 'quantity required', 'req qty', 'pr qty', 'qty req', 'req quantity', 'required qty', 'count', 'nos'],
         rate:      ['unit price', 'unit rate', 'rate', 'price', 'estimated rate', 'est rate', 'cost', 'price/unit', 'unit cost', 'amount', 'unitprice', 'unitrate'],
@@ -2602,7 +2604,7 @@
                         }
                         return out;
                     };
-                    const pick = (n, keys) => { for (const k of keys) if (n[k] !== undefined && n[k] !== '') return n[k]; return ''; };
+                    const pick = (n, keys) => { if (!keys || !Array.isArray(keys)) return ''; for (const k of keys) if (n[k] !== undefined && n[k] !== null && n[k] !== '') return n[k]; return ''; };
 
                     for (let i = startDataIdx; i < rawMatrix.length; i++) {
                         const rowData = rawMatrix[i];
@@ -2616,16 +2618,16 @@
                                 if (h) rowObj[h] = rowData[colIdx] !== undefined ? rowData[colIdx] : '';
                             });
                             const n = norm(rowObj);
-                            rawName = String(pick(n, EXCEL_COLUMN_MAPPING.assetName)).trim();
-                            rawSpec = String(pick(n, EXCEL_COLUMN_MAPPING.spec)).trim();
-                            rawMake = String(pick(n, EXCEL_COLUMN_MAPPING.make)).trim();
-                            rawSample = String(pick(n, EXCEL_COLUMN_MAPPING.sampleProvided)).trim();
-                            rawUom  = String(pick(n, EXCEL_COLUMN_MAPPING.uom)).trim();
-                            rawQty  = pick(n, EXCEL_COLUMN_MAPPING.qty);
-                            rawRate = pick(n, EXCEL_COLUMN_MAPPING.rate);
-                            rawDate = pick(n, EXCEL_COLUMN_MAPPING.requiredDate);
-                            rawCc   = pick(n, EXCEL_COLUMN_MAPPING.project);
-                            rawRem  = String(pick(n, EXCEL_COLUMN_MAPPING.remarks)).trim();
+                            rawName = String(pick(n, EXCEL_COLUMN_MAPPING.assetName || [])).trim();
+                            rawSpec = String(pick(n, EXCEL_COLUMN_MAPPING.spec || [])).trim();
+                            rawMake = String(pick(n, EXCEL_COLUMN_MAPPING.make || [])).trim();
+                            rawSample = String(pick(n, EXCEL_COLUMN_MAPPING.sampleProvided || [])).trim();
+                            rawUom  = String(pick(n, EXCEL_COLUMN_MAPPING.uom || [])).trim();
+                            rawQty  = pick(n, EXCEL_COLUMN_MAPPING.qty || []);
+                            rawRate = pick(n, EXCEL_COLUMN_MAPPING.rate || []);
+                            rawDate = pick(n, EXCEL_COLUMN_MAPPING.requiredDate || []);
+                            rawCc   = pick(n, EXCEL_COLUMN_MAPPING.project || []);
+                            rawRem  = String(pick(n, EXCEL_COLUMN_MAPPING.remarks || [])).trim();
                         } else if (rowData.length >= 10) {
                             // Standard 12-column PR Export Format: [SrNo, Item, Spec, Make, Sample, Qty, Unit, Rate, Amount, Date, CostCenter, Remarks]
                             rawName = String(rowData[1] || rowData[0] || '').trim();
