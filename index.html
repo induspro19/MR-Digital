@@ -9254,8 +9254,11 @@ function renderMrRow(item, idx, xlInputCss) {
             const firstQuoteBudget = Number(it.firstQuoteBudget || 0);
             const poValueNow = Number(it.poValue || 0);
             it.saving = firstQuoteBudget - poValueNow;
-            // Update the grid view so the saving cell reflects the new value
-            softRender();
+            // Update saving cell directly in DOM if present, without triggering full DOM re-render
+            const savingEl = document.getElementById(`dc-saving-${mrId}-${itemIdx}`);
+            if (savingEl) {
+                savingEl.textContent = formatCurrencyValue(it.saving);
+            }
         } else {
             it[dbKey] = val;
         }
@@ -9620,7 +9623,7 @@ function renderMrRow(item, idx, xlInputCss) {
         procInboxMrId = mrId;
         render();
     };
-    window.procAcceptPR = (mrId) => {
+    window.procAcceptPR = async (mrId) => {
         const mr = appData.mrs.find(m => m.id === mrId);
         if (!mr) return;
         mr.status = 'PR_ACCEPTED';
@@ -9629,10 +9632,10 @@ function renderMrRow(item, idx, xlInputCss) {
         mr.history.push({ 
             action: 'PR Accepted (Procurement Inbox)', 
             actor: user.name, role: user.role, dept: user.dept, ts: Date.now(),
-            field: 'status', oldValue: STATUS_META.PLANNED.label, newValue: STATUS_META.PR_ACCEPTED.label,
+            field: 'status', oldValue: STATUS_META.PLANNED ? STATUS_META.PLANNED.label : 'PLANNED', newValue: STATUS_META.PR_ACCEPTED ? STATUS_META.PR_ACCEPTED.label : 'PO Pending',
             note: 'PR received and accepted into Data Centre.'
         });
-        saveDB();
+        await saveDB(appData);
         // Reset inbox view back to table after accepting
         procInboxPrNumber = null;
         procInboxMrId = null;
@@ -13337,25 +13340,17 @@ function renderMrRow(item, idx, xlInputCss) {
             render();
         }
 
-        // 4. Async cloud conditional update (OCC)
+        // 4. Direct Cloud Upsert — guarantees state persistence without false OCC collisions
         _lastSaveTs = Date.now();
         try {
             const { data, error } = await _supabaseClient
                 .from('app_state')
-                .update({ data: payload, updated_at: new Date().toISOString() })
-                .eq('id', 1)
-                .eq('data->>vsn', String(currentVsn))
+                .upsert({ id: 1, data: payload, updated_at: new Date().toISOString() })
                 .select();
 
             if (error) {
-                console.error('[saveDB] Supabase OCC update failed:', error.message);
-                // Fallback to absolute upsert if json query isn't supported
-                const upsertRes = await _supabaseClient.from('app_state').upsert({ id: 1, data: payload, updated_at: new Date().toISOString() }).select();
-                return { success: !upsertRes.error, error: upsertRes.error, vsn: payload.vsn, data: upsertRes.data };
-            } else if (!data || data.length === 0) {
-                console.warn('[saveDB] OCC Collision! Another user saved first. Triggering Auto-Recovery...');
-                await handleDataCollision(payload);
-                return { success: true, collision: true, vsn: payload.vsn };
+                console.error('[saveDB] Supabase cloud save failed:', error.message);
+                return { success: false, error: error.message, vsn: payload.vsn };
             } else {
                 console.log('[saveDB] ✓ Saved to Supabase cloud (vsn: ' + payload.vsn + ')');
                 return { success: true, vsn: payload.vsn, data };
