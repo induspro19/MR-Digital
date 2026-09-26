@@ -9635,11 +9635,10 @@ function renderMrRow(item, idx, xlInputCss) {
             field: 'status', oldValue: STATUS_META.PLANNED ? STATUS_META.PLANNED.label : 'PLANNED', newValue: STATUS_META.PR_ACCEPTED ? STATUS_META.PR_ACCEPTED.label : 'PO Pending',
             note: 'PR received and accepted into Data Centre.'
         });
-        await saveDB(appData);
-        // Reset inbox view back to table after accepting
+        // Reset inbox view state BEFORE saveDB so render() immediately returns to the Inbox/Data Centre list table
         procInboxPrNumber = null;
         procInboxMrId = null;
-        render();
+        await saveDB(appData);
         alert('✅ PR Accepted! It has been moved to the Data Centre.');
     };
 
@@ -9824,7 +9823,7 @@ function renderMrRow(item, idx, xlInputCss) {
         render();
     };
 
-    window.procReturnPR = (mrId) => {
+    window.procReturnPR = async (mrId) => {
         const reason = prompt("Enter reason for returning PR:");
         if (!reason) return;
         const mr = appData.mrs.find(m => m.id === mrId);
@@ -9852,10 +9851,9 @@ function renderMrRow(item, idx, xlInputCss) {
             });
         }
         
-        saveDB();
         procInboxPrNumber = null;
         procInboxMrId = null;
-        render();
+        await saveDB(appData);
         alert('↩️ PR Returned to Planner. They will correct and resubmit for Final Authorization.');
     };
 
