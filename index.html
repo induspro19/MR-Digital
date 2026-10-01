@@ -2855,13 +2855,29 @@
                 
                 const { data, error } = await _supabaseClient.from('app_state').select('data').eq('id', 1).single();
                 if (!error && data && data.data) {
-                    if (data.data.mrs) appData.mrs = data.data.mrs;
-                    if (data.data.settings && data.data.settings.sequences) {
-                        const cloudSeq = data.data.settings.sequences;
-                        if (cloudSeq.mr && cloudSeq.mr.next > appData.settings.sequences.mr.next) appData.settings.sequences.mr.next = cloudSeq.mr.next;
-                        if (cloudSeq.pr && cloudSeq.pr.next > appData.settings.sequences.pr.next) appData.settings.sequences.pr.next = cloudSeq.pr.next;
+                    if (Array.isArray(data.data.mrs)) {
+                        // Merge cloud MRs safely into local memory without wiping out recently created local MRs/PRs
+                        data.data.mrs.forEach(cMr => {
+                            const existingIdx = appData.mrs.findIndex(lMr => lMr.id === cMr.id);
+                            if (existingIdx === -1) {
+                                appData.mrs.push(cMr);
+                            } else {
+                                // Preserve local pending edits if newer
+                                if ((cMr.updatedAt || 0) >= (appData.mrs[existingIdx].updatedAt || 0)) {
+                                    appData.mrs[existingIdx] = cMr;
+                                }
+                            }
+                        });
+                    }
+                    const seq = getSequences();
+                    if (data.data.sequences) {
+                        const cloudSeq = data.data.sequences;
+                        if (cloudSeq.mr && cloudSeq.mr.next > seq.mr.next) seq.mr.next = cloudSeq.mr.next;
+                        if (cloudSeq.pr && cloudSeq.pr.next > seq.pr.next) seq.pr.next = cloudSeq.pr.next;
                     }
                 }
+                // Sync sequences against all local + merged MRs to guarantee 100% unique sequence numbers
+                syncSequencesFromExisting();
             } catch (e) { console.warn("Pre-check failed, continuing with local state", e); }
         }
 
