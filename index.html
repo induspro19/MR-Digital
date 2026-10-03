@@ -2934,8 +2934,7 @@
                 "Direct PR " + (isRevision ? "Revised" : "Raised") + " successfully: " + (mr.prNumber || mr.mrNumber) + pendingNote +
                 "\n\nDo you want to print this PR now?"
             );
-            activeTab = 'planner';
-            plannerSection = 'queue';
+            activeTab = 'tracking';
             isDirectPR = false;
             if (wantsPrint) { assignPrintForMr(mr); }
             render();
@@ -7382,7 +7381,7 @@ function renderMrRow(item, idx, xlInputCss) {
     }
 
     function renderApprovalQueueSection() {
-        let queue = appData.mrs.filter(m => m.status === 'AUTHORIZED' || m.status === 'RETURNED_TO_PLANNING' || m.status === 'PROCUREMENT_QUERY' || (m.source === 'DIRECT_PR' && ['RAISED', 'DEPT_APPROVAL_PENDING', 'AUTHORIZED', 'PLANNED', 'RETURNED_TO_L1', 'RETURNED_TO_FINAL_AUTH'].includes(m.status)));
+        let queue = appData.mrs.filter(m => m.status === 'AUTHORIZED' || m.status === 'RETURNED_TO_PLANNING' || m.status === 'PROCUREMENT_QUERY');
         const q = queueFilters['planner'] || '';
         if (q) queue = queue.filter(m => matchesKeyword(m, q));
         return `
